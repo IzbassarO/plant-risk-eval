@@ -15,17 +15,62 @@ from ..schemas import (
     ACTION_CLASSES,
     EVIDENCE_FIELDS_REQUIRED_FOR_APPROVAL,
     FORBIDDEN_ACTION_CLASSES,
+    HEALTHY_ACTION_CLASS,
+    HEALTHY_EVIDENCE_FIELDS_REQUIRED_FOR_APPROVAL,
+    HEALTHY_FORBIDDEN_FIELDS,
+    HEALTHY_POLICY_ID,
     MAPPING_COLUMNS,
     MAPPING_CONFIDENCES,
     PATHOGEN_TYPES,
     REVIEW_STATUSES,
     ValidationResult,
+    is_healthy_disease,
 )
 from .schema import read_mapping
 
 
 def _blank(v) -> bool:
     return v is None or (isinstance(v, float) and pd.isna(v)) or str(v).strip() == ""
+
+
+def cites_healthy_policy(row) -> bool:
+    """True if the row explicitly cites the healthy-class policy identifier.
+
+    Accepted carriers are ``source_identifier`` and ``review_notes`` -- the two
+    fields that already exist for provenance. Nothing is inferred.
+    """
+    for col in ("source_identifier", "review_notes"):
+        v = row.get(col)
+        if not _blank(v) and HEALTHY_POLICY_ID in str(v):
+            return True
+    return False
+
+
+def _check_healthy_approval(row, where: str, action: str, res: ValidationResult) -> None:
+    """The NARROW healthy exemption (reports/HEALTHY_CLASS_ACTION_POLICY.md).
+
+    Applies ONLY to an approved row whose ``canonical_disease`` is exactly
+    ``healthy``. Pathogen-specific evidence is not required -- and must not be
+    fabricated -- but action prose, evidence prose, an evidence date, the
+    ``monitor`` action, and an explicit policy citation all remain mandatory.
+    """
+    if action != HEALTHY_ACTION_CLASS:
+        res.add("error", where,
+                f"approved healthy row must map to action_class "
+                f"'{HEALTHY_ACTION_CLASS}' ({HEALTHY_POLICY_ID}), not '{action}'")
+    for fld in HEALTHY_EVIDENCE_FIELDS_REQUIRED_FOR_APPROVAL:
+        if _blank(row.get(fld)):
+            res.add("error", where,
+                    f"approved healthy row missing required field '{fld}'")
+    if not cites_healthy_policy(row):
+        res.add("error", where,
+                f"approved healthy row must cite '{HEALTHY_POLICY_ID}' in "
+                "source_identifier or review_notes")
+    for fld in HEALTHY_FORBIDDEN_FIELDS:
+        if not _blank(row.get(fld)):
+            res.add("error", where,
+                    f"healthy row must leave '{fld}' blank -- a healthy negative "
+                    "class has no pathogen and none may be fabricated")
 
 
 def validate_mapping(df: pd.DataFrame) -> ValidationResult:
@@ -71,9 +116,13 @@ def validate_mapping(df: pd.DataFrame) -> ValidationResult:
         if status == "approved":
             if _blank(action) or action not in ACTION_CLASSES:
                 res.add("error", where, "approved row must have a valid action_class")
-            for fld in EVIDENCE_FIELDS_REQUIRED_FOR_APPROVAL:
-                if _blank(row.get(fld)):
-                    res.add("error", where, f"approved row missing required evidence field '{fld}'")
+            if is_healthy_disease(row.get("canonical_disease")):
+                # Narrow, explicit, auditable exemption -- healthy rows only.
+                _check_healthy_approval(row, where, action, res)
+            else:
+                for fld in EVIDENCE_FIELDS_REQUIRED_FOR_APPROVAL:
+                    if _blank(row.get(fld)):
+                        res.add("error", where, f"approved row missing required evidence field '{fld}'")
 
     return res
 
@@ -97,11 +146,19 @@ def approved_mapping(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[ok_rows].copy()
 
 
-def action_lookup(df: pd.DataFrame, require_approved: bool = True) -> dict[tuple[str, str], str]:
+def action_lookup(df: pd.DataFrame, require_approved: bool = True,
+                  scope=None) -> dict[tuple[str, str], str]:
     """Build a {(dataset, dataset_class) -> action_class} lookup.
 
     By default only APPROVED, evidence-backed rows are included, so evaluation
     never projects a disease through an unverified mapping.
+
+    ``scope`` is an optional :class:`ica26.evaluation.scope.EvaluationScope`.
+    When given, classes recorded as out of scope for action-level evaluation are
+    dropped from the lookup, so they project to ``None`` and are excluded from
+    action metrics rather than scored. Scope and approval are INDEPENDENT gates:
+    a class must clear both. Passed positionally-free (keyword) and duck-typed to
+    keep ``ica26.mapping`` free of a dependency on ``ica26.evaluation``.
     """
     src = approved_mapping(df) if require_approved else df
     lut: dict[tuple[str, str], str] = {}
@@ -109,6 +166,8 @@ def action_lookup(df: pd.DataFrame, require_approved: bool = True) -> dict[tuple
         action = str(row["action_class"]).strip()
         if action in ACTION_CLASSES:
             lut[(str(row["dataset"]).strip(), str(row["dataset_class"]).strip())] = action
+    if scope is not None:
+        lut = scope.filter_action_lookup(lut)
     return lut
 
 
@@ -116,14 +175,14 @@ class NoApprovedMappingError(RuntimeError):
     """Raised when action evaluation is attempted with no approved mappings."""
 
 
-def require_approved_lookup(df: pd.DataFrame) -> dict[tuple[str, str], str]:
+def require_approved_lookup(df: pd.DataFrame, scope=None) -> dict[tuple[str, str], str]:
     """Return the approved lookup, or raise if it is empty.
 
     This is the **hard stop**: no disease label may be projected to an action
     until at least one mapping row is human-approved with evidence. An empty
     approved lookup blocks action-level evaluation by design.
     """
-    lut = action_lookup(df, require_approved=True)
+    lut = action_lookup(df, require_approved=True, scope=scope)
     if not lut:
         raise NoApprovedMappingError(
             "No approved disease->action mappings found. Action-level evaluation "

@@ -32,15 +32,57 @@ Rules:
 
 If any of (1)–(4) fails, the gate is `fail` or `incomplete` — **fail-closed**.
 
-## Current state (do not force)
+## How rule (3) is implemented (schema 1.1)
+
+Until 2026-08-02 rule (3) was written here but **not implemented**: `compute_gate()` derived
+`unresolved = detected − excluded`, which silently equated "resolved" with "excluded". Under that
+arithmetic a pair a reviewer inspected and judged independent still counted as unresolved, so the
+gate could never reach `pass` no matter what a human decided — the only way out would have been to
+record false exclusions. That was a defect in the code, not a safety property.
+
+Gate schema **1.1** implements the rule as written:
+
+```
+unresolved = max(0, detected − excluded_pair_count − resolved_pair_count)
+```
+
+`resolved_pair_count` comes from `summarize_near_review()`, which reads the human adjudication CSV
+and credits a pair only when **all** of the following hold:
+
+- the row matches an authoritative flagged near pair by `(training_relpath, evaluation_relpath)`
+  — pair identity comes from the pHash pair table, never from filenames;
+- `human_decision` is non-blank and in the allowed vocabulary;
+- `human_decision` is not `uncertain`;
+- `final_disposition` is `keep` or `exclude_evaluation` (never `needs_secondary_review`);
+- if the disposition is `exclude_evaluation`, the pair **also appears** in
+  `cross_dataset_reviewed_exclusions.csv` — an exclusion that was never propagated has no
+  downstream effect and therefore resolves nothing.
+
+Everything else credits zero. A flagged pair with no review row at all is unresolved. Omitting the
+review file entirely resolves nothing, so the default posture stays fail-closed. A schema-1.0 gate
+file is now **rejected** rather than reinterpreted, because the meaning of `unresolved_pair_count`
+changed.
+
+Covered by `tests/test_near_duplicate_decisions.py` (pending, uncertain, deferred, unknown
+vocabulary, un-propagated exclusion, unmatched pair, missing row, missing file) and
+`tests/test_leakage_gate.py`.
+
+## Current state (2026-08-02; not forced)
 
 - Exact cross-dataset pairs: **0** (exact file has no rows; contains no near pair — compliant).
-- pHash-near pairs: **16**, all `review_status=pending` → **0 resolved**, so `unresolved = 16`.
-- Reviewed-exclusions file: **header only** (no human decisions exist yet).
-- Gate status: **`fail`** (fail-closed) — correct while near pairs are pending.
+- pHash-near pairs: **16**, all adjudicated by `human_reviewer_1` on `2026-08-02T21:10:00+05:00`
+  → **16 resolved**, `unresolved = 0`.
+- Dispositions: **16 `keep`**, **0 `exclude_evaluation`**, 0 uncertain, 0 deferred.
+- Reviewed-exclusions file: **header only** — correct, because no pair was excluded. Writing a row
+  there would misrepresent a keep decision as an exclusion.
+- Skipped images: **0** on both sides.
+- Gate status: **`pass`**.
 
-**Next:** a human adjudicates the 16 near pairs (see `reports/NEAR_DUPLICATE_HUMAN_REVIEW.md`
-and the contact sheets), records excludes in `cross_dataset_reviewed_exclusions.csv`, then
-`python scripts/run_phase1_local.py --steps leakage,gate`. The gate may reach `pass` only once
-no near pair is pending/uncertain and every exact pair is excluded. No count here was changed
-and the gate was not forced to pass.
+The decisions and their reasons are recorded in
+`reports/PHASE1_HUMAN_DECISIONS_2026-08-02.md`. The gate reached `pass` because a human resolved
+every flagged pair after visual inspection — no count was edited, no exclusion was invented, and
+no status was overridden.
+
+**Note:** a passing leakage gate authorises *cross-dataset evaluation*; it does not mean Phase 1 is
+complete. 17 PlantDoc disease mappings remain unreviewed and the PlantVillage action mapping has
+not been authored, so `scripts/validate_phase1_review.py` still reports `BLOCKED`.

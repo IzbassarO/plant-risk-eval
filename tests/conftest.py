@@ -1,12 +1,20 @@
 """Shared pytest fixtures: synthetic images and mapping rows (no downloads)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
 from PIL import Image
 
 from ica26.mapping import schema
+
+
+@pytest.fixture(scope="session")
+def repo_root() -> Path:
+    """Repository root, so tests can assert on the shipped review artifacts."""
+    return Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture

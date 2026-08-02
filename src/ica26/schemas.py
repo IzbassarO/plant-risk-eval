@@ -71,6 +71,46 @@ EVIDENCE_FIELDS_REQUIRED_FOR_APPROVAL: tuple[str, ...] = (
     "evidence_checked_at",
 )
 
+# --------------------------------------------------------------------------- #
+# Healthy-class exemption -- see reports/HEALTHY_CLASS_ACTION_POLICY.md
+#
+# A healthy class is a NEGATIVE diagnosis class, not a pathogen of unknown type.
+# There is no pathogen to cite, so the pathogen-specific half of the evidence
+# gate is unsatisfiable by construction -- and fabricating a pathogen, pathogen
+# type, source, or URL to satisfy it would be scientific misconduct. The
+# exemption below is deliberately NARROW: it applies only to
+# ``canonical_disease == 'healthy'`` mapped to ``monitor``, it still demands
+# non-empty action/evidence prose and an explicit policy reference, and it
+# additionally FORBIDS pathogen fields (so no row can quietly fabricate one).
+# --------------------------------------------------------------------------- #
+
+#: The exact canonical_disease value that triggers the healthy policy.
+HEALTHY_CANONICAL_DISEASE: str = "healthy"
+
+#: The only action class a healthy class may carry.
+HEALTHY_ACTION_CLASS: str = "monitor"
+
+#: Stable identifier a healthy row must cite (source_identifier or review_notes).
+HEALTHY_POLICY_ID: str = "policy:healthy-monitor-v1"
+
+#: Fields that MUST be non-empty before an approved HEALTHY row is accepted.
+#: Note this is the full evidence gate MINUS the pathogen-specific fields.
+HEALTHY_EVIDENCE_FIELDS_REQUIRED_FOR_APPROVAL: tuple[str, ...] = (
+    "action_class",
+    "action_summary",
+    "evidence_summary",
+    "evidence_checked_at",
+)
+
+#: Fields an approved healthy row MUST leave blank -- a healthy negative class
+#: has no pathogen, so a value here can only be fabricated.
+HEALTHY_FORBIDDEN_FIELDS: tuple[str, ...] = ("pathogen_name", "pathogen_type")
+
+
+def is_healthy_disease(canonical_disease) -> bool:
+    """True only for the exact canonical healthy label (case/space-insensitive)."""
+    return str(canonical_disease or "").strip().lower() == HEALTHY_CANONICAL_DISEASE
+
 #: Recognised pathogen types (used only to VALIDATE human-entered values;
 #: the pipeline never auto-assigns one).
 PATHOGEN_TYPES: tuple[str, ...] = (

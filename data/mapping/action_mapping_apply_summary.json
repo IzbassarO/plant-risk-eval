@@ -1,0 +1,28 @@
+{
+  "review_source": "data/mapping/action_mapping_review.csv",
+  "review_source_sha256": "4efb48a4a5aac5c61bf80ce42ad7821d6772c7994313ba9c1bb38cde08588b06",
+  "scope_source": "configs/evaluation_scope.yaml",
+  "scope_source_sha256": "7f8b2a9ce72bf8709a3fa413f81ee6788a751f5e78606b002251bd6ad6c79272",
+  "_determinism_note": "no timestamp is recorded; repeat runs on the same inputs produce byte-identical output",
+  "review_rows": 28,
+  "review_status_counts": {
+    "pending": 0,
+    "needs_review": 17,
+    "approved": 10,
+    "excluded": 1
+  },
+  "emitted_rows": 10,
+  "emitted_healthy_rows": 10,
+  "emitted_disease_rows": 0,
+  "action_class_counts": {
+    "monitor": 10
+  },
+  "skipped_out_of_action_scope": [],
+  "scope_out_of_action_evaluation": [
+    "PlantDoc/Tomato two spotted spider mites leaf",
+    "PlantVillage/Tomato___Spider_mites Two-spotted_spider_mite"
+  ],
+  "errors": [],
+  "warnings": [],
+  "ok": true
+}

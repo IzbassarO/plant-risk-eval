@@ -1,8 +1,8 @@
 # Action-Mapping Human Checklist
 
-_Compact per-row checklist for human review. **No decision is made here.** All rows remain `review_status=needs_review`, `approved=0`. Evidence is unchanged and no new sources were fetched. Set `Human choice` yourself; leave blank until decided._
+_Compact per-row checklist for human review. **This file makes no decision of its own**: every `Human choice` below is rendered from `review_status` in `data/mapping/action_mapping_review.csv`, and an undecided row renders as `______`. Evidence is unchanged and no new sources were fetched._
 
-- Rows: **28** · needs_review: **28** · approved: **0**
+- Rows: **28** · needs_review: **17** · approved: **10** · excluded: **1**
 - Allowed `Human choice`: `approve` · `revise` · `exclude` · `insufficient_evidence` (leave blank until decided).
 
 ## Apple Scab Leaf
@@ -199,9 +199,9 @@ _Compact per-row checklist for human review. **No decision is made here.** All r
 - Proposed action (candidate only): **monitor** — Conserve natural enemies; water sprays; selective miticides (soap/oil) only when needed; monitor.
 - Taxonomy + management source: UC IPM Pest Notes — Spider Mites (https://ipm.ucanr.edu/home-and-landscape/spider-mites/)
 - Evidence summary: 'If a treatment for mites is necessary, use selective materials, preferably insecticidal soap or insecticidal oil.'
-- Ambiguity: **yes** — AMBIGUOUS: an arthropod PEST, not a disease pathogen. Of the four action classes only 'monitor' fits; fungicide/copper/remove_vector do not (the mite is the pest, not a vector). Out of the paper's pathogen-based scope.
+- Ambiguity: **no** — Excluded under policy:arthropod-pest-scope-v1 (reports/ARTHROPOD_PEST_EVALUATION_SCOPE.md): Tetranychus urticae is an arthropod pest, not a plant pathogen. The class remains diagnosis-eligible and its images and manifest rows are retained; it is out of scope for disease-action and risk-weighted disease evaluation, so no canonical action-mapping row is emitted. Reviewed by human_reviewer_1.
 - Confidence (author): medium
-- **Human choice** ( approve | revise | exclude | insufficient_evidence ): ______
+- **Human choice** ( approve | revise | exclude | insufficient_evidence ): **exclude** — recorded by human_reviewer_1 at 2026-08-02T21:10:00+05:00
 
 ## Apple leaf
 
@@ -210,9 +210,9 @@ _Compact per-row checklist for human review. **No decision is made here.** All r
 - Proposed action (candidate only): **monitor** — Healthy tissue — no intervention indicated.
 - Taxonomy + management source: (definitional: healthy class, no pathogen) (definitional — no external URL)
 - Evidence summary: No disease pathogen present; monitor only. A reviewer may attach a general IPM monitoring citation.
-- Ambiguity: **no** — Healthy->monitor is definitional; has no external source_url so cannot pass the evidence gate as-is (by design).
+- Ambiguity: **no** — Approved under policy:healthy-monitor-v1 (reports/HEALTHY_CLASS_ACTION_POLICY.md): healthy is a negative diagnosis class with no pathogen; pathogen-specific evidence is exempted and must not be fabricated. healthy -> monitor is definitional. Reviewed by human_reviewer_1.
 - Confidence (author): high
-- **Human choice** ( approve | revise | exclude | insufficient_evidence ): ______
+- **Human choice** ( approve | revise | exclude | insufficient_evidence ): **approve** — recorded by human_reviewer_1 at 2026-08-02T21:10:00+05:00
 
 ## Bell_pepper leaf
 
@@ -221,9 +221,9 @@ _Compact per-row checklist for human review. **No decision is made here.** All r
 - Proposed action (candidate only): **monitor** — Healthy tissue — no intervention indicated.
 - Taxonomy + management source: (definitional: healthy class, no pathogen) (definitional — no external URL)
 - Evidence summary: No disease pathogen present; monitor only. A reviewer may attach a general IPM monitoring citation.
-- Ambiguity: **no** — Healthy->monitor is definitional; has no external source_url so cannot pass the evidence gate as-is (by design).
+- Ambiguity: **no** — Approved under policy:healthy-monitor-v1 (reports/HEALTHY_CLASS_ACTION_POLICY.md): healthy is a negative diagnosis class with no pathogen; pathogen-specific evidence is exempted and must not be fabricated. healthy -> monitor is definitional. Reviewed by human_reviewer_1.
 - Confidence (author): high
-- **Human choice** ( approve | revise | exclude | insufficient_evidence ): ______
+- **Human choice** ( approve | revise | exclude | insufficient_evidence ): **approve** — recorded by human_reviewer_1 at 2026-08-02T21:10:00+05:00
 
 ## Blueberry leaf
 
@@ -232,9 +232,9 @@ _Compact per-row checklist for human review. **No decision is made here.** All r
 - Proposed action (candidate only): **monitor** — Healthy tissue — no intervention indicated.
 - Taxonomy + management source: (definitional: healthy class, no pathogen) (definitional — no external URL)
 - Evidence summary: No disease pathogen present; monitor only. A reviewer may attach a general IPM monitoring citation.
-- Ambiguity: **no** — Healthy->monitor is definitional; has no external source_url so cannot pass the evidence gate as-is (by design).
+- Ambiguity: **no** — Approved under policy:healthy-monitor-v1 (reports/HEALTHY_CLASS_ACTION_POLICY.md): healthy is a negative diagnosis class with no pathogen; pathogen-specific evidence is exempted and must not be fabricated. healthy -> monitor is definitional. Reviewed by human_reviewer_1.
 - Confidence (author): high
-- **Human choice** ( approve | revise | exclude | insufficient_evidence ): ______
+- **Human choice** ( approve | revise | exclude | insufficient_evidence ): **approve** — recorded by human_reviewer_1 at 2026-08-02T21:10:00+05:00
 
 ## Cherry leaf
 
@@ -243,9 +243,9 @@ _Compact per-row checklist for human review. **No decision is made here.** All r
 - Proposed action (candidate only): **monitor** — Healthy tissue — no intervention indicated.
 - Taxonomy + management source: (definitional: healthy class, no pathogen) (definitional — no external URL)
 - Evidence summary: No disease pathogen present; monitor only. A reviewer may attach a general IPM monitoring citation.
-- Ambiguity: **no** — Healthy->monitor is definitional; has no external source_url so cannot pass the evidence gate as-is (by design).
+- Ambiguity: **no** — Approved under policy:healthy-monitor-v1 (reports/HEALTHY_CLASS_ACTION_POLICY.md): healthy is a negative diagnosis class with no pathogen; pathogen-specific evidence is exempted and must not be fabricated. healthy -> monitor is definitional. Reviewed by human_reviewer_1.
 - Confidence (author): high
-- **Human choice** ( approve | revise | exclude | insufficient_evidence ): ______
+- **Human choice** ( approve | revise | exclude | insufficient_evidence ): **approve** — recorded by human_reviewer_1 at 2026-08-02T21:10:00+05:00
 
 ## Peach leaf
 
@@ -254,9 +254,9 @@ _Compact per-row checklist for human review. **No decision is made here.** All r
 - Proposed action (candidate only): **monitor** — Healthy tissue — no intervention indicated.
 - Taxonomy + management source: (definitional: healthy class, no pathogen) (definitional — no external URL)
 - Evidence summary: No disease pathogen present; monitor only. A reviewer may attach a general IPM monitoring citation.
-- Ambiguity: **no** — Healthy->monitor is definitional; has no external source_url so cannot pass the evidence gate as-is (by design).
+- Ambiguity: **no** — Approved under policy:healthy-monitor-v1 (reports/HEALTHY_CLASS_ACTION_POLICY.md): healthy is a negative diagnosis class with no pathogen; pathogen-specific evidence is exempted and must not be fabricated. healthy -> monitor is definitional. Reviewed by human_reviewer_1.
 - Confidence (author): high
-- **Human choice** ( approve | revise | exclude | insufficient_evidence ): ______
+- **Human choice** ( approve | revise | exclude | insufficient_evidence ): **approve** — recorded by human_reviewer_1 at 2026-08-02T21:10:00+05:00
 
 ## Raspberry leaf
 
@@ -265,9 +265,9 @@ _Compact per-row checklist for human review. **No decision is made here.** All r
 - Proposed action (candidate only): **monitor** — Healthy tissue — no intervention indicated.
 - Taxonomy + management source: (definitional: healthy class, no pathogen) (definitional — no external URL)
 - Evidence summary: No disease pathogen present; monitor only. A reviewer may attach a general IPM monitoring citation.
-- Ambiguity: **no** — Healthy->monitor is definitional; has no external source_url so cannot pass the evidence gate as-is (by design).
+- Ambiguity: **no** — Approved under policy:healthy-monitor-v1 (reports/HEALTHY_CLASS_ACTION_POLICY.md): healthy is a negative diagnosis class with no pathogen; pathogen-specific evidence is exempted and must not be fabricated. healthy -> monitor is definitional. Reviewed by human_reviewer_1.
 - Confidence (author): high
-- **Human choice** ( approve | revise | exclude | insufficient_evidence ): ______
+- **Human choice** ( approve | revise | exclude | insufficient_evidence ): **approve** — recorded by human_reviewer_1 at 2026-08-02T21:10:00+05:00
 
 ## Soyabean leaf
 
@@ -276,9 +276,9 @@ _Compact per-row checklist for human review. **No decision is made here.** All r
 - Proposed action (candidate only): **monitor** — Healthy tissue — no intervention indicated.
 - Taxonomy + management source: (definitional: healthy class, no pathogen) (definitional — no external URL)
 - Evidence summary: No disease pathogen present; monitor only. A reviewer may attach a general IPM monitoring citation.
-- Ambiguity: **no** — Healthy->monitor is definitional; has no external source_url so cannot pass the evidence gate as-is (by design).
+- Ambiguity: **no** — Approved under policy:healthy-monitor-v1 (reports/HEALTHY_CLASS_ACTION_POLICY.md): healthy is a negative diagnosis class with no pathogen; pathogen-specific evidence is exempted and must not be fabricated. healthy -> monitor is definitional. Reviewed by human_reviewer_1.
 - Confidence (author): high
-- **Human choice** ( approve | revise | exclude | insufficient_evidence ): ______
+- **Human choice** ( approve | revise | exclude | insufficient_evidence ): **approve** — recorded by human_reviewer_1 at 2026-08-02T21:10:00+05:00
 
 ## Strawberry leaf
 
@@ -287,9 +287,9 @@ _Compact per-row checklist for human review. **No decision is made here.** All r
 - Proposed action (candidate only): **monitor** — Healthy tissue — no intervention indicated.
 - Taxonomy + management source: (definitional: healthy class, no pathogen) (definitional — no external URL)
 - Evidence summary: No disease pathogen present; monitor only. A reviewer may attach a general IPM monitoring citation.
-- Ambiguity: **no** — Healthy->monitor is definitional; has no external source_url so cannot pass the evidence gate as-is (by design).
+- Ambiguity: **no** — Approved under policy:healthy-monitor-v1 (reports/HEALTHY_CLASS_ACTION_POLICY.md): healthy is a negative diagnosis class with no pathogen; pathogen-specific evidence is exempted and must not be fabricated. healthy -> monitor is definitional. Reviewed by human_reviewer_1.
 - Confidence (author): high
-- **Human choice** ( approve | revise | exclude | insufficient_evidence ): ______
+- **Human choice** ( approve | revise | exclude | insufficient_evidence ): **approve** — recorded by human_reviewer_1 at 2026-08-02T21:10:00+05:00
 
 ## Tomato leaf
 
@@ -298,9 +298,9 @@ _Compact per-row checklist for human review. **No decision is made here.** All r
 - Proposed action (candidate only): **monitor** — Healthy tissue — no intervention indicated.
 - Taxonomy + management source: (definitional: healthy class, no pathogen) (definitional — no external URL)
 - Evidence summary: No disease pathogen present; monitor only. A reviewer may attach a general IPM monitoring citation.
-- Ambiguity: **no** — Healthy->monitor is definitional; has no external source_url so cannot pass the evidence gate as-is (by design).
+- Ambiguity: **no** — Approved under policy:healthy-monitor-v1 (reports/HEALTHY_CLASS_ACTION_POLICY.md): healthy is a negative diagnosis class with no pathogen; pathogen-specific evidence is exempted and must not be fabricated. healthy -> monitor is definitional. Reviewed by human_reviewer_1.
 - Confidence (author): high
-- **Human choice** ( approve | revise | exclude | insufficient_evidence ): ______
+- **Human choice** ( approve | revise | exclude | insufficient_evidence ): **approve** — recorded by human_reviewer_1 at 2026-08-02T21:10:00+05:00
 
 ## grape leaf
 
@@ -309,6 +309,6 @@ _Compact per-row checklist for human review. **No decision is made here.** All r
 - Proposed action (candidate only): **monitor** — Healthy tissue — no intervention indicated.
 - Taxonomy + management source: (definitional: healthy class, no pathogen) (definitional — no external URL)
 - Evidence summary: No disease pathogen present; monitor only. A reviewer may attach a general IPM monitoring citation.
-- Ambiguity: **no** — Healthy->monitor is definitional; has no external source_url so cannot pass the evidence gate as-is (by design).
+- Ambiguity: **no** — Approved under policy:healthy-monitor-v1 (reports/HEALTHY_CLASS_ACTION_POLICY.md): healthy is a negative diagnosis class with no pathogen; pathogen-specific evidence is exempted and must not be fabricated. healthy -> monitor is definitional. Reviewed by human_reviewer_1.
 - Confidence (author): high
-- **Human choice** ( approve | revise | exclude | insufficient_evidence ): ______
+- **Human choice** ( approve | revise | exclude | insufficient_evidence ): **approve** — recorded by human_reviewer_1 at 2026-08-02T21:10:00+05:00

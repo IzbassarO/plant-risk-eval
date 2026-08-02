@@ -51,8 +51,25 @@ EVIDENCE_FIELDS_REQUIRED_FOR_APPROVAL = (
 )
 #: The review CSV names the action column `candidate_action_class`; the canonical
 #: mapping table (src/ica26/schemas.py:MAPPING_COLUMNS) names it `action_class`.
+#: `scripts/apply_action_mapping_review.py` is the one-way bridge between them.
 REVIEW_ACTION_COLUMN = "candidate_action_class"
 CANONICAL_ACTION_COLUMN = "action_class"
+
+#: Narrow healthy-class exemption -- mirrors src/ica26/schemas.py.
+#: A healthy class is a NEGATIVE diagnosis class: there is no pathogen, so the
+#: pathogen-specific evidence fields are exempt and must stay blank rather than
+#: be fabricated. Everything else about the gate is unchanged.
+HEALTHY_CANONICAL_DISEASE = "healthy"
+HEALTHY_ACTION_CLASS = "monitor"
+HEALTHY_POLICY_ID = "policy:healthy-monitor-v1"
+HEALTHY_EVIDENCE_FIELDS_REQUIRED_FOR_APPROVAL = (
+    "action_class", "action_summary", "evidence_summary", "evidence_checked_at",
+)
+HEALTHY_FORBIDDEN_FIELDS = ("pathogen_name", "pathogen_type")
+
+#: Arthropod-pest scope decision -- mirrors configs/evaluation_scope.yaml.
+ARTHROPOD_POLICY_ID = "policy:arthropod-pest-scope-v1"
+ARTHROPOD_SCOPE_REASON = "arthropod_pest_out_of_disease_scope"
 
 #: Allowed human values, from reports/NEAR_DUPLICATE_HUMAN_REVIEW.md.
 NDP_DECISIONS = ("same_source_image", "same_scene_different_crop",
@@ -77,7 +94,10 @@ REVIEWED_EXCL = Path("data/exclusions/cross_dataset_reviewed_exclusions.csv")
 EXACT_EXCL = Path("data/exclusions/cross_dataset_exact_exclusions.csv")
 MAP_REVIEW = Path("data/mapping/action_mapping_review.csv")
 MAP_TEMPLATE = Path("data/mapping/action_mapping_template.csv")
+MAP_APPROVED = Path("data/mapping/action_mapping_approved.csv")
+MAP_APPLY_SCRIPT = Path("scripts/apply_action_mapping_review.py")
 MAP_CHECKLIST = Path("reports/ACTION_MAPPING_HUMAN_CHECKLIST.md")
+SCOPE_CONFIG = Path("configs/evaluation_scope.yaml")
 LEAKAGE_PAIRS = Path("reports/leakage_plantvillage_vs_plantdoc_pairs.csv")
 PD_MANIFEST = Path("data/manifests/plantdoc_manifest.csv")
 PV_MANIFEST = Path("data/manifests/plantvillage_manifest.csv")
@@ -343,6 +363,11 @@ def validate_near_duplicate_review(F: Findings) -> dict:
 def validate_action_mapping(F: Findings) -> dict:
     art = str(MAP_REVIEW)
     rows = read_csv(MAP_REVIEW)
+    # Raw text of the scope config. Substring containment is enough here: this
+    # validator stays stdlib-only, and configs/evaluation_scope.yaml is parsed and
+    # schema-checked properly by ica26.evaluation.scope + tests/test_evaluation_scope.py.
+    scope_text = ((REPO / SCOPE_CONFIG).read_text(encoding="utf-8")
+                  if (REPO / SCOPE_CONFIG).exists() else "")
 
     approved = excluded = pending = invalid = 0
     healthy_actions: dict[str, set[str]] = {}
@@ -418,30 +443,73 @@ def validate_action_mapping(F: Findings) -> dict:
 
         # -- evidence gate. Evaluated for every row, because it determines whether
         #    an `approve` decision is even *expressible* for that row.
-        missing_evidence = []
-        for fld in EVIDENCE_FIELDS_REQUIRED_FOR_APPROVAL:
-            col = REVIEW_ACTION_COLUMN if fld == CANONICAL_ACTION_COLUMN else fld
-            if blank(r.get(col)):
-                missing_evidence.append(fld)
+        is_healthy = (r.get("canonical_disease") or "").strip().lower() == HEALTHY_CANONICAL_DISEASE
+        if is_healthy:
+            # Narrow exemption (policy:healthy-monitor-v1): a healthy class is a
+            # NEGATIVE diagnosis, so there is no pathogen to cite. Action prose,
+            # evidence prose, the date, `monitor`, and a policy citation are all
+            # still mandatory -- and pathogen fields must stay BLANK, so the
+            # exemption can never be used to smuggle in a fabricated pathogen.
+            missing_evidence = [
+                fld for fld in HEALTHY_EVIDENCE_FIELDS_REQUIRED_FOR_APPROVAL
+                if blank(r.get(REVIEW_ACTION_COLUMN if fld == CANONICAL_ACTION_COLUMN else fld))
+            ]
+            cites_policy = any(
+                HEALTHY_POLICY_ID in (r.get(c) or "")
+                for c in ("source_identifier", "review_notes")
+            )
+            if status == "approved":
+                if action != HEALTHY_ACTION_CLASS:
+                    F.add(art, rid, "MAP-HEALTHY-ACTION", "invalid_value",
+                          f"approved healthy row must map to '{HEALTHY_ACTION_CLASS}' "
+                          f"({HEALTHY_POLICY_ID}), not '{action}'", "blocker",
+                          str(Path("reports/HEALTHY_CLASS_ACTION_POLICY.md")))
+                if not cites_policy:
+                    F.add(art, rid, "MAP-HEALTHY-POLICY-REF", "invalid_value",
+                          f"approved healthy row must cite '{HEALTHY_POLICY_ID}' in "
+                          "source_identifier or review_notes", "blocker",
+                          str(Path("reports/HEALTHY_CLASS_ACTION_POLICY.md")))
+                for fld in HEALTHY_FORBIDDEN_FIELDS:
+                    if not blank(r.get(fld)):
+                        F.add(art, rid, "MAP-HEALTHY-NO-PATHOGEN", "invalid_value",
+                              f"healthy row must leave '{fld}' blank -- a healthy "
+                              "negative class has no pathogen and none may be "
+                              "fabricated", "blocker",
+                              str(Path("reports/HEALTHY_CLASS_ACTION_POLICY.md")))
+        else:
+            missing_evidence = [
+                fld for fld in EVIDENCE_FIELDS_REQUIRED_FOR_APPROVAL
+                if blank(r.get(REVIEW_ACTION_COLUMN if fld == CANONICAL_ACTION_COLUMN else fld))
+            ]
         if missing_evidence:
-            sev = "blocker" if status == "approved" else "blocker"
             st = "invalid_value" if status == "approved" else "evidence_gate_unsatisfiable"
+            gate = ("healthy-class evidence gate" if is_healthy else "evidence gate")
             F.add(art, rid, "MAP-EVIDENCE-GATE", st,
-                  "evidence gate cannot be satisfied: missing "
+                  f"{gate} cannot be satisfied: missing "
                   f"{missing_evidence}; src/ica26/mapping/validation.py rejects an "
-                  "approved row lacking any of these fields", sev,
+                  "approved row lacking any of these fields", "blocker",
                   str(Path("src/ica26/schemas.py")))
 
         # -- out-of-scope (arthropod pest) rows need an explicit human scope call
         if ptype in ARTHROPOD_PEST_TYPES:
-            F.add(art, rid, "MAP-SCOPE-ARTHROPOD", "missing_decision",
-                  f"pathogen_type '{ptype}' is an arthropod pest, not a plant "
-                  "pathogen; an explicit human in-scope/out-of-scope decision is "
-                  "required before this class may enter a plant-disease dataset",
-                  "blocker", str(MAP_CHECKLIST))
+            cites_scope = ARTHROPOD_POLICY_ID in (r.get("review_notes") or "")
+            in_scope_config = dc and dc in scope_text and ARTHROPOD_SCOPE_REASON in scope_text
+            if status in TERMINAL_REVIEW_STATUSES and (cites_scope or in_scope_config):
+                F.add(art, rid, "MAP-SCOPE-ARTHROPOD", "pass",
+                      f"arthropod-pest class carries an explicit human scope "
+                      f"decision (review_status='{status}'"
+                      + (f", cites {ARTHROPOD_POLICY_ID}" if cites_scope else "")
+                      + (f", recorded in {SCOPE_CONFIG}" if in_scope_config else "")
+                      + ")", "info", str(SCOPE_CONFIG))
+            else:
+                F.add(art, rid, "MAP-SCOPE-ARTHROPOD", "missing_decision",
+                      f"pathogen_type '{ptype}' is an arthropod pest, not a plant "
+                      "pathogen; an explicit human in-scope/out-of-scope decision is "
+                      "required before this class may enter a plant-disease dataset",
+                      "blocker", str(MAP_CHECKLIST))
 
         # -- healthy-class treatment consistency
-        if (r.get("canonical_disease") or "").strip().lower() == "healthy":
+        if is_healthy:
             healthy_actions.setdefault(action or "<blank>", set()).add(rid)
 
         if not any(f["row_identifier"] == rid and f["artifact"] == art for f in F.rows):
@@ -459,14 +527,46 @@ def validate_action_mapping(F: Findings) -> dict:
               f"all {sum(len(v) for v in healthy_actions.values())} healthy classes "
               f"map consistently to '{a}'", "info", art)
 
-    # ---- schema divergence: review CSV vs canonical mapping table
+    # ---- schema divergence: review CSV vs canonical mapping table.
+    #      The two columns SHOULD differ (candidate proposal vs ratified fact);
+    #      what matters is that an audited transcription step exists and that its
+    #      output actually reflects the recorded decisions.
     if rows and CANONICAL_ACTION_COLUMN not in rows[0]:
-        F.add(art, "<schema>", "MAP-SCHEMA-VOCAB", "inconsistent",
-              f"review CSV carries '{REVIEW_ACTION_COLUMN}' but the canonical "
-              f"mapping schema requires '{CANONICAL_ACTION_COLUMN}'; decisions are "
-              "not consumable by ica26.mapping.validation without a transcription "
-              "step, and no such script exists in scripts/",
-              "blocker", str(Path("src/ica26/schemas.py")))
+        if not (REPO / MAP_APPLY_SCRIPT).exists():
+            F.add(art, "<schema>", "MAP-SCHEMA-VOCAB", "inconsistent",
+                  f"review CSV carries '{REVIEW_ACTION_COLUMN}' but the canonical "
+                  f"mapping schema requires '{CANONICAL_ACTION_COLUMN}'; decisions "
+                  "are not consumable by ica26.mapping.validation without a "
+                  "transcription step, and no such script exists in scripts/",
+                  "blocker", str(Path("src/ica26/schemas.py")))
+        elif not (REPO / MAP_APPROVED).exists():
+            F.add(art, "<schema>", "MAP-SCHEMA-VOCAB", "inconsistent",
+                  f"{MAP_APPLY_SCRIPT} exists but has not been run: "
+                  f"{MAP_APPROVED} is absent, so no canonical mapping carries the "
+                  f"'{CANONICAL_ACTION_COLUMN}' column",
+                  "blocker", str(MAP_APPLY_SCRIPT))
+        else:
+            canon = read_csv(MAP_APPROVED)
+            approved_ids = {(r.get("dataset", ""), r.get("dataset_class", ""))
+                            for r in rows if (r.get("review_status") or "").strip() == "approved"}
+            canon_ids = {(r.get("dataset", ""), r.get("dataset_class", "")) for r in canon}
+            missing = sorted(approved_ids - canon_ids)
+            extra = sorted(canon_ids - approved_ids)
+            bad_action = [f"{r.get('dataset')}/{r.get('dataset_class')}"
+                          for r in canon
+                          if (r.get(CANONICAL_ACTION_COLUMN) or "").strip() not in ACTION_CLASSES]
+            if missing or extra or bad_action:
+                F.add(art, "<schema>", "MAP-SCHEMA-VOCAB", "inconsistent",
+                      f"{MAP_APPROVED} is out of sync with the review decisions: "
+                      f"missing={missing} unexpected={extra} bad_action={bad_action}; "
+                      f"re-run `python {MAP_APPLY_SCRIPT}`",
+                      "blocker", str(MAP_APPLY_SCRIPT))
+            else:
+                F.add(art, "<schema>", "MAP-SCHEMA-VOCAB", "pass",
+                      f"'{REVIEW_ACTION_COLUMN}' is transcribed to "
+                      f"'{CANONICAL_ACTION_COLUMN}' by {MAP_APPLY_SCRIPT}; "
+                      f"{MAP_APPROVED} carries {len(canon_ids)} approved row(s) "
+                      "and matches the review file", "info", str(MAP_APPLY_SCRIPT))
 
     # ---- checklist: every entry must carry a human choice
     if (REPO / MAP_CHECKLIST).exists():
@@ -528,8 +628,12 @@ def main() -> int:
 
     checksums = {}
     for p in (NDP_REVIEW, REVIEWED_EXCL, EXACT_EXCL, MAP_REVIEW, MAP_TEMPLATE,
+              MAP_APPROVED, MAP_APPLY_SCRIPT, SCOPE_CONFIG,
               MAP_CHECKLIST, LEAKAGE_PAIRS, PD_MANIFEST, PV_MANIFEST,
               Path("reports/NEAR_DUPLICATE_HUMAN_REVIEW.md"),
+              Path("reports/HEALTHY_CLASS_ACTION_POLICY.md"),
+              Path("reports/ARTHROPOD_PEST_EVALUATION_SCOPE.md"),
+              Path("reports/PHASE1_HUMAN_DECISIONS_2026-08-02.md"),
               Path("phase1_return_package.zip")):
         if (REPO / p).exists():
             checksums[str(p)] = sha256_of(p)

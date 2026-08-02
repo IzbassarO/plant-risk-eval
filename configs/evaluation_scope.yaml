@@ -1,0 +1,55 @@
+# Evaluation scope for the ICA-2026 action-level framework.
+#
+# A scope entry NEVER deletes data. It records, per original dataset class, which
+# EVALUATION LAYERS that class participates in. A class may be a perfectly valid
+# diagnosis target while being outside the scope of a *plant-disease* action or
+# risk-weighted metric. Absent classes default to "in scope everywhere"; only an
+# explicit human decision narrows a class, and every entry must name the policy
+# document that authorises it.
+#
+# This is an evaluation-scope decision, NOT a data-quality exclusion: images stay
+# in data/raw, rows stay in the diagnosis manifests, and no manifest is rewritten.
+version: 1
+
+#: Evaluation layers a scope entry may switch off. Diagnosis is listed so an
+#: entry always states its diagnosis stance explicitly rather than implying it.
+layers:
+  - include_diagnosis
+  - include_action_evaluation
+  - include_risk_weighted_evaluation
+
+out_of_scope_classes:
+  - dataset: PlantDoc
+    dataset_class: Tomato two spotted spider mites leaf
+    include_diagnosis: true
+    include_action_evaluation: false
+    include_risk_weighted_evaluation: false
+    exclusion_reason: arthropod_pest_out_of_disease_scope
+    policy_reference: reports/ARTHROPOD_PEST_EVALUATION_SCOPE.md
+    decided_by: human_reviewer_1
+    decided_at: "2026-08-02T21:10:00+05:00"
+    notes: >-
+      Tetranychus urticae is an arthropod pest, not a plant pathogen. The class
+      stays in diagnosis-level classification; it is out of scope for
+      disease-action and risk-weighted disease metrics.
+
+  - dataset: PlantVillage
+    dataset_class: Tomato___Spider_mites Two-spotted_spider_mite
+    include_diagnosis: true
+    include_action_evaluation: false
+    include_risk_weighted_evaluation: false
+    exclusion_reason: arthropod_pest_out_of_disease_scope
+    policy_reference: reports/ARTHROPOD_PEST_EVALUATION_SCOPE.md
+    decided_by: human_reviewer_1
+    decided_at: "2026-08-02T21:10:00+05:00"
+    notes: >-
+      Same arthropod-pest scope decision as the PlantDoc spider-mite class. No
+      PlantVillage action-mapping row exists yet and none is created by this
+      entry; the entry only records that the class is out of disease-action and
+      risk-weighted scope when that mapping is eventually authored.
+
+notes: >-
+  Adding an entry here does not approve, create, or modify any disease-to-action
+  mapping. Scope narrowing and action mapping are independent gates: a class must
+  be BOTH in scope and backed by an approved, evidence-gated mapping row before
+  it can contribute to an action-level or risk-weighted metric.

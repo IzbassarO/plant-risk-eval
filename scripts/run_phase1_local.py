@@ -1212,7 +1212,9 @@ def render_report(data_dir: Path, repo_dir: Path, state: dict) -> str:
         "## E. Leakage gate status", "",
         f"- Status: **{gate.get('status', 'n/a')}** "
         f"(exact {gate.get('exact_duplicate_count')}, near {gate.get('near_duplicate_count')}, "
-        f"excluded {gate.get('excluded_pair_count')}, unresolved {gate.get('unresolved_pair_count')}).",
+        f"excluded {gate.get('excluded_pair_count')}, "
+        f"human-resolved {gate.get('resolved_pair_count')}, "
+        f"unresolved {gate.get('unresolved_pair_count')}).",
         f"- Manifest-bound (training SHA `{str(gate.get('training_manifest_sha256'))[:12]}…`, "
         f"evaluation SHA `{str(gate.get('evaluation_manifest_sha256'))[:12]}…`).",
         f"- Five-state guard test: `reports/leakage_gate_guard_test.json` "

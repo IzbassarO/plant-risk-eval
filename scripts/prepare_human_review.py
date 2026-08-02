@@ -459,19 +459,41 @@ def build_reviewed_exclusions_skeleton() -> Path:
 
 
 # --------------------------------------------------------------------------- #
-# PART 4 — mapping human checklist (no decisions)
+# PART 4 — mapping human checklist (renders decisions; never makes one)
 # --------------------------------------------------------------------------- #
+#: review_status -> the `Human choice` token it corresponds to. A status outside
+#: this map is undecided and renders as the blank `______` placeholder, so
+#: regenerating the checklist can never invent or erase a human decision.
+_STATUS_TO_CHOICE = {"approved": "approve", "excluded": "exclude"}
+
+
+def _human_choice_line(row) -> str:
+    choice = _STATUS_TO_CHOICE.get(str(row["review_status"]).strip())
+    rendered = f"**{choice}**" if choice else "______"
+    suffix = ""
+    if choice:
+        who = str(row.get("reviewer", "") or "").strip()
+        when = str(row.get("reviewed_at", "") or "").strip()
+        if who or when:
+            suffix = f" — recorded by {who or 'unattributed'}" + (f" at {when}" if when else "")
+    return ("- **Human choice** ( approve | revise | exclude | insufficient_evidence ): "
+            f"{rendered}{suffix}")
+
+
 def build_mapping_checklist() -> dict:
     df = pd.read_csv(DATA / "mapping" / "action_mapping_review.csv", dtype=str, keep_default_na=False)
     n = len(df)
     needs = int((df["review_status"] == "needs_review").sum())
     approved = int((df["review_status"] == "approved").sum())
+    excluded = int((df["review_status"] == "excluded").sum())
 
     md = ["# Action-Mapping Human Checklist", "",
-          "_Compact per-row checklist for human review. **No decision is made here.** All rows remain "
-          "`review_status=needs_review`, `approved=0`. Evidence is unchanged and no new sources were "
-          "fetched. Set `Human choice` yourself; leave blank until decided._", "",
-          f"- Rows: **{n}** · needs_review: **{needs}** · approved: **{approved}**",
+          "_Compact per-row checklist for human review. **This file makes no decision of its "
+          "own**: every `Human choice` below is rendered from `review_status` in "
+          "`data/mapping/action_mapping_review.csv`, and an undecided row renders as `______`. "
+          "Evidence is unchanged and no new sources were fetched._", "",
+          f"- Rows: **{n}** · needs_review: **{needs}** · approved: **{approved}** · "
+          f"excluded: **{excluded}**",
           "- Allowed `Human choice`: `approve` · `revise` · `exclude` · `insufficient_evidence` "
           "(leave blank until decided).", ""]
     for _, r in df.iterrows():
@@ -488,11 +510,11 @@ def build_mapping_checklist() -> dict:
             f"- Evidence summary: {r['evidence_summary']}",
             f"- Ambiguity: **{amb}**" + (f" — {r['review_notes']}" if r["review_notes"] else ""),
             f"- Confidence (author): {r['mapping_confidence']}",
-            "- **Human choice** ( approve | revise | exclude | insufficient_evidence ): ______",
+            _human_choice_line(r),
             "",
         ]
     (REPORTS / "ACTION_MAPPING_HUMAN_CHECKLIST.md").write_text("\n".join(md))
-    return {"rows": n, "needs_review": needs, "approved": approved}
+    return {"rows": n, "needs_review": needs, "approved": approved, "excluded": excluded}
 
 
 def main() -> int:

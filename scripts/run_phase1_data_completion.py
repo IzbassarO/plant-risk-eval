@@ -425,18 +425,22 @@ def step_gate(data_dir: Path, repo_dir: Path, pv_images_root: Path,
     from ica26.leakage.gate import compute_gate
 
     man_dir = data_dir / "manifests"
+    excl_dir = data_dir / "exclusions"
     gate, _ = compute_gate(
         training_manifest=man_dir / "plantvillage_manifest.csv",
         training_root=pv_images_root, training_dataset="PlantVillage",
         evaluation_manifest=man_dir / "plantdoc_manifest.csv",
         evaluation_root=data_dir / "raw" / "plantdoc", evaluation_dataset="PlantDoc",
         threshold=threshold, excluded_pair_count=excluded_pairs,
+        near_duplicate_review=excl_dir / "cross_dataset_near_duplicate_review.csv",
+        reviewed_exclusions=excl_dir / "cross_dataset_reviewed_exclusions.csv",
         provenance={"command": "run_phase1_data_completion.py:gate",
                     "training_config": "color"},
     )
     gate.write(repo_dir / "reports" / "leakage_gate.json")
     log(f"gate: status={gate.status} exact={gate.exact_duplicate_count} "
-        f"near={gate.near_duplicate_count} unresolved={gate.unresolved_pair_count}")
+        f"near={gate.near_duplicate_count} resolved={gate.resolved_pair_count} "
+        f"unresolved={gate.unresolved_pair_count}")
     return {"status": gate.status}
 
 

@@ -1,6 +1,6 @@
 {
-  "schema_version": "1.0",
-  "generated_at": "2026-07-30T07:45:45+00:00",
+  "schema_version": "1.1",
+  "generated_at": "2026-08-02T16:53:25+00:00",
   "training_dataset": "PlantVillage",
   "evaluation_dataset": "PlantDoc",
   "training_manifest_sha256": "b9acc43637ef2e930bd9e5e8a09b1d5025c720d65f9dd3fc9aabdfbd7e399591",
@@ -10,14 +10,25 @@
   "exact_duplicate_count": 0,
   "near_duplicate_count": 16,
   "excluded_pair_count": 0,
-  "unresolved_pair_count": 16,
-  "status": "fail",
+  "unresolved_pair_count": 0,
+  "status": "pass",
+  "resolved_pair_count": 16,
   "provenance": {
     "command": "run_phase1_data_completion.py:gate",
     "training_config": "color",
     "phash_algorithm": "imagehash.phash",
     "skipped_training": 0,
     "skipped_evaluation": 0,
+    "near_duplicate_review": "data/exclusions/cross_dataset_near_duplicate_review.csv",
+    "near_review_counts": {
+      "review_rows": 16,
+      "resolved": 16,
+      "kept": 16,
+      "excluded": 0,
+      "unresolved": 0,
+      "unmatched": 0,
+      "invalid": 0
+    },
     "ica26_version": "0.1.0"
   }
 }
