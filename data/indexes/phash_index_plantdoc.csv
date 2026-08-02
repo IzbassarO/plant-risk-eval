@@ -414,7 +414,7 @@ PlantDoc,train,Apple rust leaf,train/Apple rust leaf/B2750027-Cedar-apple_rust-S
 PlantDoc,train,Apple rust leaf,train/Apple rust leaf/C0258424-Cedar_apple_rust_on_a_leaf-SPL.jpg,d2456536365b896d
 PlantDoc,train,Apple rust leaf,train/Apple rust leaf/C11.11.jpg,c0cb6d0d3f78a4b4
 PlantDoc,train,Apple rust leaf,train/Apple rust leaf/CAR%2Bzestar.JPG.jpg,d4e170d9e160b78e
-PlantDoc,train,Apple rust leaf,train/Apple rust leaf/CAR1.jpg,d82068b0976bffa8
+PlantDoc,train,Apple rust leaf,train/Apple rust leaf/CAR1__ff8e845061e3.jpg,aef1c40b823f1fe0
 PlantDoc,train,Apple rust leaf,train/Apple rust leaf/CAR4.jpg,9e87c383d3d4c46a
 PlantDoc,train,Apple rust leaf,train/Apple rust leaf/Cedar+Apple+rust+on+Crab+apple+leaf.jpg,ceb12591a469567d
 PlantDoc,train,Apple rust leaf,train/Apple rust leaf/Cedar+apple+rust.JPG.jpg,d912d66f6ce54186
@@ -451,6 +451,7 @@ PlantDoc,train,Apple rust leaf,train/Apple rust leaf/buckinghamshire-speen-garde
 PlantDoc,train,Apple rust leaf,train/Apple rust leaf/car-apple1.jpg,966538cc61796763
 PlantDoc,train,Apple rust leaf,train/Apple rust leaf/car-apple9.jpg,faa18156872ed768
 PlantDoc,train,Apple rust leaf,train/Apple rust leaf/car.jpg,ce9636cb8bae1033
+PlantDoc,train,Apple rust leaf,train/Apple rust leaf/car1__da3a9af451c8.jpg,d82068b0976bffa8
 PlantDoc,train,Apple rust leaf,train/Apple rust leaf/car2.jpg,b5b3aa9762ace062
 PlantDoc,train,Apple rust leaf,train/Apple rust leaf/cd6bfd6bfbcac781bd496bf13845fb0f.jpg,8b45b644955a77a6
 PlantDoc,train,Apple rust leaf,train/Apple rust leaf/cedapp04_lg.jpg,e936c5c91eb01567
@@ -610,8 +611,8 @@ PlantDoc,train,Blueberry leaf,train/Blueberry leaf/A+A+Blueberry+Leaf+Disease+00
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/BLUEBERRY-BLUE-CROP-LEAF-500x500.jpg,af9a172e8848fd62
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/BLUEBERRY-SPARTAN-LEAF-500x500.jpg,b8bbc799538860a7
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/Blueberries+autumn+leaves7.jpg,fad27ac928a98e89
-PlantDoc,train,Blueberry leaf,train/Blueberry leaf/Blueberry-Leaf.jpg,856c39687033b5be
-PlantDoc,train,Blueberry leaf,train/Blueberry leaf/Blueberry-leaves.jpg,d382a731ee4dca1c
+PlantDoc,train,Blueberry leaf,train/Blueberry leaf/Blueberry-Leaf__eb505ea1d76e.jpg,856c39687033b5be
+PlantDoc,train,Blueberry leaf,train/Blueberry leaf/Blueberry-leaves__5ceeed324d9f.jpg,d382a731ee4dca1c
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/Blueberry07.jpg,dca795d59880c8e7
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/Blueberry165.JPG.jpg,c96c9cb9d2192ce5
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/Blueberry169.JPG.jpg,85c30ce663781ff8
@@ -654,6 +655,7 @@ PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaf-isolated-white
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaf-isolated-white-background-clipping-path-84283705.jpg,ea68c7979c9812d6
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaf-isolated-white-background-clipping-path-87355538.jpg,ea4a92b48d9932e7
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaf-set-collection-isolated-white-58283965.jpg,be6781f8e01cc9c5
+PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaf__a488765c32aa.jpg,9a3969a666cc9659
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaves-16311688.jpg,be3ac1c516924b6b
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaves-5931369.jpg,a9cfc631923c0f0f
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaves-in-October.jpg,c19e6b997c792c81
@@ -661,6 +663,7 @@ PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaves-isolated-sha
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaves-normal-above-and-iron-deficient-below-bgahf8.jpg,8821f58eaf1ff409
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaves-safe.jpeg.jpg,e4cec1e19a949a6b
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaves-white-collection-isolated-35579573.jpg,e939a54e93b116d2
+PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaves__2e99aae9cb26.jpg,ebcc8d9f01a3f4c0
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-plant-berries-and-leaves-blueberries-vaccinium-corybosum-BNDMY8.jpg,8c98d9a172e76b89
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-plant-unripe-berries-and-leaves-blueberries-vaccinium-corybosum-BNDN04.jpg,edd842ed5ec32590
 PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry_leaves_berries_fresh_wood_1280x960_hd-wallpaper-1763513.jpg,85814a7f69339d9c
@@ -884,8 +887,8 @@ PlantDoc,train,Corn leaf blight,train/Corn leaf blight/Northern-Corn-Leaf-Blight
 PlantDoc,train,Corn leaf blight,train/Corn leaf blight/Northern-Corn-Leaf-Blight-NCLB-med.jpg,f82c6fd2926a2fc0
 PlantDoc,train,Corn leaf blight,train/Corn leaf blight/Northern-Corn-Leaf-Blight-in-Sweet-Corn.jpg,e82a6a6883fcd9a3
 PlantDoc,train,Corn leaf blight,train/Corn leaf blight/Northern-Corn-Leaf-Blight.ashx.jpg,eea138605897e4af
-PlantDoc,train,Corn leaf blight,train/Corn leaf blight/Northern-Corn-Leaf-Blight.jpg,c2e05ebc4f35b0d4
 PlantDoc,train,Corn leaf blight,train/Corn leaf blight/Northern-Corn-Leaf-Blight4.jpg,da1b63f03486e26e
+PlantDoc,train,Corn leaf blight,train/Corn leaf blight/Northern-Corn-Leaf-Blight__4fbcb5158227.jpg,c2e05ebc4f35b0d4
 PlantDoc,train,Corn leaf blight,train/Corn leaf blight/Northern-corn-leaf-blight-NM-F1a.jpg,9bdf43aeee000176
 PlantDoc,train,Corn leaf blight,train/Corn leaf blight/Northern-corn-leaf-blight-NM-F2.jpg,cc811bfe7cf842e0
 PlantDoc,train,Corn leaf blight,train/Corn leaf blight/Northern-corn-leaf-blight-V12-leaf-NM-F3.jpg,b9b884c34ffe410b
@@ -972,6 +975,7 @@ PlantDoc,train,Corn leaf blight,train/Corn leaf blight/northern-corn-leaf-blight
 PlantDoc,train,Corn leaf blight,train/Corn leaf blight/northern-corn-leaf-blight-exserohilum-turcicum-lesions-on-a-maize-BX3K2K.jpg,85c7e812fe6be114
 PlantDoc,train,Corn leaf blight,train/Corn leaf blight/northern-corn-leaf-blight-exserohilum-turcicum-lesions-on-a-maize-leaf-south-africa-XDYJWY.jpg,d493fd078b3ed401
 PlantDoc,train,Corn leaf blight,train/Corn leaf blight/northern-corn-leaf-blight-exserohilum-turcicum-lesions-on-a-maize-leaf-south-africa-xe3a7j.jpg,c83ea769e063b847
+PlantDoc,train,Corn leaf blight,train/Corn leaf blight/northern-corn-leaf-blight__2c2cc7cec2c4.jpg,d9808fecc0c57f19
 PlantDoc,train,Corn leaf blight,train/Corn leaf blight/northern_corn_leaf_blight_university_of_delaware-600x400.jpg,eac00d3a7962c767
 PlantDoc,train,Corn leaf blight,train/Corn leaf blight/northern_leaf_blight.jpg,94ed8b5235c1fd18
 PlantDoc,train,Corn leaf blight,train/Corn leaf blight/photo-7-004.jpg,93e4fb0cc0ee3f80
@@ -1120,7 +1124,7 @@ PlantDoc,train,Peach leaf,train/Peach leaf/H2c1o.jpg,9de924b413171b5b
 PlantDoc,train,Peach leaf,train/Peach leaf/P1010703.JPG.jpg,ad959f7504ca4e83
 PlantDoc,train,Peach leaf,train/Peach leaf/P1015750.JPG.jpg,d4b107eea0c9dc4e
 PlantDoc,train,Peach leaf,train/Peach leaf/P1015775.JPG.jpg,f74896a05ca57da1
-PlantDoc,train,Peach leaf,train/Peach leaf/Peach-Leaf.jpg,c4c4e663eb49e985
+PlantDoc,train,Peach leaf,train/Peach leaf/Peach-Leaf__3e557ad64269.jpg,c4c4e663eb49e985
 PlantDoc,train,Peach leaf,train/Peach leaf/Peach-Pixzee-tree.jpg,dc4faf2792a12711
 PlantDoc,train,Peach leaf,train/Peach leaf/Peach-leaves.jpg,84cf777089b741c9
 PlantDoc,train,Peach leaf,train/Peach leaf/Peach_leaves_raw.jpg,ecd80727772e08cb
@@ -1151,6 +1155,7 @@ PlantDoc,train,Peach leaf,train/Peach leaf/peach-leaf-isolated-white-background-
 PlantDoc,train,Peach leaf,train/Peach leaf/peach-leaf-isolated-white-background-43668230.jpg,a66ccd939136664d
 PlantDoc,train,Peach leaf,train/Peach leaf/peach-leaf-stock-picture-855439.jpg,ca61174ff512da2c
 PlantDoc,train,Peach leaf,train/Peach leaf/peach-leaf-white-background-40292976.jpg,e0c6c7388a6d9973
+PlantDoc,train,Peach leaf,train/Peach leaf/peach-leaf__0571261a682b.jpg,fef290c693ad9091
 PlantDoc,train,Peach leaf,train/Peach leaf/peach-leaves-18058413.jpg,9a1af3d3c5b80ce4
 PlantDoc,train,Peach leaf,train/Peach leaf/peach-leaves-26807890.jpg,e646eb7b920a9a1c
 PlantDoc,train,Peach leaf,train/Peach leaf/peach-leaves-isolated-white-background-43668179.jpg,a6bcc8e3341d4be4
@@ -1278,7 +1283,8 @@ PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/maxresdef
 PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/pe-mi-lateblightleaf.jpg,e51e1b40d6540efb
 PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/potato-blight-damage-on-leaves-caused-by-fungus-phytophthora-picture-id505322893.jpg,d930367d0835b74b
 PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/potato-blight-leaf.jpg,e836c6c69e399949
-PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/potato-blight-phytophora-infestans-close-up-of-infected-leaf-showing-A60HXN.jpg,d0be1e8c6ec066f2
+PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/potato-blight-phytophora-infestans-close-up-of-infected-leaf-showing-A60HXN__79aeef9fa53b.jpg,d0be1e8c6ec066f2
+PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/potato-blight-phytophora-infestans-close-up-of-infected-leaf-showing-a60hxn__0ea1317f5e20.jpg,d03e1e4c8e40f67b
 PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/potato-blight-phytophora-infestans-close-up-of-infected-leaf-top-surface-a60hxg.jpg,851f6d41e34df22c
 PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/potato-blight-phytophthora-infestans-close-up-of-upper-surface-of-bmmrxd.jpg,a3d5bd42d23ccb22
 PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/potato-blight-phytophthora-infestans-showing-infected-leaf-top-surface-bmmrtd.jpg,a253d90cbf4d658c

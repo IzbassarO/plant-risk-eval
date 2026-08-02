@@ -593,6 +593,12 @@ def step_plantdoc(data_dir: Path, do_download: bool = True) -> dict:
                 log(f"PlantDoc raw-CDN: +{rep['downloaded']} skipped={rep['skipped']} "
                     f"failed={rep['failed']}")
 
+    # Case-insensitive filesystems silently collapse upstream paths that differ
+    # only by letter case, destroying distinct images (AUD-EC-003). Re-assert the
+    # collision-safe layout BEFORE the manifest is built, so a fresh extraction
+    # can never reintroduce the loss. Idempotent; skipped when already clean.
+    _ensure_collision_safe(data_dir)
+
     # Rebuild manifest/summary/snapshot from the filesystem, pinned to the frozen
     # commit (live enumeration when available, else VERIFIED_SNAPSHOT). Atomic.
     df = PD.build_manifest(dest)
@@ -609,6 +615,53 @@ def step_plantdoc(data_dir: Path, do_download: bool = True) -> dict:
         f"(train={rec['train_images']} test={rec['test_images']})")
     _append_plantdoc_reconciliation(data_dir, summary)
     return {"summary": summary, "reconciliation": rec}
+
+
+def _collision_safe_expected(data_dir: Path) -> list[str]:
+    """Active relpaths the inventory implies, with collision members disambiguated."""
+    import csv as _csv
+    from ica26.datasets.plantdoc import casefold_collisions, collision_safe_relpath
+
+    inv_path = data_dir / "manifests" / "plantdoc_source_inventory.csv"
+    if not inv_path.exists():
+        return []
+    with open(inv_path, newline="", encoding="utf-8") as fh:
+        inv = list(_csv.DictReader(fh))
+    groups = casefold_collisions(r["original_upstream_path"] for r in inv)
+    colliding = {p for members in groups.values() for p in members}
+    return [
+        collision_safe_relpath(r["original_upstream_path"], r["source_sha256"])
+        if r["original_upstream_path"] in colliding else r["original_upstream_path"]
+        for r in inv
+    ]
+
+
+def _ensure_collision_safe(data_dir: Path) -> None:
+    """Materialize the collision-safe layout if the active tree is not already it.
+
+    The cheap check compares the expected active path set against disk. Only a
+    genuine discrepancy pays the cost of re-reading the pinned archive, so the
+    common case (already restored) is fast and writes nothing.
+    """
+    expected = _collision_safe_expected(data_dir)
+    if not expected:
+        log("plantdoc: no source inventory — skipping collision-safe check")
+        return
+    dest = data_dir / "raw" / "plantdoc"
+    missing = [p for p in expected if not (dest / p).exists()]
+    if not missing:
+        log(f"plantdoc: collision-safe layout intact ({len(expected)} active paths)")
+        return
+    log(f"plantdoc: {len(missing)} expected active path(s) absent — "
+        "restoring the collision-safe layout from the pinned archive")
+    import restore_plantdoc_collisions as RC  # sibling script
+
+    rc = RC.main([])
+    if rc != 0:
+        raise SystemExit(
+            f"collision-safe materialization failed (exit {rc}); refusing to build a "
+            "manifest that would silently omit distinct source images"
+        )
 
 
 def _append_plantdoc_reconciliation(data_dir: Path, summary: dict) -> None:
@@ -923,63 +976,103 @@ def _csv_rows(path: Path) -> int:
 # --------------------------------------------------------------------------- #
 # STEP: leakage gate (fail-closed) + five-state guard test
 # --------------------------------------------------------------------------- #
-def step_gate(data_dir: Path, repo_dir: Path, threshold: int = PHASH_THRESHOLD,
-              excluded_pairs: int = 0) -> dict:
+def step_gate(data_dir: Path, repo_dir: Path, threshold: int = PHASH_THRESHOLD) -> dict:
     # Independent recompute (re-hashes + binds current manifest SHAs) — the audit
     # required cross-dataset metrics to be blocked by a persisted, manifest-bound
     # gate. Reuses the shared driver's gate step.
     res = D.step_gate(data_dir, repo_dir, _pv_images_root(data_dir),
-                      threshold=threshold, excluded_pairs=excluded_pairs)
+                      threshold=threshold)
     _write_guard_test(data_dir, repo_dir)
     return res
 
 
-def _write_guard_test(data_dir: Path, repo_dir: Path) -> dict:
-    """Exercise the leakage-gate validator across five states (fail-closed)."""
-    from ica26.leakage.gate import LeakageGate, validate_gate, SCHEMA_VERSION, PHASH_ALGORITHM
-    from ica26.datasets.manifest import sha256_of_file
+def _gate_inputs(data_dir: Path, repo_dir: Path):
+    """Every artifact the persisted gate is bound to (AUD-EC-008)."""
+    from ica26.leakage.gate import GateInputs
 
     man_dir = data_dir / "manifests"
-    tr_man = man_dir / "plantvillage_manifest.csv"
-    ev_man = man_dir / "plantdoc_manifest.csv"
-    if not tr_man.exists() or not ev_man.exists():
+    excl_dir = data_dir / "exclusions"
+    return GateInputs(
+        training_manifest=man_dir / "plantvillage_manifest.csv",
+        evaluation_manifest=man_dir / "plantdoc_manifest.csv",
+        pair_table=repo_dir / "reports" / "leakage_plantvillage_vs_plantdoc_pairs.csv",
+        near_review=excl_dir / "cross_dataset_near_duplicate_review.csv",
+        reviewed_exclusions=excl_dir / "cross_dataset_reviewed_exclusions.csv",
+        exact_exclusions=excl_dir / "cross_dataset_exact_exclusions.csv",
+    )
+
+
+def _write_guard_test(data_dir: Path, repo_dir: Path) -> dict:
+    """Exercise the leakage-gate validator across its rejection states.
+
+    Every state is a synthetic gate checked against the REAL current inputs, so
+    the guard test proves the validator rejects staleness of each bound input,
+    not just of the manifests.
+    """
+    from ica26.leakage.gate import (
+        GATE_INPUT_NAMES, LeakageGate, PHASH_ALGORITHM, SCHEMA_VERSION,
+        compute_input_digests, validate_gate,
+    )
+
+    man_dir = data_dir / "manifests"
+    if not (man_dir / "plantvillage_manifest.csv").exists() or \
+            not (man_dir / "plantdoc_manifest.csv").exists():
         log("guard-test: manifests missing — skipped")
         return {}
-    tr_sha = sha256_of_file(tr_man)
-    ev_sha = sha256_of_file(ev_man)
+
+    inputs = _gate_inputs(data_dir, repo_dir)
+    digests = compute_input_digests(
+        inputs, threshold=PHASH_THRESHOLD,
+        training_dataset="PlantVillage", evaluation_dataset="PlantDoc")
 
     def _gate(**kw) -> LeakageGate:
-        base = dict(schema_version=SCHEMA_VERSION, generated_at=_ts(),
+        base = dict(schema_version=SCHEMA_VERSION,
                     training_dataset="PlantVillage", evaluation_dataset="PlantDoc",
-                    training_manifest_sha256=tr_sha, evaluation_manifest_sha256=ev_sha,
                     phash_algorithm=PHASH_ALGORITHM, threshold=PHASH_THRESHOLD,
-                    exact_duplicate_count=0, near_duplicate_count=0,
-                    excluded_pair_count=0, unresolved_pair_count=0, status="pass")
+                    exact_duplicate_count=0, exact_excluded_count=0,
+                    near_duplicate_count=0, near_resolved_count=0,
+                    near_kept_count=0, near_excluded_count=0,
+                    unresolved_pair_count=0, status="pass",
+                    authorization_violations=[], input_digests=dict(digests))
         base.update(kw)
         return LeakageGate(**base)
+
+    def _stale(name: str) -> LeakageGate:
+        d = dict(digests)
+        d[name] = "0" * 64
+        return _gate(input_digests=d)
 
     states = {
         "1_missing": (None, "rejected"),
         "2_incomplete": (_gate(status="incomplete"), "rejected"),
-        "3_stale": (_gate(training_manifest_sha256="0" * 64), "rejected"),
-        "4_unresolved": (_gate(unresolved_pair_count=1), "rejected"),
-        "5_valid_pass": (_gate(), "accepted"),
+        "3_unresolved": (_gate(unresolved_pair_count=1), "rejected"),
+        "4_violations": (_gate(authorization_violations=["synthetic violation"]), "rejected"),
+        "5_old_schema": (_gate(schema_version="1.1"), "rejected"),
+        "6_unbound": (_gate(input_digests={}), "rejected"),
+        "7_valid_pass": (_gate(), "accepted"),
     }
+    # One rejection state per bound input, so no binding can silently go missing.
+    for name in GATE_INPUT_NAMES:
+        states[f"8_stale_{name}"] = (_stale(name), "rejected")
+
     results, all_ok = {}, True
-    for name, (gate, expect) in states.items():
-        res = validate_gate(gate, tr_man, ev_man)
+    for name, (gate, expect) in sorted(states.items()):
+        res = validate_gate(gate, inputs)
         got = "accepted" if res.ok else "rejected"
         ok = got == expect
         all_ok = all_ok and ok
         results[name] = f"{got} {'OK' if ok else 'MISMATCH'}"
     out = {
         "guard_states": results, "all_pass": all_ok,
-        "note": ("States 1-4 reject; state 5 accepts a valid pass gate bound to current "
-                 "manifests. Synthetic gates (same technique as tests/test_leakage_gate.py). "
+        "bound_inputs": list(GATE_INPUT_NAMES),
+        "note": ("Every state except the final valid gate must be rejected. Each "
+                 "8_stale_* state mutates exactly one bound input digest, proving the "
+                 "gate is bound to all of them and not only to the manifests. "
+                 "Synthetic gates (same technique as tests/test_leakage_gate.py). "
                  "No model evaluation was run."),
     }
     atomic_write_json(repo_dir / "reports" / "leakage_gate_guard_test.json", out)
-    log(f"guard-test: five-state validator all_pass={all_ok}")
+    log(f"guard-test: {len(states)}-state validator all_pass={all_ok}")
     return out
 
 
@@ -1445,9 +1538,7 @@ def main(argv=None) -> int:
             _check_stop()
         if "gate" in steps:
             log("================ STEP gate ================")
-            excluded = state.get("leakage", {}).get("n_excluded", 0)
-            state["gate"] = step_gate(data_dir, repo_dir, threshold=PHASH_THRESHOLD,
-                                      excluded_pairs=excluded)
+            state["gate"] = step_gate(data_dir, repo_dir, threshold=PHASH_THRESHOLD)
             _check_stop()
         if "tests" in steps:
             log("================ STEP tests ================")

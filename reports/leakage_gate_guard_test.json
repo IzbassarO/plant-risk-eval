@@ -2,10 +2,28 @@
   "guard_states": {
     "1_missing": "rejected OK",
     "2_incomplete": "rejected OK",
-    "3_stale": "rejected OK",
-    "4_unresolved": "rejected OK",
-    "5_valid_pass": "accepted OK"
+    "3_unresolved": "rejected OK",
+    "4_violations": "rejected OK",
+    "5_old_schema": "rejected OK",
+    "6_unbound": "rejected OK",
+    "7_valid_pass": "accepted OK",
+    "8_stale_evaluation_manifest": "rejected OK",
+    "8_stale_exact_exclusions": "rejected OK",
+    "8_stale_leakage_config": "rejected OK",
+    "8_stale_near_review": "rejected OK",
+    "8_stale_pair_table": "rejected OK",
+    "8_stale_reviewed_exclusions": "rejected OK",
+    "8_stale_training_manifest": "rejected OK"
   },
   "all_pass": true,
-  "note": "States 1-4 reject; state 5 accepts a valid pass gate bound to current manifests. Synthetic gates (same technique as tests/test_leakage_gate.py). No model evaluation was run."
+  "bound_inputs": [
+    "training_manifest",
+    "evaluation_manifest",
+    "pair_table",
+    "near_review",
+    "reviewed_exclusions",
+    "exact_exclusions",
+    "leakage_config"
+  ],
+  "note": "Every state except the final valid gate must be rejected. Each 8_stale_* state mutates exactly one bound input digest, proving the gate is bound to all of them and not only to the manifests. Synthetic gates (same technique as tests/test_leakage_gate.py). No model evaluation was run."
 }

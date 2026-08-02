@@ -6,7 +6,7 @@
   "hash_size_bits": 64,
   "threshold": 6,
   "n_training_indexed": 54305,
-  "n_evaluation_indexed": 2572,
+  "n_evaluation_indexed": 2578,
   "skipped_training": 0,
   "skipped_evaluation": 0,
   "n_exact_pairs": 0,

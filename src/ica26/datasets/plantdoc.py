@@ -20,8 +20,8 @@ import subprocess
 import tempfile
 import time
 import urllib.parse
-from pathlib import Path
-from typing import Optional
+from pathlib import Path, PurePosixPath
+from typing import Iterable, Optional
 
 import pandas as pd
 
@@ -182,6 +182,126 @@ def download_via_raw(dest_root: str | Path, file_list: list[str], ref: str = DEF
 
 
 # --------------------------------------------------------------------------- #
+# Case-insensitive filename collisions
+# (policy: reports/PLANTDOC_CASE_COLLISION_POLICY.md)
+#
+# The upstream tree is case-SENSITIVE and contains paths that differ only by
+# letter case, e.g. `CAR1.jpg` and `car1.jpg`. Extracting those onto a
+# case-INSENSITIVE filesystem (macOS APFS, NTFS) makes the second member
+# overwrite the first, silently destroying a distinct image. The loss is an
+# artifact of the extraction filesystem -- it is not a duplicate, not a
+# re-encoding, and never a reason to drop a distinct source record.
+#
+# The fix is to give EVERY member of a colliding group a deterministic
+# disambiguated filename, rather than letting one member win the natural path by
+# extraction order. The disambiguator is the leading 12 hex digits of the file's
+# own SHA-256, so the active path is a pure function of content + upstream name
+# and is stable across machines, runs, and filesystems.
+# --------------------------------------------------------------------------- #
+#: Hex digits of SHA-256 appended to a colliding filename. 12 hex digits = 48
+#: bits; collision probability across a few thousand files is negligible, and a
+#: real clash is caught by the uniqueness assertion in :func:`casefold_collisions`.
+COLLISION_SHA_PREFIX_LEN = 12
+
+#: Separator between the original stem and the content disambiguator.
+COLLISION_SEPARATOR = "__"
+
+
+def casefold_key(relpath: str) -> str:
+    """Identity of a path as a case-insensitive filesystem sees it.
+
+    Unicode-normalised (NFC) then case-folded, so two paths sharing this key
+    cannot coexist as separate files on macOS/Windows. Uses ``str.casefold``
+    rather than ``str.lower`` because casefold handles non-ASCII case mappings
+    (e.g. German sharp s) that ``lower`` leaves distinct.
+    """
+    import unicodedata
+
+    return unicodedata.normalize("NFC", str(relpath)).casefold()
+
+
+def collision_safe_relpath(original_relpath: str, sha256: str) -> str:
+    """Deterministic, collision-free active path for one colliding member.
+
+    ``train/Apple rust leaf/CAR1.jpg`` + sha ``ff8e8450...``
+    -> ``train/Apple rust leaf/CAR1__ff8e845061e3.jpg``
+
+    The directory and extension are untouched; only the stem gains the content
+    disambiguator. Two members of a group always differ here because their
+    SHA-256 values differ -- that is what makes them distinct records.
+    """
+    if not sha256 or len(sha256) < COLLISION_SHA_PREFIX_LEN:
+        raise ValueError(f"a collision-safe path needs a full sha256, got {sha256!r}")
+    p = PurePosixPath(str(original_relpath))
+    stem, suffix = p.stem, p.suffix
+    disambiguated = f"{stem}{COLLISION_SEPARATOR}{sha256[:COLLISION_SHA_PREFIX_LEN]}{suffix}"
+    return str(p.parent / disambiguated)
+
+
+def casefold_collisions(relpaths: Iterable[str]) -> dict[str, list[str]]:
+    """Group paths that collide on a case-insensitive filesystem.
+
+    Returns ``{casefold_key: [relpath, ...]}`` for keys with more than one
+    member, each member list sorted for determinism.
+    """
+    buckets: dict[str, list[str]] = {}
+    for rp in relpaths:
+        buckets.setdefault(casefold_key(rp), []).append(str(rp))
+    return {k: sorted(v) for k, v in sorted(buckets.items()) if len(v) > 1}
+
+
+def assert_no_casefold_collisions(relpaths: Iterable[str]) -> None:
+    """Raise if any two paths would collide on a case-insensitive filesystem."""
+    clashes = casefold_collisions(relpaths)
+    if clashes:
+        detail = "; ".join(f"{k} <- {v}" for k, v in list(clashes.items())[:10])
+        raise ValueError(
+            f"{len(clashes)} case-insensitive path collision(s) remain: {detail}"
+        )
+
+
+def collision_safe_shortfall(df: pd.DataFrame, inventory_csv: str | Path) -> list[str]:
+    """Upstream SHA-256 digests the manifest fails to represent.
+
+    The check is on CONTENT, not on paths: a case-collision loss shows up as an
+    inventory digest with no manifest row, whatever the surviving file is called.
+    Returns [] when the inventory is absent (nothing to compare against).
+    """
+    import csv as _csv
+    from collections import Counter
+
+    p = Path(inventory_csv)
+    if not p.exists():
+        return []
+    with open(p, newline="", encoding="utf-8") as fh:
+        inv = Counter(r["source_sha256"] for r in _csv.DictReader(fh))
+    have = Counter(df["sha256"].astype(str)) if len(df) else Counter()
+    missing = []
+    for sha, n in inv.items():
+        if have.get(sha, 0) < n:
+            missing.append(sha)
+    return sorted(missing)
+
+
+def assert_collision_safe(df: pd.DataFrame, inventory_csv: str | Path) -> None:
+    """Fail closed if a manifest silently omits distinct upstream images.
+
+    Guards every manifest-building path against AUD-EC-003: a case-insensitive
+    filesystem drops a distinct image, the scan cannot see what is not there, and
+    the manifest looks internally consistent while being short. Content-level
+    reconciliation against the inventory is the only way to catch that.
+    """
+    missing = collision_safe_shortfall(df, inventory_csv)
+    if missing:
+        raise ValueError(
+            f"manifest omits {len(missing)} distinct upstream image(s) "
+            f"(first: {missing[:3]}). This is the case-collision loss described in "
+            "reports/PLANTDOC_CASE_COLLISION_POLICY.md; run "
+            "scripts/restore_plantdoc_collisions.py before building a manifest."
+        )
+
+
+# --------------------------------------------------------------------------- #
 # Manifest + reconciliation
 # --------------------------------------------------------------------------- #
 def build_manifest(dest_root: str | Path, acquired_at_utc: Optional[str] = None) -> pd.DataFrame:
@@ -294,6 +414,9 @@ def acquire(
             paths = (live or {}).get("paths") or []
             dl_report = download_via_raw(dest_root, paths)
     df = build_manifest(dest_root)
+    # Fail closed BEFORE writing: a manifest short of distinct upstream images is
+    # not a valid dataset description (AUD-EC-003).
+    assert_collision_safe(df, Path(manifest_csv).parent / "plantdoc_source_inventory.csv")
     M.write_manifest(df, manifest_csv)
     fs_check = verify_against_filesystem(df, dest_root)
     summary = summarize(df, snapshot, fs_check)

@@ -7,7 +7,7 @@ import pytest
 from PIL import Image
 
 from ica26.datasets import manifest as M
-from ica26.leakage.gate import LeakageGateError, compute_gate
+from ica26.leakage.gate import GateInputs, LeakageGateError, compute_gate
 from ica26.mapping import schema
 from ica26.mapping.validation import NoApprovedMappingError
 from ica26.evaluation import harm
@@ -29,16 +29,40 @@ def _ds(tmp_path, name, split, seeds):
     return root, man
 
 
+#: Empty-but-present leakage artifacts: no pair detected, so nothing to authorise.
+_PAIR_COLS = ["training_relpath", "evaluation_relpath", "training_class",
+              "evaluation_class", "hamming_distance", "classification"]
+_NEAR_COLS = ["pair_id", "training_relative_path", "evaluation_relative_path",
+              "human_decision", "final_disposition"]
+_REXCL_COLS = ["pair_id", "training_relative_path", "evaluation_relative_path"]
+_EEXCL_COLS = ["training_relpath", "evaluation_relpath", "hamming_distance"]
+
+
+def _header_only(path, cols):
+    path.write_text(",".join(cols) + "\n", encoding="utf-8")
+    return path
+
+
 def _valid_gate(tmp_path):
     tr_root, tr_man = _ds(tmp_path, "train_ds", "train", [1, 2])
     ev_root, ev_man = _ds(tmp_path, "eval_ds", "test", [30, 40])
+    inputs = GateInputs(
+        training_manifest=tr_man, evaluation_manifest=ev_man,
+        pair_table=_header_only(tmp_path / "pairs.csv", _PAIR_COLS),
+        near_review=_header_only(tmp_path / "near.csv", _NEAR_COLS),
+        reviewed_exclusions=_header_only(tmp_path / "rexcl.csv", _REXCL_COLS),
+        exact_exclusions=_header_only(tmp_path / "eexcl.csv", _EEXCL_COLS),
+    )
     gate, _ = compute_gate(
         training_manifest=tr_man, training_root=tr_root, training_dataset="train_ds",
         evaluation_manifest=ev_man, evaluation_root=ev_root, evaluation_dataset="eval_ds",
-        threshold=6, generated_at="2026-01-01T00:00:00+00:00",
+        pair_table=inputs.pair_table, near_review=inputs.near_review,
+        reviewed_exclusions=inputs.reviewed_exclusions,
+        exact_exclusions=inputs.exact_exclusions, threshold=6,
     )
+    assert gate.status == "pass", gate.authorization_violations
     gp = tmp_path / "gate.json"; gate.write(gp)
-    return gp, tr_man, ev_man
+    return gp, inputs
 
 
 def _approved_mapping():
@@ -56,31 +80,31 @@ def _approved_mapping():
 
 
 def test_blocks_without_gate(tmp_path):
-    _, tr_man, ev_man = _valid_gate(tmp_path)
+    _, inputs = _valid_gate(tmp_path)
     with pytest.raises(LeakageGateError):
         guarded_cross_dataset_action_evaluation(
             y_true=["rust"], y_pred=["rust"], dataset="eval_ds",
             mapping_df=_approved_mapping(),
             gate_path=tmp_path / "absent.json",
-            training_manifest=tr_man, evaluation_manifest=ev_man,
+            gate_inputs=inputs,
         )
 
 
 def test_blocks_without_approved_mapping(tmp_path):
-    gp, tr_man, ev_man = _valid_gate(tmp_path)
+    gp, inputs = _valid_gate(tmp_path)
     empty = schema.new_template([schema.empty_row(dataset="eval_ds", dataset_class="rust")])  # pending
     with pytest.raises(NoApprovedMappingError):
         guarded_cross_dataset_action_evaluation(
             y_true=["rust"], y_pred=["rust"], dataset="eval_ds", mapping_df=empty,
-            gate_path=gp, training_manifest=tr_man, evaluation_manifest=ev_man,
+            gate_path=gp, gate_inputs=inputs,
         )
 
 
 def test_succeeds_with_gate_and_mapping(tmp_path):
-    gp, tr_man, ev_man = _valid_gate(tmp_path)
+    gp, inputs = _valid_gate(tmp_path)
     report = guarded_cross_dataset_action_evaluation(
         y_true=["rust"], y_pred=["rust"], dataset="eval_ds", mapping_df=_approved_mapping(),
-        gate_path=gp, training_manifest=tr_man, evaluation_manifest=ev_man,
+        gate_path=gp, gate_inputs=inputs,
     )
     assert report["action"]["action_accuracy"] == 1.0
     assert "majority_baseline" in report            # mandatory control present
@@ -88,21 +112,21 @@ def test_succeeds_with_gate_and_mapping(tmp_path):
 
 
 def test_example_harm_matrix_rejected(tmp_path):
-    gp, tr_man, ev_man = _valid_gate(tmp_path)
+    gp, inputs = _valid_gate(tmp_path)
     with pytest.raises(harm.HarmMatrixError):
         guarded_cross_dataset_action_evaluation(
             y_true=["rust"], y_pred=["rust"], dataset="eval_ds", mapping_df=_approved_mapping(),
-            gate_path=gp, training_manifest=tr_man, evaluation_manifest=ev_man,
+            gate_path=gp, gate_inputs=inputs,
             harm_matrix=harm.EXAMPLE_DEV_REVIEWED_MATRIX,
         )
 
 
 def test_dev_override_allows_run(tmp_path, capsys):
-    _, tr_man, ev_man = _valid_gate(tmp_path)
+    _, inputs = _valid_gate(tmp_path)
     report = guarded_cross_dataset_action_evaluation(
         y_true=["rust"], y_pred=["rust"], dataset="eval_ds", mapping_df=_approved_mapping(),
         gate_path=tmp_path / "absent.json",
-        training_manifest=tr_man, evaluation_manifest=ev_man,
+        gate_inputs=inputs,
         allow_missing_leakage_gate=True,
     )
     assert "DEV-ONLY OVERRIDE" in capsys.readouterr().err

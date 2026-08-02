@@ -1,0 +1,8 @@
+{
+  "_note": "Non-authoritative execution metadata. The gate artifact (reports/leakage_gate.json) is the authority and is byte-deterministic; this file is not.",
+  "command": "run_phase1_data_completion.py:gate",
+  "gate_schema_version": "2.0",
+  "gate_sha256": "ce78e3b83e2521024e961813eeff34dd17c8a9671d93c29b159ebc96301f3437",
+  "gate_status": "pass",
+  "generated_at": "2026-08-02T18:28:43+00:00"
+}

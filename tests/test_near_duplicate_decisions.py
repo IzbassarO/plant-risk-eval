@@ -1,10 +1,9 @@
-"""Near-duplicate adjudication: recorded decisions and how the gate consumes them.
+"""The 16 recorded near-duplicate decisions, and their end-to-end authentication.
 
-`LEAKAGE_GATE_EXCLUSION_POLICY.md` §3 says a flagged near pair is *resolved* once
-a human gives it a terminal decision -- keeping a pair resolves it just as much
-as excluding one, because the reviewer looked at the contact sheet and judged the
-two images independent. These tests pin that semantics and prove it stays
-fail-closed for every non-terminal state.
+Unit-level forgery cases live in tests/test_leakage_gate.py. This module pins the
+SHIPPED decisions and proves they still authenticate against the CURRENT
+repository artifacts -- the rebuilt PlantDoc manifest (2,578 images), the
+authoritative pair table, and the reviewed-exclusions file.
 """
 from __future__ import annotations
 
@@ -15,19 +14,17 @@ import pytest
 from ica26.leakage.gate import (
     NEAR_REVIEW_DECISIONS,
     NEAR_REVIEW_DISPOSITIONS,
-    summarize_near_review,
+    authenticate_exact_exclusions,
+    authenticate_near_review,
+    build_authoritative_pairs,
 )
 
 REVIEW_CSV = "data/exclusions/cross_dataset_near_duplicate_review.csv"
 REVIEWED_EXCL_CSV = "data/exclusions/cross_dataset_reviewed_exclusions.csv"
-
-REVIEW_COLUMNS = [
-    "pair_id", "training_dataset", "training_relative_path", "training_class",
-    "training_sha256", "evaluation_dataset", "evaluation_relative_path",
-    "evaluation_class", "evaluation_sha256", "phash_distance", "contact_sheet",
-    "human_decision", "decision_reason", "reviewer", "reviewed_at",
-    "final_disposition",
-]
+EXACT_EXCL_CSV = "data/exclusions/cross_dataset_exact_exclusions.csv"
+PAIR_TABLE = "reports/leakage_plantvillage_vs_plantdoc_pairs.csv"
+PV_MANIFEST = "data/manifests/plantvillage_manifest.csv"
+PD_MANIFEST = "data/manifests/plantdoc_manifest.csv"
 
 
 @pytest.fixture(scope="module")
@@ -36,8 +33,17 @@ def recorded(repo_root):
         return list(csv.DictReader(fh))
 
 
+@pytest.fixture(scope="module")
+def authoritative(repo_root):
+    pairs, violations = build_authoritative_pairs(
+        repo_root / PAIR_TABLE, repo_root / PV_MANIFEST, repo_root / PD_MANIFEST,
+        training_dataset="PlantVillage", evaluation_dataset="PlantDoc")
+    assert violations == [], violations
+    return pairs
+
+
 # --------------------------------------------------------------------------- #
-# The recorded decisions themselves
+# The recorded decisions
 # --------------------------------------------------------------------------- #
 def test_all_sixteen_pairs_are_adjudicated(recorded):
     assert len(recorded) == 16
@@ -74,6 +80,47 @@ def test_no_pair_was_excluded_so_the_exclusions_file_stays_empty(repo_root):
         assert list(csv.DictReader(fh)) == []
 
 
+# --------------------------------------------------------------------------- #
+# End-to-end authentication against the CURRENT artifacts
+# --------------------------------------------------------------------------- #
+def test_pair_table_reconciles_with_the_rebuilt_manifests(authoritative):
+    near = {k: v for k, v in authoritative.items() if v.classification == "near"}
+    exact = {k: v for k, v in authoritative.items() if v.classification == "exact"}
+    assert len(near) == 16
+    assert len(exact) == 0
+
+
+def test_recorded_decisions_authenticate_after_the_plantdoc_rebuild(repo_root, authoritative):
+    """Restoring six images must not have invalidated any recorded decision."""
+    near = {k: v for k, v in authoritative.items() if v.classification == "near"}
+    auth = authenticate_near_review(
+        repo_root / REVIEW_CSV, near, repo_root / REVIEWED_EXCL_CSV)
+    assert auth.violations == []
+    assert auth.resolved == 16
+    assert auth.kept == 16
+    assert auth.excluded == 0
+    assert auth.unresolved == 0
+
+
+def test_review_sha256_fields_match_the_current_manifests(recorded, authoritative):
+    """The recorded digests are the manifests' digests, not free-text."""
+    for r in recorded:
+        pair = authoritative[(r["training_relative_path"], r["evaluation_relative_path"])]
+        assert r["training_sha256"] == pair.training_sha256
+        assert r["evaluation_sha256"] == pair.evaluation_sha256
+        assert int(r["phash_distance"]) == pair.phash_distance
+        assert r["training_class"] == pair.training_class
+        assert r["evaluation_class"] == pair.evaluation_class
+
+
+def test_no_exact_pairs_and_no_exact_exclusions(repo_root, authoritative):
+    exact = {k: v for k, v in authoritative.items() if v.classification == "exact"}
+    auth = authenticate_exact_exclusions(repo_root / EXACT_EXCL_CSV, exact)
+    assert auth.detected == 0
+    assert auth.excluded == 0
+    assert auth.violations == []
+
+
 def test_identity_fields_are_intact(recorded):
     for r in recorded:
         assert r["training_dataset"] == "PlantVillage"
@@ -83,105 +130,31 @@ def test_identity_fields_are_intact(recorded):
         assert 0 < int(r["phash_distance"]) <= 6
 
 
+def test_every_reviewed_endpoint_still_exists_in_its_manifest(repo_root, recorded):
+    with open(repo_root / PD_MANIFEST, newline="", encoding="utf-8") as fh:
+        pd_paths = {r["relpath"] for r in csv.DictReader(fh)}
+    with open(repo_root / PV_MANIFEST, newline="", encoding="utf-8") as fh:
+        pv_paths = {r["relpath"] for r in csv.DictReader(fh)}
+    for r in recorded:
+        assert r["training_relative_path"] in pv_paths
+        assert r["evaluation_relative_path"] in pd_paths
+
+
 # --------------------------------------------------------------------------- #
-# How the gate consumes them
+# The persisted gate agrees with all of the above
 # --------------------------------------------------------------------------- #
-def _keys(rows):
-    return {(r["training_relative_path"], r["evaluation_relative_path"]) for r in rows}
+def test_persisted_gate_matches_the_recorded_review(repo_root):
+    import json
 
-
-def test_kept_pairs_count_as_resolved(repo_root, recorded):
-    out = summarize_near_review(repo_root / REVIEW_CSV, _keys(recorded),
-                                repo_root / REVIEWED_EXCL_CSV)
-    assert out["resolved"] == 16
-    assert out["kept"] == 16
-    assert out["excluded"] == 0
-    assert out["unresolved"] == 0
-    assert out["invalid"] == 0
-    assert out["unmatched"] == 0
-
-
-def _write(tmp_path, rows):
-    p = tmp_path / "review.csv"
-    with open(p, "w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=REVIEW_COLUMNS, lineterminator="\n")
-        w.writeheader()
-        w.writerows(rows)
-    return p
-
-
-def _row(**kw):
-    r = {c: "" for c in REVIEW_COLUMNS}
-    r.update({
-        "pair_id": "ndp-01", "training_relative_path": "t/a.jpg",
-        "evaluation_relative_path": "e/b.jpg", "phash_distance": "6",
-        "human_decision": "clearly_different", "final_disposition": "keep",
-        "reviewer": "human_reviewer_1", "reviewed_at": "2026-08-02",
-    })
-    r.update(kw)
-    return r
-
-
-KEYS = {("t/a.jpg", "e/b.jpg")}
-
-
-@pytest.mark.parametrize("kw", [
-    {"human_decision": "", "final_disposition": ""},          # pending
-    {"human_decision": "uncertain"},                          # non-terminal decision
-    {"final_disposition": "needs_secondary_review"},          # non-terminal disposition
-    {"human_decision": "clearly_different", "final_disposition": ""},
-    {"human_decision": "", "final_disposition": "keep"},
-])
-def test_non_terminal_states_resolve_nothing(tmp_path, kw):
-    out = summarize_near_review(_write(tmp_path, [_row(**kw)]), KEYS)
-    assert out["resolved"] == 0
-    assert out["unresolved"] == 1
-
-
-def test_unknown_vocabulary_resolves_nothing(tmp_path):
-    out = summarize_near_review(_write(tmp_path, [_row(human_decision="looks_ok")]), KEYS)
-    assert out["resolved"] == 0
-    assert out["invalid"] == 1
-
-
-def test_exclusion_not_propagated_resolves_nothing(tmp_path):
-    row = _row(human_decision="same_source_image", final_disposition="exclude_evaluation")
-    out = summarize_near_review(_write(tmp_path, [row]), KEYS)
-    assert out["resolved"] == 0
-    assert out["invalid"] == 1
-    assert out["unresolved"] == 1
-
-
-def test_propagated_exclusion_resolves(tmp_path):
-    row = _row(human_decision="same_source_image", final_disposition="exclude_evaluation")
-    excl = tmp_path / "excl.csv"
-    with open(excl, "w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=["training_relative_path",
-                                           "evaluation_relative_path"],
-                           lineterminator="\n")
-        w.writeheader()
-        w.writerow({"training_relative_path": "t/a.jpg",
-                    "evaluation_relative_path": "e/b.jpg"})
-    out = summarize_near_review(_write(tmp_path, [row]), KEYS, excl)
-    assert out["resolved"] == 1
-    assert out["excluded"] == 1
-
-
-def test_review_row_for_an_unflagged_pair_is_ignored(tmp_path):
-    out = summarize_near_review(
-        _write(tmp_path, [_row(training_relative_path="t/other.jpg")]), KEYS)
-    assert out["resolved"] == 0
-    assert out["unmatched"] == 1
-    assert out["unresolved"] == 1  # the real flagged pair still has no decision
-
-
-def test_flagged_pair_with_no_review_row_is_unresolved(tmp_path):
-    out = summarize_near_review(_write(tmp_path, []),
-                                KEYS | {("t/c.jpg", "e/d.jpg")})
-    assert out["resolved"] == 0
-    assert out["unresolved"] == 2
-
-
-def test_missing_review_file_resolves_nothing(tmp_path):
-    out = summarize_near_review(tmp_path / "absent.csv", KEYS)
-    assert out["resolved"] == 0
+    gate = json.loads((repo_root / "reports/leakage_gate.json").read_text())
+    assert gate["schema_version"] == "2.0"
+    assert gate["near_duplicate_count"] == 16
+    assert gate["near_resolved_count"] == 16
+    assert gate["near_kept_count"] == 16
+    assert gate["near_excluded_count"] == 0
+    assert gate["exact_duplicate_count"] == 0
+    assert gate["exact_excluded_count"] == 0
+    assert gate["unresolved_pair_count"] == 0
+    assert gate["authorization_violations"] == []
+    assert gate["status"] == "pass"
+    assert "generated_at" not in gate

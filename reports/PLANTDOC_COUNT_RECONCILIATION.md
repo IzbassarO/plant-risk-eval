@@ -143,3 +143,16 @@ This delta is a **filesystem limitation, not a missing or failed download**. No 
 | 6 | `train/Potato leaf early blight/potato-blight-phytophora-infestans-close-up-of-infected-leaf-showing-A60HXN.jpg` | `train/Potato leaf early blight/potato-blight-phytophora-infestans-close-up-of-infected-leaf-showing-a60hxn.jpg` |
 
 **Implication for the paper:** PlantDoc acquisition is exhaustive on this machine; the evaluation set materializes as **2572** distinct images. If the full 2578-path set is ever required, extract on a case-sensitive volume (e.g. a case-sensitive APFS image or Linux); the acquisition code and manifest logic are unchanged. Evidence: `data/manifests/_plantdoc_case_collisions.json`.
+
+
+---
+
+## Local completion update — 2026-08-02T18:02:16Z
+
+- Acquisition: GitHub archive for commit `5467f6012d78` (+ raw-CDN fallback for any missing file); existing valid images preserved.
+- Paper-reported count: **2598** (not forced).
+- Upstream count at pinned commit: **2578** (git train/test image paths).
+- Local manifest split: train 2342 / test 236.
+- Filesystem == manifest == valid decodable: **2578 / 2578 / 2578**.
+- fs<->manifest mismatches: 0 rows-missing-files, 0 files-missing-from-manifest.
+- Completion: **COMPLETE** (2578/2578).

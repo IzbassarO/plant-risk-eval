@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Optional, Sequence
 
-from ..leakage.gate import require_valid_gate
+from ..leakage.gate import GateInputs, require_valid_gate
 from ..mapping.validation import require_approved_lookup
 from .action_metrics import action_report, project_labels
 from .harm import ReviewedHarmMatrix, require_production_matrix
@@ -24,13 +24,17 @@ def guarded_cross_dataset_action_evaluation(
     dataset: str,
     mapping_df,
     gate_path,
-    training_manifest,
-    evaluation_manifest,
+    gate_inputs: GateInputs,
     harm_matrix: Optional[ReviewedHarmMatrix] = None,
     confidences: Optional[Sequence[float]] = None,
     allow_missing_leakage_gate: bool = False,
 ) -> dict:
     """Run cross-dataset action evaluation behind the leakage + mapping gates.
+
+    ``gate_inputs`` names every artifact the gate was bound to (both manifests,
+    the pair table, the review CSV, and both exclusion files). All of them are
+    re-digested, so a gate cannot authorise evaluation after any of its inputs
+    changed -- not just after a manifest changed.
 
     Raises:
         LeakageGateError -- gate missing/stale/not passing (unless dev override).
@@ -39,7 +43,7 @@ def guarded_cross_dataset_action_evaluation(
     """
     # 1) Leakage clearance (fail closed; dev-only override warns loudly).
     require_valid_gate(
-        gate_path, training_manifest, evaluation_manifest,
+        gate_path, gate_inputs,
         allow_missing_leakage_gate=allow_missing_leakage_gate,
     )
 

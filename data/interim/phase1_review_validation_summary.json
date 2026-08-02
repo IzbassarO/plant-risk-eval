@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-08-02T16:55:18Z",
+  "generated_at_utc": "2026-08-02T18:34:33Z",
   "_timestamp_note": "metadata only; excluded from deterministic content hashes",
   "near_duplicate_review": {
     "total": 16,
@@ -51,7 +51,7 @@
     "configs/evaluation_scope.yaml": "7f8b2a9ce72bf8709a3fa413f81ee6788a751f5e78606b002251bd6ad6c79272",
     "reports/ACTION_MAPPING_HUMAN_CHECKLIST.md": "290cdfe5f44311ce6e57a1f1726fb08a267506f25fccca7b74444e7506e394d0",
     "reports/leakage_plantvillage_vs_plantdoc_pairs.csv": "16d187c4f711d03aecf498fa157bdca3ea14061751a2587a09a442af029912c2",
-    "data/manifests/plantdoc_manifest.csv": "d77ef4d8b0fa6a984128f693a95b2d7b0d869d45bac081761b03d27fd27f5ffc",
+    "data/manifests/plantdoc_manifest.csv": "548b815197c51bc26ea6adb2080b93cd670426623ca13d6eee8a43d49fb4ba55",
     "data/manifests/plantvillage_manifest.csv": "b9acc43637ef2e930bd9e5e8a09b1d5025c720d65f9dd3fc9aabdfbd7e399591",
     "reports/NEAR_DUPLICATE_HUMAN_REVIEW.md": "00613c1364dc906db3504a9fe9cbea467b8f7d2f81d2612c622c564a73e394ef",
     "reports/HEALTHY_CLASS_ACTION_POLICY.md": "02f4b790b76e5e71acfc2abdd99366add0c2591508e3b39d459ac95f41eb1623",

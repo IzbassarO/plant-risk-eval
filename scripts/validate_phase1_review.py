@@ -622,7 +622,9 @@ def main() -> int:
     rows = sorted(F.rows, key=lambda r: (r["artifact"], r["row_identifier"], r["check_id"]))
     (REPO / OUT_CSV).parent.mkdir(parents=True, exist_ok=True)
     with open(REPO / OUT_CSV, "w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(OUT_COLUMNS))
+        # LF, not the csv module default CRLF: these artifacts are committed, and
+        # CRLF trips `git diff --check` as trailing whitespace (AUD-EC-009).
+        w = csv.DictWriter(fh, fieldnames=list(OUT_COLUMNS), lineterminator="\n")
         w.writeheader()
         w.writerows(rows)
 
