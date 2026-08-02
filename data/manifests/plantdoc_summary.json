@@ -1,0 +1,137 @@
+{
+  "dataset": "PlantDoc",
+  "generated_at_utc": "2026-07-30T07:08:52+00:00",
+  "n_images": 2572,
+  "n_classes_total": 28,
+  "n_corrupt_total": 0,
+  "duplicate_relpaths": [],
+  "resolution": {
+    "median_width": 800.0,
+    "median_height": 667.0
+  },
+  "modes": {
+    "RGB": 2561,
+    "CMYK": 5,
+    "RGBA": 5,
+    "L": 1
+  },
+  "per_split": {
+    "test": {
+      "n_images": 236,
+      "n_classes": 27,
+      "classes": [
+        "Apple Scab Leaf",
+        "Apple leaf",
+        "Apple rust leaf",
+        "Bell_pepper leaf",
+        "Bell_pepper leaf spot",
+        "Blueberry leaf",
+        "Cherry leaf",
+        "Corn Gray leaf spot",
+        "Corn leaf blight",
+        "Corn rust leaf",
+        "Peach leaf",
+        "Potato leaf early blight",
+        "Potato leaf late blight",
+        "Raspberry leaf",
+        "Soyabean leaf",
+        "Squash Powdery mildew leaf",
+        "Strawberry leaf",
+        "Tomato Early blight leaf",
+        "Tomato Septoria leaf spot",
+        "Tomato leaf",
+        "Tomato leaf bacterial spot",
+        "Tomato leaf late blight",
+        "Tomato leaf mosaic virus",
+        "Tomato leaf yellow virus",
+        "Tomato mold leaf",
+        "grape leaf",
+        "grape leaf black rot"
+      ],
+      "n_corrupt": 0
+    },
+    "train": {
+      "n_images": 2336,
+      "n_classes": 28,
+      "classes": [
+        "Apple Scab Leaf",
+        "Apple leaf",
+        "Apple rust leaf",
+        "Bell_pepper leaf",
+        "Bell_pepper leaf spot",
+        "Blueberry leaf",
+        "Cherry leaf",
+        "Corn Gray leaf spot",
+        "Corn leaf blight",
+        "Corn rust leaf",
+        "Peach leaf",
+        "Potato leaf early blight",
+        "Potato leaf late blight",
+        "Raspberry leaf",
+        "Soyabean leaf",
+        "Squash Powdery mildew leaf",
+        "Strawberry leaf",
+        "Tomato Early blight leaf",
+        "Tomato Septoria leaf spot",
+        "Tomato leaf",
+        "Tomato leaf bacterial spot",
+        "Tomato leaf late blight",
+        "Tomato leaf mosaic virus",
+        "Tomato leaf yellow virus",
+        "Tomato mold leaf",
+        "Tomato two spotted spider mites leaf",
+        "grape leaf",
+        "grape leaf black rot"
+      ],
+      "n_corrupt": 0
+    }
+  },
+  "source_url": "https://github.com/pratikkayal/PlantDoc-Dataset",
+  "expected": {
+    "paper_reported_count": 2598,
+    "upstream_count_note": "current upstream tree has 2,578 images at the pinned commit",
+    "train_classes": 28,
+    "test_classes": 27,
+    "note": "Test split drops the 'Tomato two spotted spider mites leaf' class."
+  },
+  "reconciliation": {
+    "paper_reported_count": 2598,
+    "upstream_repository_count": 2578,
+    "downloaded_image_count": 2572,
+    "valid_decodable_count": 2572,
+    "manifest_count": 2572,
+    "train_images": 2336,
+    "test_images": 236,
+    "train_class_count": 28,
+    "test_class_count": 27,
+    "filesystem_vs_manifest": {
+      "manifest_rows_missing_files": [],
+      "files_missing_from_manifest": [],
+      "n_manifest": 2572,
+      "n_filesystem": 2572
+    },
+    "paper_vs_upstream_delta": 20,
+    "complete": false,
+    "explanation": "Paper (Singh et al. 2020) reports 2598 images; the current upstream tree at the pinned commit has 2578 (delta 20), a genuine change to the repository since publication, not a non-image-file artifact (0 non-image files exist under train/test). 'complete' requires downloaded==upstream, all decodable, and filesystem==manifest."
+  },
+  "complete": false,
+  "license": "CC BY 4.0",
+  "source_snapshot": {
+    "repo": "pratikkayal/PlantDoc-Dataset",
+    "repo_url": "https://github.com/pratikkayal/PlantDoc-Dataset.git",
+    "ref": "master",
+    "acquisition_method": "git",
+    "paper_reported_count": 2598,
+    "retrieved_at_utc": "2026-07-30T07:08:52+00:00",
+    "source_of_truth": "live-git",
+    "commit_sha": "5467f6012d78d1c446145d5f582da6096f852ae8",
+    "upstream_image_count": 2578,
+    "upstream_train_images": 2342,
+    "upstream_test_images": 236,
+    "upstream_train_classes": 28,
+    "upstream_test_classes": 27,
+    "train_only_classes": [
+      "Tomato two spotted spider mites leaf"
+    ]
+  }
+}

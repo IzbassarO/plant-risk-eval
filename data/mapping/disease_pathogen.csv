@@ -1,0 +1,29 @@
+source_dataset,crop_canonical,disease_canonical,eppo_code,pathogen_type,action_class
+plantdoc,apple,Apple Scab Leaf,,,  # FILL MANUALLY
+plantdoc,apple,Apple leaf,,,  # FILL MANUALLY
+plantdoc,apple,Apple rust leaf,,,  # FILL MANUALLY
+plantdoc,pepper,Bell_pepper leaf,,,  # FILL MANUALLY
+plantdoc,pepper,Bell_pepper leaf spot,,,  # FILL MANUALLY
+plantdoc,blueberry,Blueberry leaf,,,  # FILL MANUALLY
+plantdoc,cherry,Cherry leaf,,,  # FILL MANUALLY
+plantdoc,corn,Corn Gray leaf spot,,,  # FILL MANUALLY
+plantdoc,corn,Corn leaf blight,,,  # FILL MANUALLY
+plantdoc,corn,Corn rust leaf,,,  # FILL MANUALLY
+plantdoc,peach,Peach leaf,,,  # FILL MANUALLY
+plantdoc,potato,Potato leaf early blight,,,  # FILL MANUALLY
+plantdoc,potato,Potato leaf late blight,,,  # FILL MANUALLY
+plantdoc,raspberry,Raspberry leaf,,,  # FILL MANUALLY
+plantdoc,UNKNOWN,Soyabean leaf,,,  # FILL MANUALLY
+plantdoc,squash,Squash Powdery mildew leaf,,,  # FILL MANUALLY
+plantdoc,strawberry,Strawberry leaf,,,  # FILL MANUALLY
+plantdoc,tomato,Tomato Early blight leaf,,,  # FILL MANUALLY
+plantdoc,tomato,Tomato Septoria leaf spot,,,  # FILL MANUALLY
+plantdoc,tomato,Tomato leaf,,,  # FILL MANUALLY
+plantdoc,tomato,Tomato leaf bacterial spot,,,  # FILL MANUALLY
+plantdoc,tomato,Tomato leaf late blight,,,  # FILL MANUALLY
+plantdoc,tomato,Tomato leaf mosaic virus,,,  # FILL MANUALLY
+plantdoc,tomato,Tomato leaf yellow virus,,,  # FILL MANUALLY
+plantdoc,tomato,Tomato mold leaf,,,  # FILL MANUALLY
+plantdoc,grape,grape leaf,,,  # FILL MANUALLY
+plantdoc,grape,grape leaf black rot,,,  # FILL MANUALLY
+plantdoc,UNKNOWN,plantdoc,,,  # FILL MANUALLY

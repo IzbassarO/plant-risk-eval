@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ica26"
+version = "0.1.0"
+description = "Foundation package for the ICA-2026 plant-disease action-level evaluation framework."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+# Core runtime deps -- kept light so it installs on Colab free tier and locally.
+dependencies = [
+    "numpy>=1.24,<3",
+    "pandas>=2.0,<4",
+    "pillow>=10,<12",
+    "imagehash>=4.3,<5",
+    "pyyaml>=6,<7",
+    "requests>=2.28,<3",
+]
+
+[project.optional-dependencies]
+# Hugging Face access for PlantVillage acquisition (heavier; install on Colab).
+hf = ["datasets>=2.19", "huggingface_hub>=0.23"]
+# Test + dev tooling.
+dev = ["pytest>=8,<9"]
+
+[project.scripts]
+ica26-plantdoc = "ica26.datasets.plantdoc:main"
+ica26-plantvillage = "ica26.datasets.plantvillage:main"
+ica26-leakage = "ica26.leakage.phash:main"
+ica26-leakage-gate = "ica26.leakage.gate:main"
+ica26-validate-mapping = "ica26.mapping.validation:main"
+ica26-build-mapping = "ica26.mapping.crosswalk:main"
+ica26-portability = "ica26.portability:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

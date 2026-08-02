@@ -1,0 +1,140 @@
+# =============================================================================
+# ICA 2026 — "From Diagnosis to Decision"
+#
+# Boundary rule: the repository carries SCIENTIFIC CODE and REPRODUCIBILITY
+# ARTIFACTS (manifests, indexes, mappings, exclusions, reports). It never
+# carries raw or licensed dataset pixels, archives, caches, or credentials.
+#
+# Ignored files are NOT deleted locally — they simply stay untracked.
+# =============================================================================
+
+# --- raw image data: never committed (licensing + size) ----------------------
+# PlantVillage is CC BY-SA 3.0 and PlantDoc CC BY 4.0, but neither is
+# redistributed here; see DATA_ACCESS.md for local placement.
+data/raw/
+
+# --- data/interim: derived scratch, EXCEPT the Phase-1 validation outputs ----
+# Contents are excluded with `/*` (not `dir/`) so the negations below can still
+# re-include individual reproducibility-critical files. `dir/` would make the
+# re-inclusions unreachable.
+data/interim/*
+!data/interim/phase1_review_validation.csv
+!data/interim/phase1_review_validation_summary.json
+
+# --- superseded / regenerable report artifacts -------------------------------
+# Contact sheets are ~4.1 MB of derived collages regenerable from raw data via
+# `python scripts/prepare_human_review.py`; the reviewer uses them locally.
+reports/near_duplicate_contact_sheets/
+# Legacy CPU smoke-run figures, superseded and not referenced by any report.
+reports/_legacy_smoke_figures/
+# Point-in-time remediation backups (local history only).
+reports/_remediation_backup_*/
+
+# --- credentials / secrets (double-blind submission + security) --------------
+.env
+.env.*
+!.env.example
+kaggle.json
+.kaggle/
+.huggingface/
+.netrc
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.*
+*_secret*
+hf_token*
+credentials.json
+service_account*.json
+
+# --- model weights / checkpoints ---------------------------------------------
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.h5
+*.pb
+*.safetensors
+*.tflite
+*.joblib
+*.pkl
+checkpoints/
+weights/
+
+# --- archives & dataset dumps -------------------------------------------------
+# Covers ICA2026_colab.zip (889 MB), data.zip (2.0 GB), the PlantDoc commit
+# tarball (938 MB), and phase1_return_package.zip (its contents are tracked
+# individually, so the zip itself adds no reproducibility value).
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+
+# --- experiment trackers / logs ----------------------------------------------
+wandb/
+mlruns/
+.neptune/
+runs/
+lightning_logs/
+logs/
+*.log
+
+# --- model / dataset caches ---------------------------------------------------
+.cache/
+hf_cache/
+huggingface/
+transformers_cache/
+torch_cache/
+
+# --- databases ----------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+
+# --- python / tooling ---------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.ipynb_checkpoints/
+
+# --- partial / temporary transfer artifacts -----------------------------------
+*.part
+*.tmp
+*.incomplete
+*.swp
+*~
+
+# --- IDE / editor metadata (not intentionally shared) -------------------------
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# --- OS metadata ---------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini

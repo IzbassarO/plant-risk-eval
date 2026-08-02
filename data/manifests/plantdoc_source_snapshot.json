@@ -1,0 +1,18 @@
+{
+  "repo": "pratikkayal/PlantDoc-Dataset",
+  "repo_url": "https://github.com/pratikkayal/PlantDoc-Dataset.git",
+  "ref": "master",
+  "acquisition_method": "git",
+  "paper_reported_count": 2598,
+  "retrieved_at_utc": "2026-07-30T07:08:52+00:00",
+  "source_of_truth": "live-git",
+  "commit_sha": "5467f6012d78d1c446145d5f582da6096f852ae8",
+  "upstream_image_count": 2578,
+  "upstream_train_images": 2342,
+  "upstream_test_images": 236,
+  "upstream_train_classes": 28,
+  "upstream_test_classes": 27,
+  "train_only_classes": [
+    "Tomato two spotted spider mites leaf"
+  ]
+}

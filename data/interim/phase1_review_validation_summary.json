@@ -1,0 +1,57 @@
+{
+  "generated_at_utc": "2026-08-02T11:10:45Z",
+  "_timestamp_note": "metadata only; excluded from deterministic content hashes",
+  "near_duplicate_review": {
+    "total": 16,
+    "decided": 0,
+    "excluded": 0,
+    "kept": 0,
+    "unresolved": 16,
+    "invalid": 0,
+    "authoritative_near_pairs": 16,
+    "reviewed_exclusion_rows": 0,
+    "exact_exclusion_rows": 0
+  },
+  "action_mapping_review": {
+    "total": 28,
+    "approved": 0,
+    "excluded": 0,
+    "pending": 28,
+    "invalid": 0,
+    "plantdoc_classes": 28,
+    "plantdoc_mapped": 28,
+    "plantvillage_classes": 38,
+    "plantvillage_mapped": 0,
+    "healthy_rows": 10
+  },
+  "findings": {
+    "total": 75,
+    "blockers": 74,
+    "warnings": 0,
+    "by_check": {
+      "CHECKLIST-DECIDED": 1,
+      "MAP-COVERAGE-DATASET": 1,
+      "MAP-EVIDENCE-GATE": 10,
+      "MAP-HEALTHY-CONSISTENT": 1,
+      "MAP-SCHEMA-VOCAB": 1,
+      "MAP-SCOPE-ARTHROPOD": 1,
+      "MAP-STATUS-TERMINAL": 28,
+      "NDP-DECISION-PRESENT": 16,
+      "NDP-DISPOSITION-PRESENT": 16
+    }
+  },
+  "verdict": "BLOCKED",
+  "reviewed_artifact_sha256": {
+    "data/exclusions/cross_dataset_near_duplicate_review.csv": "a9823815600bb80d11f3e9978407e1202b2e0e27d3a813439e362f2e0b1d12f4",
+    "data/exclusions/cross_dataset_reviewed_exclusions.csv": "6ef83daba8e9f070d8191acc6c4f7212ec503a69f4da6136893e616ed6a9ee3a",
+    "data/exclusions/cross_dataset_exact_exclusions.csv": "0cacb177b00395cd0b5841b5eda18afbb2f8565f9787c8e8fba9dcf691837d83",
+    "data/mapping/action_mapping_review.csv": "d4d63addf7654c718dda43955f22f9e2773f8e42ed0bebb9e3d8de77782fd4e4",
+    "data/mapping/action_mapping_template.csv": "8d0f437aee1c19cc93dd1ba588a9dace7ff8d20eed2a6b6fc12d21f7069b53da",
+    "reports/ACTION_MAPPING_HUMAN_CHECKLIST.md": "0d41d480f025c3673563e3b3ea252de797734b0f8a1d8473344fcf640f14e1e7",
+    "reports/leakage_plantvillage_vs_plantdoc_pairs.csv": "16d187c4f711d03aecf498fa157bdca3ea14061751a2587a09a442af029912c2",
+    "data/manifests/plantdoc_manifest.csv": "d77ef4d8b0fa6a984128f693a95b2d7b0d869d45bac081761b03d27fd27f5ffc",
+    "data/manifests/plantvillage_manifest.csv": "b9acc43637ef2e930bd9e5e8a09b1d5025c720d65f9dd3fc9aabdfbd7e399591",
+    "reports/NEAR_DUPLICATE_HUMAN_REVIEW.md": "00613c1364dc906db3504a9fe9cbea467b8f7d2f81d2612c622c564a73e394ef",
+    "phase1_return_package.zip": "0041dd0f8ba82a2525a412717afdb75e3def432bf88773f79ff16ae79510f86e"
+  }
+}

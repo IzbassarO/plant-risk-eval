@@ -1,0 +1,16 @@
+{
+  "phash_algorithm": "imagehash.phash",
+  "hash_size_bits": 64,
+  "threshold": 6,
+  "generated_at_utc": "2026-07-30T07:44:31Z",
+  "indexes": {
+    "plantvillage": {
+      "indexed": 54305,
+      "skipped": 0
+    },
+    "plantdoc": {
+      "indexed": 2572,
+      "skipped": 0
+    }
+  }
+}

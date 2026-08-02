@@ -1,0 +1,30 @@
+# TEMPLATE for a reviewed harm matrix.  DO NOT treat this as scientific truth.
+#
+# review_status is `pending`, so this matrix can NEVER be used by a paper-result
+# command (require_production_matrix() rejects anything not `approved`). A human
+# fills every weight from a documented rationale, records sources in
+# source_notes, and only then sets review_status: approved.  There is NO
+# scientific default anywhere in the code.
+#
+# weights[true_action][predicted_action] = cost of taking predicted_action when
+# the correct action was true_action.  Diagonal = 0.  Leave off-diagonal as null
+# until reviewed; a null keeps the matrix non-loadable for production use.
+#
+# The paper's thesis (viral->fungicide is the most harmful confusion) implies the
+# `remove_vector` (true, viral) row should carry the largest weights, but the
+# exact numbers are a reviewed decision, not a default.
+
+matrix_id: harm_v0_template
+version: "0.0"
+created_at: ""            # set on approval (ISO 8601)
+review_status: pending    # -> not usable until a human sets `approved`
+is_example: false
+source_notes: >-
+  UNFILLED TEMPLATE. Populate each weight with its rationale and citable source
+  (UC IPM / CABI / EPPO / agronomic reasoning) before requesting approval.
+action_order: [fungicide, copper_sanitation, remove_vector, monitor]
+weights:
+  fungicide:         {fungicide: 0, copper_sanitation: null, remove_vector: null, monitor: null}
+  copper_sanitation: {fungicide: null, copper_sanitation: 0, remove_vector: null, monitor: null}
+  remove_vector:     {fungicide: null, copper_sanitation: null, remove_vector: 0, monitor: null}
+  monitor:           {fungicide: null, copper_sanitation: null, remove_vector: null, monitor: 0}

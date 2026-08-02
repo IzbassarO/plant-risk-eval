@@ -1,0 +1,21 @@
+{
+  "phash_algorithm": "imagehash.phash",
+  "hash_size_bits": 64,
+  "mode": "intra",
+  "threshold": 6,
+  "n_a": 1663,
+  "n_b": 1663,
+  "datasets_a": [
+    "PlantDoc"
+  ],
+  "datasets_b": [
+    "PlantDoc"
+  ],
+  "n_exact_pairs": 24,
+  "n_near_pairs": 9,
+  "skipped_a": [],
+  "skipped_b": [],
+  "checked_pair": [
+    "data/manifests/plantdoc_manifest.csv"
+  ]
+}

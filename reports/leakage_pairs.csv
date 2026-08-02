@@ -1,0 +1,34 @@
+dataset_a,split_a,class_a,path_a,dataset_b,split_b,class_b,path_b,distance,kind
+PlantDoc,test,Blueberry leaf,test/Blueberry leaf/blueberry-leaves-normal-above-and-iron-deficient-below-bgahf8.jpg,PlantDoc,train,Blueberry leaf,train/Blueberry leaf/blueberry-leaves-normal-above-and-iron-deficient-below-bgahf8.jpg,0,exact
+PlantDoc,test,Corn Gray leaf spot,test/Corn Gray leaf spot/IMG_42231.jpg,PlantDoc,train,Corn leaf blight,train/Corn leaf blight/IMG_42231.jpg,0,exact
+PlantDoc,test,Corn leaf blight,test/Corn leaf blight/2015070295153021.jpg,PlantDoc,train,Corn Gray leaf spot,train/Corn Gray leaf spot/2015070295153021.jpg,0,exact
+PlantDoc,test,Corn leaf blight,test/Corn leaf blight/corn-gray-leaf-spot-f4.jpg,PlantDoc,train,Corn Gray leaf spot,train/Corn Gray leaf spot/corn-gray-leaf-spot-f4.jpg,0,exact
+PlantDoc,test,Potato leaf early blight,test/Potato leaf early blight/backus-056-potato-blight.jpg,PlantDoc,train,Potato leaf late blight,train/Potato leaf late blight/backus-056-potato-blight.jpg,0,exact
+PlantDoc,test,Potato leaf late blight,test/Potato leaf late blight/1421_0.jpeg?itok=FMtmgePj.jpg,PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/1421_0.jpeg?itok=FMtmgePj.jpg,0,exact
+PlantDoc,test,Potato leaf late blight,test/Potato leaf late blight/5816740026_d42ef24413_Phytophthora-Infestans.jpg,PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/5816740026_d42ef24413_Phytophthora-Infestans.jpg,0,exact
+PlantDoc,test,Potato leaf late blight,test/Potato leaf late blight/irish-blight-symptoms-on-potato-leaves-atmf8b.jpg,PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/irish-blight-symptoms-on-potato-leaves-atmf8b.jpg,0,exact
+PlantDoc,train,Apple Scab Leaf,train/Apple Scab Leaf/Apple-Scab1.jpg,PlantDoc,train,Apple Scab Leaf,train/Apple Scab Leaf/applescab.jpg,0,exact
+PlantDoc,train,Bell_pepper leaf spot,train/Bell_pepper leaf spot/green-pepper-plant-diseases-bacterial-spot-on-pepper-plant-green-pepper-plant-diseases-photos.jpg,PlantDoc,train,Bell_pepper leaf spot,train/Bell_pepper leaf spot/peppers_bacterial_spot_zoom.jpg,0,exact
+PlantDoc,train,Bell_pepper leaf spot,train/Bell_pepper leaf spot/image_1500x1500%253E.jpeg?1467983528.jpg,PlantDoc,train,Bell_pepper leaf spot,train/Bell_pepper leaf spot/image_original.jpeg?1472603886.jpg,0,exact
+PlantDoc,train,Bell_pepper leaf spot,train/Bell_pepper leaf spot/image_1500x1500%253E.jpeg?1472603885.jpg,PlantDoc,train,Bell_pepper leaf spot,train/Bell_pepper leaf spot/image_original.jpeg?1472603885.jpg,0,exact
+PlantDoc,train,Cherry leaf,train/Cherry leaf/Cherry-Fruit-and-Leaves-tp1263.jpg,PlantDoc,train,Cherry leaf,train/Cherry leaf/i-have-a-cherry-tree-5252.jpg,0,exact
+PlantDoc,train,Corn Gray leaf spot,train/Corn Gray leaf spot/gls99-anamosa.jpg,PlantDoc,train,Corn leaf blight,train/Corn leaf blight/gls99-anamosa-400x334.jpg,0,exact
+PlantDoc,train,Corn leaf blight,train/Corn leaf blight/Figure-2-.jpg,PlantDoc,train,Corn leaf blight,train/Corn leaf blight/Northern-corn-leaf-blight-NM-F2.jpg,0,exact
+PlantDoc,train,Corn leaf blight,train/Corn leaf blight/bacterial-corn-1.jpg,PlantDoc,train,Corn leaf blight,train/Corn leaf blight/bacterial-corn-300x300.jpg,0,exact
+PlantDoc,train,Corn rust leaf,train/Corn rust leaf/Corn-Common-Rust-300x225.jpg,PlantDoc,train,Corn rust leaf,train/Corn rust leaf/Corn-Common-Rust.jpg,0,exact
+PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/14321627273_58d893c3e2_potato-plant.jpg,PlantDoc,train,Potato leaf late blight,train/Potato leaf late blight/14321627273_58d893c3e2_b.jpg,0,exact
+PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/18028_1.jpg,PlantDoc,train,Potato leaf late blight,train/Potato leaf late blight/24064_1.jpg,0,exact
+PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/45035_1.jpg,PlantDoc,train,Potato leaf late blight,train/Potato leaf late blight/Late+blight+on+potato.jpg,0,exact
+PlantDoc,train,Potato leaf late blight,train/Potato leaf late blight/LB_potato_leaf_topside.jpg,PlantDoc,train,Potato leaf late blight,train/Potato leaf late blight/PotatoLateBlight2.jpg,0,exact
+PlantDoc,train,Potato leaf late blight,train/Potato leaf late blight/b3a52d4eda0deedc34260c4dee847a5b.jpg,PlantDoc,train,Potato leaf late blight,train/Potato leaf late blight/early_blight.jpg,0,exact
+PlantDoc,train,Raspberry leaf,train/Raspberry leaf/579a1aa0c6b3fd0354d1a6b57a40ac42--red-raspberry-medicinal-plants.jpg,PlantDoc,train,Raspberry leaf,train/Raspberry leaf/Raspberry-Suckers1.jpg,0,exact
+PlantDoc,train,Squash Powdery mildew leaf,train/Squash Powdery mildew leaf/6c460a55e7e8607e922d98e1416448d4.jpg,PlantDoc,train,Squash Powdery mildew leaf,train/Squash Powdery mildew leaf/Aug+16+2010+051.jpg,0,exact
+PlantDoc,train,Apple leaf,train/Apple leaf/4633813-sweet-apple-with-leaf.jpg,PlantDoc,train,Apple leaf,train/Apple leaf/stock-photo-sweet-apple-with-leaf-111143150.jpg,6,near
+PlantDoc,train,Apple leaf,train/Apple leaf/depositphotos_55202179-stock-photo-green-apple-with-leaf-and.jpg,PlantDoc,train,Apple leaf,train/Apple leaf/green-apple-leaf-slice-isolated-white-ripe-background-clipping-path-45471482.jpg,6,near
+PlantDoc,train,Corn leaf blight,train/Corn leaf blight/28430_rel.jpg,PlantDoc,train,Corn leaf blight,train/Corn leaf blight/28430_web.jpg,2,near
+PlantDoc,train,Corn leaf blight,train/Corn leaf blight/Corn-gray-leaf-spot-8-14-15-F1.jpg,PlantDoc,train,Corn leaf blight,train/Corn leaf blight/corn_gray_leaf_spot.jpg,4,near
+PlantDoc,train,Corn leaf blight,train/Corn leaf blight/corn-short-backlit-Xanth-lesions-halos-f2-.jpg,PlantDoc,train,Corn leaf blight,train/Corn leaf blight/corn-short-backlit-Xanth-lesions-halos-f2.jpg,6,near
+PlantDoc,train,Peach leaf,train/Peach leaf/fresh-peach-fruits-green-leaves-15654533.jpg,PlantDoc,train,Peach leaf,train/Peach leaf/stock-photo-fresh-peach-fruits-with-green-leaves-isolated-on-white-background-59305621.jpg,6,near
+PlantDoc,train,Peach leaf,train/Peach leaf/stock-photo-two-peach-leaves-isolated-on-white-311533217.jpg,PlantDoc,train,Peach leaf,train/Peach leaf/two-peach-leaves-isolated-on-white-picture-id519433636.jpg,4,near
+PlantDoc,train,Potato leaf early blight,train/Potato leaf early blight/potato-blight-phytophora-infestans-close-up-of-infected-leaf-top-surface-a60hxg.jpg,PlantDoc,train,Potato leaf late blight,train/Potato leaf late blight/potato-blight-phytophora-infestans-close-up-of-infected-leaf-top-surface-A60HXG.jpg,6,near
+PlantDoc,train,Soyabean leaf,train/Soyabean leaf/fresh-soy-leaves-white-46020567.jpg,PlantDoc,train,Soyabean leaf,train/Soyabean leaf/stock-photo-fresh-soy-leaves-isolated-on-white-224197243.jpg,2,near

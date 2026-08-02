@@ -1,0 +1,33 @@
+{
+  "generated_at_utc": "2026-07-30T07:14:43Z",
+  "note": "Case-variant path pairs that are distinct in the case-sensitive upstream git tree but cannot coexist on the case-insensitive macOS (APFS) filesystem; one of each pair overwrites the other, so distinct on-disk files = upstream - collisions.",
+  "upstream_train_test_image_paths": 2578,
+  "case_insensitive_collision_pairs": 6,
+  "distinct_on_case_insensitive_fs": 2572,
+  "collisions": [
+    [
+      "train/Apple rust leaf/CAR1.jpg",
+      "train/Apple rust leaf/car1.jpg"
+    ],
+    [
+      "train/Blueberry leaf/Blueberry-Leaf.jpg",
+      "train/Blueberry leaf/blueberry-leaf.jpg"
+    ],
+    [
+      "train/Blueberry leaf/Blueberry-leaves.jpg",
+      "train/Blueberry leaf/blueberry-leaves.jpg"
+    ],
+    [
+      "train/Corn leaf blight/Northern-Corn-Leaf-Blight.jpg",
+      "train/Corn leaf blight/northern-corn-leaf-blight.jpg"
+    ],
+    [
+      "train/Peach leaf/Peach-Leaf.jpg",
+      "train/Peach leaf/peach-leaf.jpg"
+    ],
+    [
+      "train/Potato leaf early blight/potato-blight-phytophora-infestans-close-up-of-infected-leaf-showing-A60HXN.jpg",
+      "train/Potato leaf early blight/potato-blight-phytophora-infestans-close-up-of-infected-leaf-showing-a60hxn.jpg"
+    ]
+  ]
+}

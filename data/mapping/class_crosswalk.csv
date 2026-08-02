@@ -1,0 +1,29 @@
+source_dataset,original_label,crop_canonical,disease_canonical,needs_review
+plantdoc,Apple Scab Leaf,apple,Apple Scab Leaf,False
+plantdoc,Apple leaf,apple,Apple leaf,False
+plantdoc,Apple rust leaf,apple,Apple rust leaf,False
+plantdoc,Bell_pepper leaf,pepper,Bell_pepper leaf,False
+plantdoc,Bell_pepper leaf spot,pepper,Bell_pepper leaf spot,False
+plantdoc,Blueberry leaf,blueberry,Blueberry leaf,False
+plantdoc,Cherry leaf,cherry,Cherry leaf,False
+plantdoc,Corn Gray leaf spot,corn,Corn Gray leaf spot,False
+plantdoc,Corn leaf blight,corn,Corn leaf blight,False
+plantdoc,Corn rust leaf,corn,Corn rust leaf,False
+plantdoc,Peach leaf,peach,Peach leaf,False
+plantdoc,Potato leaf early blight,potato,Potato leaf early blight,False
+plantdoc,Potato leaf late blight,potato,Potato leaf late blight,False
+plantdoc,Raspberry leaf,raspberry,Raspberry leaf,False
+plantdoc,Soyabean leaf,UNKNOWN,Soyabean leaf,True
+plantdoc,Squash Powdery mildew leaf,squash,Squash Powdery mildew leaf,False
+plantdoc,Strawberry leaf,strawberry,Strawberry leaf,False
+plantdoc,Tomato Early blight leaf,tomato,Tomato Early blight leaf,False
+plantdoc,Tomato Septoria leaf spot,tomato,Tomato Septoria leaf spot,False
+plantdoc,Tomato leaf,tomato,Tomato leaf,False
+plantdoc,Tomato leaf bacterial spot,tomato,Tomato leaf bacterial spot,False
+plantdoc,Tomato leaf late blight,tomato,Tomato leaf late blight,False
+plantdoc,Tomato leaf mosaic virus,tomato,Tomato leaf mosaic virus,False
+plantdoc,Tomato leaf yellow virus,tomato,Tomato leaf yellow virus,False
+plantdoc,Tomato mold leaf,tomato,Tomato mold leaf,False
+plantdoc,grape leaf,grape,grape leaf,False
+plantdoc,grape leaf black rot,grape,grape leaf black rot,False
+plantdoc,plantdoc,UNKNOWN,plantdoc,True

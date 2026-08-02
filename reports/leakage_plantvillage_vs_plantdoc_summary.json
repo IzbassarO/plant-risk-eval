@@ -1,0 +1,18 @@
+{
+  "training_dataset": "PlantVillage",
+  "training_config": "color",
+  "evaluation_dataset": "PlantDoc",
+  "phash_algorithm": "imagehash.phash",
+  "hash_size_bits": 64,
+  "threshold": 6,
+  "n_training_indexed": 54305,
+  "n_evaluation_indexed": 2572,
+  "skipped_training": 0,
+  "skipped_evaluation": 0,
+  "n_exact_pairs": 0,
+  "n_near_pairs": 16,
+  "n_pending_review": 16,
+  "self_pairs": 0,
+  "reversed_duplicates": 0,
+  "pairs_csv": "reports/leakage_plantvillage_vs_plantdoc_pairs.csv"
+}

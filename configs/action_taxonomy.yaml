@@ -1,0 +1,34 @@
+# Action taxonomy for the ICA-2026 action-level evaluation framework.
+#
+# EXACTLY four action classes. `abiotic_correction` is intentionally EXCLUDED
+# and must not be reintroduced. The descriptions below are neutral definitions
+# of each action category -- they do NOT assign any specific disease to an
+# action. Disease-to-action assignment happens only in the evidence-gated
+# mapping table (data/mapping/action_mapping_template.csv).
+version: 1
+
+action_classes:
+  - name: fungicide
+    description: >-
+      Apply a fungicidal treatment as the primary control response.
+  - name: copper_sanitation
+    description: >-
+      Apply a copper-based treatment together with sanitation (removal or
+      pruning of affected plant tissue).
+  - name: remove_vector
+    description: >-
+      Control or remove the disease's biological vector or the infected source
+      plant material, rather than treating the leaf chemically.
+  - name: monitor
+    description: >-
+      Take no immediate chemical intervention; continue observation and
+      re-assess (healthy tissue or below the action threshold).
+
+forbidden_action_classes:
+  - abiotic_correction
+
+notes: >-
+  These four categories are fixed for Phase 1. Mapping a dataset disease class to
+  one of them requires externally verifiable evidence recorded in the mapping
+  table; the definitions here are not evidence and do not by themselves approve
+  any mapping.

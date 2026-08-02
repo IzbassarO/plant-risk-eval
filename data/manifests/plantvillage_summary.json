@@ -1,0 +1,64 @@
+{
+  "dataset": "PlantVillage",
+  "config": "color",
+  "hf_repo": "mohanty/PlantVillage",
+  "n_images": 54305,
+  "n_classes_total": 38,
+  "n_healthy_classes": 12,
+  "per_split": {
+    "test": {
+      "n_images": 10709,
+      "n_classes": 38
+    },
+    "train": {
+      "n_images": 43596,
+      "n_classes": 38
+    }
+  },
+  "leaf_id": {
+    "n_with_leaf_id": 41111,
+    "n_without_leaf_id": 13194,
+    "proportion_with_leaf_id": 0.757,
+    "leaf_map_entries": 40328,
+    "grouped_split_readiness": "ready",
+    "note": "Leaf-grouped train/test split files are provided by the dataset authors; leaf-map.json explicitly groups the images with a leaf tag."
+  },
+  "pixels_materialized": true,
+  "pixel_note": "",
+  "license": "CC BY-SA 3.0",
+  "source_snapshot": {
+    "dataset": "PlantVillage",
+    "hf_repo": "mohanty/PlantVillage",
+    "config": "color",
+    "revision": "9e97599868962bd0079b8db4b7f1efa9185fa1e7",
+    "execution_mode": "repo-files+pixels",
+    "retrieved_at_utc": "2026-07-30T07:43:30+00:00",
+    "disk_bytes": 0,
+    "execution_seconds": 19.1,
+    "license": "CC BY-SA 3.0",
+    "source_of_truth_note": "Kaggle mirrors are forbidden (they drop leaf_id)."
+  },
+  "execution": {
+    "mode": "repo-files+pixels",
+    "n_images": 54305,
+    "seconds": 19.1
+  },
+  "pixel_verification": {
+    "filesystem_image_count": 54305,
+    "manifest_rows": 54305,
+    "pixels_materialized_count": 54305,
+    "valid_decodable_count": 54305,
+    "n_corrupt": 0,
+    "zero_byte_files": 0,
+    "duplicate_relpaths": [],
+    "duplicate_relpath_count": 0,
+    "decode_sample_size": 100,
+    "decode_sample_ok": 100,
+    "sha_sample_size": 100,
+    "sha_sample_ok": 100
+  },
+  "acquisition_command": "hf_hub_download('mohanty/PlantVillage','data.zip',repo_type='dataset',revision='9e97599868962bd0079b8db4b7f1efa9185fa1e7')",
+  "execution_seconds": 33.3,
+  "disk_bytes": 850785369,
+  "source_revision": "9e97599868962bd0079b8db4b7f1efa9185fa1e7"
+}

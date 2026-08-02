@@ -1,0 +1,19 @@
+{
+  "filesystem_image_count": 1717,
+  "valid_decodable_count": 1717,
+  "manifest_row_count": 1717,
+  "train_images": 1481,
+  "test_images": 236,
+  "train_classes": 17,
+  "test_classes": 27,
+  "corrupt_count": 0,
+  "duplicate_relpaths": [],
+  "zero_byte_files": [],
+  "manifest_rows_missing_files": 0,
+  "files_missing_from_manifest": 0,
+  "sha256_sample_checked": 60,
+  "sha256_sample_ok": 60,
+  "upstream_repository_count": 2578,
+  "paper_reported_count": 2598,
+  "complete": false
+}
