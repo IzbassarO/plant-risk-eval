@@ -164,6 +164,8 @@ def test_the_packet_manifest_digests_match(repo_root):
     import hashlib
 
     manifest = json.loads((repo_root / MANIFEST).read_text())
+    assert manifest["schema_version"] == (
+        "ica26.governance.plantdoc_label_second_review_packet/1")
     assert manifest["status"] == "pending"
     assert manifest["groups_under_review"] == EXPECTED_GROUPS
     for name, digest in manifest["artifacts"].items():
@@ -181,6 +183,30 @@ def test_the_packet_rebuilds_byte_identically(repo_root):
     assert "check OK" in r.stdout
     assert {p: (repo_root / p).read_bytes()
             for p in (REVIEW_CSV, MEMBERS_CSV, CHECKLIST, MANIFEST)} == before
+
+
+def test_check_validates_the_manifest_not_only_packet_bodies(
+        repo_root, tmp_path, monkeypatch, capsys):
+    """A copied stale manifest must not authenticate otherwise-current packet bytes."""
+    import shutil
+
+    for relative in (RESOLUTION, REVIEW_CSV, MEMBERS_CSV, CHECKLIST, MANIFEST):
+        destination = tmp_path / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(repo_root / relative, destination)
+    manifest_path = tmp_path / MANIFEST
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload["artifacts"]["plantdoc_label_second_review.csv"] = "0" * 64
+    manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n",
+                             encoding="utf-8")
+
+    # Run the builder module against the copied repository without writing it.
+    sys.path.insert(0, str(repo_root / "scripts"))
+    import build_plantdoc_second_review_packet as packet_builder
+
+    monkeypatch.setattr(packet_builder, "REPO", tmp_path)
+    assert packet_builder.main(["--check"]) == 1
+    assert "packet_manifest.json" in capsys.readouterr().out
 
 
 # --------------------------------------------------------------------------- #

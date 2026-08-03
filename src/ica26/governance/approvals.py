@@ -9,6 +9,12 @@ reviewer, no scope, no commit, no timestamp, and nothing it claims to have
 approved — it is an assertion with no author and no object. A gate that accepts
 it is not recording a human decision, it is recording the *word* for one.
 
+Schema v2 uses two immutable Git states. ``reviewed_repository_commit`` names
+the pre-approval tree whose regular-file blobs were examined; a later commit
+introduces the approval record itself. The validator proves ancestry, reconciles
+every declared SHA-256 against both Git states and the worktree, and refuses a
+record that existed in the state it purports to approve.
+
 An approval is only meaningful if you can answer, from the artifact alone: who
 decided, what exactly they decided, over which bytes, at which commit, when, on
 what grounds, and what they pointedly did **not** approve. Every one of those is
@@ -26,13 +32,18 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
+from typing import Iterable, Optional
 
-from .mapping import PLACEHOLDER_TOKENS, is_placeholder, sha256_of_file
+from .mapping import is_placeholder, sha256_of_file
+from .second_review import (
+    SECOND_REVIEW_REQUIRED_BINDINGS,
+    SECOND_REVIEW_SCHEMA,
+    validate_second_review_payload,
+)
 
 #: Versioned artifact schema. An artifact declaring a different version is
 #: rejected, never coerced: fields may have changed meaning between versions.
-APPROVAL_SCHEMA = "ica26.governance.approval/1"
+APPROVAL_SCHEMA = "ica26.governance.approval/2"
 
 #: Fields EVERY approval artifact must carry, whatever it approves.
 REQUIRED_FIELDS = (
@@ -43,7 +54,7 @@ REQUIRED_FIELDS = (
     "reviewer_id",          # anonymous but stable identifier
     "reviewer_role",        # the qualification that makes the decision meaningful
     "reviewed_at",          # strict ISO-8601 with an explicit offset
-    "repository_commit",    # the tree state the decision was taken against
+    "reviewed_repository_commit",  # immutable pre-record state reviewed
     "approved_artifacts",   # {path: sha256} -- the exact bytes approved
     "rationale",            # why, or a pointer to a preserved review report
     "not_approved",         # what this decision explicitly does NOT cover
@@ -89,7 +100,22 @@ FREEZE_APPROVAL_SPEC = ApprovalSpec(
     required_bindings=("data/manifests/plantdoc_effective_manifest.csv",
                        "data/exclusions/plantdoc_internal_duplicate_resolution.csv",
                        "reports/plantdoc_internal_duplicate_gate.json",
-                       "reports/leakage_gate.json"),
+                       "reports/leakage_gate.json",
+                       "reports/leakage_plantvillage_vs_plantdoc_summary.json",
+                       "configs/action_taxonomy.yaml",
+                       "configs/evaluation_scope.yaml",
+                       "data/mapping/action_mapping_review.csv",
+                       "data/mapping/action_mapping_approved.csv",
+                       "data/mapping/action_mapping_apply_summary.json",
+                       "data/mapping/disease_pathogen.csv",
+                       "data/mapping/class_crosswalk.csv",
+                       "data/mapping/plantvillage_class_list.csv",
+                       "data/manifests/plantvillage_manifest.csv",
+                       "data/manifests/plantvillage_source_snapshot.json",
+                       "configs/harm_matrix_template.yaml",
+                       "human_review/evidence_manifest.json",
+                       "human_review/plantdoc_label_second_review/second_review.json",
+                       "reports/DATASET_V1_AUDIT_SIGNOFF.json"),
 )
 
 #: The independent re-audit that closes outstanding findings.
@@ -106,11 +132,14 @@ AUDIT_SIGNOFF_SPEC = ApprovalSpec(
 SECOND_REVIEW_SPEC = ApprovalSpec(
     artifact_type="plantdoc_label_second_review",
     scope="plantdoc_relabelled_groups",
-    required_bindings=("data/exclusions/plantdoc_internal_duplicate_resolution.csv",
-                       "reports/plantdoc_label_second_review/"
-                       "plantdoc_label_second_review.csv"),
-    extra_required=("group_verdicts", "diagnostic_citations"),
+    required_bindings=SECOND_REVIEW_REQUIRED_BINDINGS,
+    extra_required=("review_schema_version", "groups"),
 )
+
+#: Type-specific schema for the self-contained G07/G08/G10 review objects.
+#: The generic approval schema still governs authorship and reviewed-state
+#: binding; this nested version governs the scientific evidence contract.
+SECOND_REVIEW_SCHEMA_VERSION = SECOND_REVIEW_SCHEMA
 
 
 @dataclass
@@ -175,6 +204,177 @@ def current_commit(repo: str | Path = ".") -> Optional[str]:
         return None
 
 
+def _safe_repository_path(repo: str | Path, name: str) -> tuple[Optional[Path], str]:
+    """Resolve one repository-relative artifact path without following it outside.
+
+    Approval contracts contain fixed paths, but artifacts are untrusted input.
+    Keeping path validation in one helper ensures both the worktree and Git-tree
+    checks apply the same refusal semantics.
+    """
+    if not name or Path(name).is_absolute():
+        return None, "is not a non-empty repository-relative path"
+    root = Path(repo).resolve()
+    try:
+        target = (root / name).resolve()
+        target.relative_to(root)
+    except (OSError, ValueError):
+        return None, "escapes the repository"
+    return target, ""
+
+
+def _git_blob_sha256(
+    commit: str,
+    name: str,
+    *,
+    repo: str | Path,
+) -> tuple[Optional[str], str]:
+    """SHA-256 of a regular-file blob at ``commit``, without checkout.
+
+    This is the core reviewed-state guarantee.  Looking only at the current
+    filesystem proves what exists now, not what the reviewer saw.  ``ls-tree``
+    also lets us reject symlinks and submodules before streaming the blob.
+    """
+    target, unsafe = _safe_repository_path(repo, name)
+    if target is None:
+        return None, unsafe
+    del target  # only path safety, not the worktree bytes, matters here
+    try:
+        entry = subprocess.run(
+            ["git", "-C", str(repo), "ls-tree", "-z", commit, "--", name],
+            capture_output=True, timeout=30)
+    except Exception as exc:  # noqa: BLE001
+        return None, f"could not inspect reviewed Git tree: {type(exc).__name__}: {exc}"
+    if entry.returncode != 0:
+        return None, "reviewed Git commit is missing or unreadable"
+    records = [record for record in entry.stdout.split(b"\0") if record]
+    if len(records) != 1 or b"\t" not in records[0]:
+        return None, "does not exist as one regular file in the reviewed Git tree"
+    metadata, recorded_name = records[0].split(b"\t", 1)
+    try:
+        mode, object_type, object_id = metadata.decode("ascii").split()
+        decoded_name = recorded_name.decode("utf-8")
+    except (UnicodeDecodeError, ValueError):
+        return None, "has an unreadable Git tree entry"
+    if decoded_name != name:
+        return None, "does not resolve to the exact declared path in the reviewed Git tree"
+    if object_type != "blob" or not mode.startswith("100"):
+        return None, f"is Git mode {mode} type {object_type}, not a regular file"
+
+    try:
+        process = subprocess.Popen(
+            ["git", "-C", str(repo), "cat-file", "blob", object_id],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        assert process.stdout is not None
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: process.stdout.read(1 << 20), b""):
+            digest.update(chunk)
+        stderr = process.stderr.read() if process.stderr is not None else b""
+        returncode = process.wait(timeout=30)
+    except Exception as exc:  # noqa: BLE001
+        try:
+            process.kill()
+        except Exception:  # noqa: BLE001
+            pass
+        return None, f"could not read reviewed Git blob: {type(exc).__name__}: {exc}"
+    if returncode != 0:
+        detail = stderr.decode("utf-8", errors="replace").strip()
+        return None, "could not read reviewed Git blob" + (f": {detail}" if detail else "")
+    return digest.hexdigest(), ""
+
+
+def _is_ancestor(candidate: str, head: str, repo: str | Path) -> bool:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), "merge-base", "--is-ancestor", candidate, head],
+            capture_output=True, timeout=30)
+    except Exception:  # noqa: BLE001
+        return False
+    return result.returncode == 0
+
+
+def _git_path_exists(commit: str, name: str, *, repo: str | Path) -> bool:
+    target, _ = _safe_repository_path(repo, name)
+    if target is None:
+        return False
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), "ls-tree", "-z", commit, "--", name],
+            capture_output=True, timeout=30)
+    except Exception:  # noqa: BLE001
+        return False
+    return result.returncode == 0 and bool(result.stdout)
+
+
+def _path_touch_commits(
+    candidate: str,
+    head: str,
+    path: str,
+    *,
+    repo: str | Path,
+) -> tuple[list[str], str]:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), "rev-list", "--reverse", f"{candidate}..{head}",
+             "--", path],
+            capture_output=True, text=True, timeout=30)
+    except Exception as exc:  # noqa: BLE001
+        return [], f"could not inspect approval-record history: {type(exc).__name__}: {exc}"
+    if result.returncode != 0:
+        return [], "could not inspect approval-record history"
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()], ""
+
+
+def _reviewed_state_is_recorded(
+    candidate: str,
+    head: str,
+    *,
+    repo: str | Path,
+    approval_path: str = "",
+) -> tuple[bool, str]:
+    """Verify the two-state approval lifecycle using immutable Git objects.
+
+    ``candidate`` is the reviewed state and deliberately excludes the approval
+    record.  ``head`` is the approval-record state (or a later descendant).  The
+    artifact-level blob checks are performed separately by ``validate_approval``;
+    this helper proves ancestry, record introduction, and record immutability.
+
+    Artifact applicability is derived from immutable Git objects and never from
+    a mutable allow-list of paths.
+    """
+    if candidate.lower() == head.lower():
+        return False, ("approval-record state is missing: reviewed_repository_commit "
+                       "must precede the commit that records the approval")
+    if not _is_ancestor(candidate, head, repo):
+        return False, ("stale reviewed-state binding: approval names "
+                       f"{candidate[:12]}…, HEAD is {head[:12]}…, and the reviewed "
+                       "commit is not an ancestor")
+    if not approval_path:
+        return False, "approval-record path is unavailable; persistence cannot be verified"
+
+    if _git_path_exists(candidate, approval_path, repo=repo):
+        return False, ("approval record already existed in the reviewed state; an approval "
+                       "cannot approve a state containing its own content")
+
+    head_record_digest, head_error = _git_blob_sha256(head, approval_path, repo=repo)
+    if head_record_digest is None:
+        return False, ("approval record is not a committed regular file in the "
+                       f"approval-record state: {head_error}")
+    record_path, unsafe = _safe_repository_path(repo, approval_path)
+    if record_path is None or record_path.is_symlink() or not record_path.is_file():
+        return False, f"approval record path is unsafe or absent: {unsafe or approval_path}"
+    if sha256_of_file(record_path) != head_record_digest:
+        return False, "approval record worktree bytes differ from the committed record state"
+
+    touch_commits, touch_error = _path_touch_commits(
+        candidate, head, approval_path, repo=repo)
+    if touch_error:
+        return False, touch_error
+    if len(touch_commits) != 1:
+        return False, ("approval artifact must be introduced exactly once after its reviewed "
+                       f"state; observed {len(touch_commits)} commits touching it")
+    return True, ""
+
+
 def _is_sha256(value) -> bool:
     text = str(value or "").strip().lower()
     return len(text) == 64 and all(c in "0123456789abcdef" for c in text)
@@ -188,6 +388,7 @@ def validate_approval(
     path: str = "",
     expected_commit: Optional[str] = None,
     siblings: Iterable[tuple[str, dict]] = (),
+    require_recorded_state: bool = False,
 ) -> ApprovalVerdict:
     """Validate one already-loaded approval payload against ``spec``.
 
@@ -263,17 +464,40 @@ def validate_approval(
             "'approved_artifacts' must be a non-empty {path: sha256} map binding the "
             "exact bytes reviewed")
     else:
-        for name in spec.required_bindings:
-            if name not in bindings:
-                v.violations.append(f"approved_artifacts does not bind required '{name}'")
-        for name, declared in sorted(bindings.items()):
-            target = Path(repo) / name
+        # An approval is a closed set of named bytes, not an arbitrary map that
+        # happens to contain the required entries.  Exact coverage makes the
+        # review surface independently auditable and prevents a path outside the
+        # declared contract from being smuggled into an otherwise valid record.
+        expected_bindings = set(spec.required_bindings)
+        non_string_names = [repr(name) for name in bindings if not isinstance(name, str)]
+        if non_string_names:
+            v.violations.append(
+                "approved_artifacts has non-string path key(s): "
+                f"{non_string_names}")
+        actual_bindings = {name for name in bindings if isinstance(name, str)}
+        for name in sorted(expected_bindings - actual_bindings):
+            v.violations.append(f"approved_artifacts does not bind required '{name}'")
+        unexpected_bindings = sorted(actual_bindings - expected_bindings)
+        if unexpected_bindings:
+            v.violations.append(
+                "approved_artifacts binds path(s) outside this approval contract: "
+                f"{unexpected_bindings}")
+        for name, declared in sorted(bindings.items(), key=lambda item: str(item[0])):
+            if not isinstance(name, str):
+                continue
+            target, unsafe = _safe_repository_path(repo, name)
+            if target is None:
+                v.violations.append(
+                    f"approved_artifacts['{name}'] is not a safe repository-relative "
+                    f"path ({unsafe})")
+                continue
             if not _is_sha256(declared):
                 v.violations.append(f"approved_artifacts['{name}'] is not a SHA-256 digest")
                 continue
-            if not target.exists():
+            if target.is_symlink() or not target.is_file():
                 v.violations.append(
-                    f"approved_artifacts binds '{name}', which does not exist")
+                    f"approved_artifacts binds '{name}', which does not exist as a "
+                    "regular non-symlink file")
                 continue
             actual = sha256_of_file(target)
             if actual != str(declared).strip().lower():
@@ -282,16 +506,38 @@ def validate_approval(
                     f"{str(declared)[:12]}…, current {actual[:12]}…)")
 
     # --- commit binding ---------------------------------------------------- #
-    commit = str(payload.get("repository_commit") or "").strip()
+    if "repository_commit" in payload:
+        v.violations.append(
+            "legacy 'repository_commit' is ambiguous; use "
+            "'reviewed_repository_commit' for the pre-approval reviewed state")
+    commit = str(payload.get("reviewed_repository_commit") or "").strip()
     head = expected_commit if expected_commit is not None else current_commit(repo)
+    commit_is_resolvable = False
     if len(commit) != 40 or not all(c in "0123456789abcdef" for c in commit.lower()):
         v.violations.append(
-            f"repository_commit '{commit}' is not a full 40-character commit SHA")
-    elif head and commit.lower() != head.lower():
+            f"reviewed_repository_commit '{commit}' is not a full 40-character commit SHA")
+    elif not head:
         v.violations.append(
-            f"stale commit binding: approval names {commit[:12]}…, HEAD is {head[:12]}…")
+            "current approval-record commit cannot be resolved; reviewed-state "
+            "ancestry is unverifiable")
     else:
+        if commit.lower() != head.lower():
+            if require_recorded_state:
+                current, reason = _reviewed_state_is_recorded(
+                    commit, head, repo=repo, approval_path=path)
+                if not current:
+                    v.violations.append(reason)
+            else:
+                v.violations.append(
+                    "stale reviewed-state binding: approval names "
+                    f"{commit[:12]}…, HEAD is {head[:12]}…")
+        elif require_recorded_state:
+            v.violations.append(
+                "approval-record state is missing: reviewed_repository_commit must "
+                "precede the commit that records the approval")
         # An approval cannot predate the tree it claims to have reviewed.
+        # This holds both for an in-memory preflight and a persisted descendant
+        # approval record.
         committed_at = commit_timestamp(commit, repo)
         if committed_at is None:
             v.violations.append(
@@ -301,6 +547,63 @@ def validate_approval(
             v.violations.append(
                 f"approval is dated {stamp}, before commit {commit[:12]}… was created "
                 f"({committed_at.isoformat()}); it cannot have reviewed that tree")
+        else:
+            commit_is_resolvable = True
+
+    # Validate the declared SHA-256 values against immutable blobs in the
+    # reviewed commit and in the current approval-record state.  The existing
+    # worktree checks above additionally catch uncommitted mutation.
+    if commit_is_resolvable and isinstance(bindings, dict):
+        for name, declared in sorted(bindings.items(), key=lambda item: str(item[0])):
+            if not isinstance(name, str) or not _is_sha256(declared):
+                continue
+            expected_digest = str(declared).strip().lower()
+            reviewed_digest, reviewed_error = _git_blob_sha256(commit, name, repo=repo)
+            if reviewed_digest is None:
+                v.violations.append(
+                    f"approved artifact '{name}' is absent or invalid at reviewed state "
+                    f"{commit[:12]}… ({reviewed_error})")
+            elif reviewed_digest != expected_digest:
+                v.violations.append(
+                    f"approved_artifacts['{name}'] does not match its reviewed-state "
+                    f"Git blob (declared {expected_digest[:12]}…, reviewed "
+                    f"{reviewed_digest[:12]}…)")
+
+            if head:
+                head_digest, head_error = _git_blob_sha256(head, name, repo=repo)
+                if head_digest is None:
+                    v.violations.append(
+                        f"approved artifact '{name}' is absent or invalid at current "
+                        f"approval-record state ({head_error})")
+                elif head_digest != expected_digest:
+                    v.violations.append(
+                        f"approved artifact '{name}' changed after its reviewed state "
+                        f"(approved {expected_digest[:12]}…, current Git blob "
+                        f"{head_digest[:12]}…)")
+
+    if isinstance(bindings, dict) and path:
+        record_target, _ = _safe_repository_path(repo, str(path))
+        record_rel = ""
+        if record_target is not None:
+            try:
+                record_rel = str(record_target.relative_to(Path(repo).resolve()))
+            except ValueError:
+                record_rel = ""
+        if record_rel and record_rel in bindings:
+            v.violations.append(
+                "approval record appears in approved_artifacts; an approval cannot "
+                "approve its own content")
+        if require_recorded_state and record_target is not None:
+            try:
+                recorded_payload = json.loads(record_target.read_text(encoding="utf-8"))
+            except Exception as exc:  # noqa: BLE001
+                v.violations.append(
+                    "committed approval record cannot be compared with the validated "
+                    f"payload ({type(exc).__name__}: {exc})")
+            else:
+                if recorded_payload != payload:
+                    v.violations.append(
+                        "validated payload differs from the committed approval record")
 
     # --- type-specific requirements ---------------------------------------- #
     if spec.required_findings:
@@ -316,6 +619,10 @@ def validate_approval(
             v.violations.append(
                 "'auditor_independent_of_implementer' must be exactly true; a "
                 "self-audit does not close a finding")
+
+    if (spec.artifact_type == SECOND_REVIEW_SPEC.artifact_type
+            and spec.scope == SECOND_REVIEW_SPEC.scope):
+        v.violations.extend(validate_second_review_payload(payload, repo=repo))
 
     # --- duplicate / contradictory approvals -------------------------------- #
     for other_path, other in siblings:
@@ -338,7 +645,13 @@ def validate_approval_file(
     repo: str | Path = ".",
     expected_commit: Optional[str] = None,
 ) -> ApprovalVerdict:
-    """Load and validate an approval artifact. Absence is a refusal, not an error."""
+    """Load and validate a *persisted* approval record.
+
+    Unlike ``validate_approval`` (which may preflight an in-memory human record
+    against the reviewed commit), file validation always requires the distinct,
+    committed approval-record state. Absence or an uncommitted file is a refusal,
+    not an error or a provisional approval.
+    """
     p = Path(path)
     # Repository-relative, always: a verdict is a paper-facing artifact and an
     # absolute path would carry the reviewer's home directory into it.
@@ -367,4 +680,5 @@ def validate_approval_file(
             siblings.append((str(other), data))
 
     return validate_approval(payload, spec, repo=repo, path=rel,
-                             expected_commit=expected_commit, siblings=siblings)
+                             expected_commit=expected_commit, siblings=siblings,
+                             require_recorded_state=True)

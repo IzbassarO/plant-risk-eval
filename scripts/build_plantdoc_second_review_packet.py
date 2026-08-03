@@ -55,6 +55,7 @@ REVIEW_CSV = "plantdoc_label_second_review.csv"
 MEMBERS_CSV = "plantdoc_label_second_review_members.csv"
 CHECKLIST_MD = "PLANTDOC_LABEL_SECOND_REVIEW.md"
 MANIFEST_JSON = "packet_manifest.json"
+PACKET_SCHEMA = "ica26.governance.plantdoc_label_second_review_packet/1"
 
 #: Where the completed, human-authored verdict is expected. Never written here.
 COMPLETED_ARTIFACT = Path("human_review/plantdoc_label_second_review/second_review.json")
@@ -93,14 +94,6 @@ MEMBER_COLUMNS = (
 def read_csv(path: Path) -> list[dict]:
     with open(path, newline="", encoding="utf-8") as fh:
         return list(csv.DictReader(fh))
-
-
-def sha256_of(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def render_csv(columns, rows) -> str:
@@ -156,8 +149,9 @@ def relabelled_groups(resolution_rows: list[dict]) -> list[str]:
             if relabel_kind(members) != "unchanged"]
 
 
-def build(repo: Path = REPO) -> tuple[dict[str, str], dict]:
+def build(repo: Path | None = None) -> tuple[dict[str, str], dict]:
     """Render every packet artifact. Writes nothing."""
+    repo = repo or REPO
     rows = read_csv(repo / RESOLUTION)
     targets = relabelled_groups(rows)
     by_group: dict[str, list[dict]] = {}
@@ -198,6 +192,21 @@ def build(repo: Path = REPO) -> tuple[dict[str, str], dict]:
         CHECKLIST_MD: render_markdown(review_rows, member_rows),
     }
     meta = {"groups": targets, "records": len(member_rows)}
+    entries = {
+        name: hashlib.sha256(text.encode("utf-8")).hexdigest()
+        for name, text in sorted(artifacts.items())
+    }
+    artifacts[MANIFEST_JSON] = json.dumps({
+        "_note": "SHA-256 of every packet artifact. No wall-clock field, so the packet "
+                 "is byte-deterministic and can be re-derived and compared.",
+        "schema_version": PACKET_SCHEMA,
+        "dataset": "PlantDoc",
+        "groups_under_review": meta["groups"],
+        "records": meta["records"],
+        "status": "pending",
+        "completed_artifact_expected_at": str(COMPLETED_ARTIFACT),
+        "artifacts": entries,
+    }, indent=2, sort_keys=True) + "\n"
     return artifacts, meta
 
 
@@ -275,12 +284,16 @@ def render_markdown(review_rows, member_rows) -> str:
     L += ["## Recording the verdict", "",
           f"Fill `{REVIEW_CSV}`, then record the signed verdict as JSON at:", "",
           f"    {COMPLETED_ARTIFACT}", "",
-          "It must satisfy `ica26.governance.approvals.SECOND_REVIEW_SPEC`: schema version, "
-          "artifact type, decision, scope, reviewer id and role, an ISO-8601 timestamp with "
-          "offset, the repository commit, SHA-256 bindings for the resolution table and this "
-          "packet's CSV, a rationale, per-group verdicts, diagnostic citations, and an "
-          "explicit statement of what is **not** being approved. Anything missing, stale, or "
-          "placeholder is refused.", "",
+          "It must satisfy `ica26.governance.approvals.SECOND_REVIEW_SPEC`: generic approval "
+          "authorship and reviewed-state fields plus `review_schema_version` and a `groups` "
+          "list containing exactly one self-contained object for each of G07, G08, and G10. "
+          "Every group object binds this packet manifest's SHA-256 and repeats its exact "
+          "member ids and byte SHA-256 values, current effective record id and label, decision "
+          "(`agree`, `disagree`, or `uncertain`), strict confidence, independent reviewer id "
+          "and qualification, offset timestamp, rationale, structured citations, and a "
+          "decision-consistent recommended action. Missing, duplicate, extra, stale, "
+          "contradictory, or placeholder content is refused. Only three valid `agree` records "
+          "can satisfy readiness; `uncertain` always remains blocked.", "",
           "## What this packet does NOT do", "",
           "- It proposes no diagnosis and offers no recommendation.",
           "- It changes no adjudicated decision, label, split, or record identity.",
@@ -317,19 +330,8 @@ def main(argv=None) -> int:
 
     for name, text in artifacts.items():
         atomic_write_text(packet / name, text)
-    entries = {n: sha256_of(packet / n) for n in sorted(artifacts)}
-    atomic_write_text(packet / MANIFEST_JSON, json.dumps({
-        "_note": "SHA-256 of every packet artifact. No wall-clock field, so the packet "
-                 "is byte-deterministic and can be re-derived and compared.",
-        "dataset": "PlantDoc",
-        "groups_under_review": meta["groups"],
-        "records": meta["records"],
-        "status": "pending",
-        "completed_artifact_expected_at": str(COMPLETED_ARTIFACT),
-        "artifacts": entries,
-    }, indent=2, sort_keys=True) + "\n")
 
-    print(f"[second-review] wrote {len(artifacts) + 1} artifact(s) to {PACKET_DIR}")
+    print(f"[second-review] wrote {len(artifacts)} artifact(s) to {PACKET_DIR}")
     print("[second-review] every second-review field is blank — this packet proposes "
           "no diagnosis and satisfies no readiness condition")
     return 0
