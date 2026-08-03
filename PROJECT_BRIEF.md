@@ -159,7 +159,10 @@ Standard backbones from `timm`, trained on PlantVillage with leaf-grouped splits
 - **Do not use the Roboflow copy** — truncated by platform size limits.
 
 **PlantDoc** — second field evaluation, cleanest license
-- 2,598 images / 13 species. **28 classes in `train` (18 disease + 10 healthy), 27 in `test`** — test drops *Tomato two-spotted spider mite*. Not "27 = 17 + 10".
+- **Three counts, and they are not interchangeable** (see §6.1 and `reports/PLANTDOC_COUNT_RECONCILIATION.md`):
+  **2,598** paper-reported (Singh et al. 2020) · **2,578** in the upstream tree at the pinned commit `5467f601`, which is what was acquired · **2,564** in the effective Dataset V1 after the R2B duplicate remediation.
+  The 20-image paper↔upstream delta is a real change to the repository since publication, not a counting artifact.
+- 13 species. **28 classes in `train` (18 disease + 10 healthy), 27 in `test`** — test drops *Tomato two-spotted spider mite*. Not "27 = 17 + 10".
 - `github.com/pratikkayal/PlantDoc-Dataset` (classification), `PlantDoc-Object-Detection-Dataset` (bounding boxes)
 - License **CC BY 4.0** — the only redistributable in-the-wild set, so use it for released qualitative figures.
 - Paper: Singh et al. (2020), CoDS-COMAD, DOI `10.1145/3371158.3371196`; arXiv `1911.10317`
@@ -278,13 +281,67 @@ reports/
   DATASET_ASSESSMENT.md               per-dataset verdicts, primary-source verified
   figures/                            eda_plantdoc.png, confusion_plantdoc.png, abstention_plantdoc.png
 data/
-  raw/plantdoc/                       ONLY dataset present; TRUNCATED
+  raw/plantdoc/                       2,578 images, complete at pinned commit 5467f601
+  raw/plantvillage/                   54,305 color images, pinned HF revision 9e975998
+  manifests/                          plantdoc_manifest.csv (2,578 acquired)
+                                      plantdoc_effective_manifest.csv (2,564 effective)
+                                      plantvillage_manifest.csv (54,305)
+  exclusions/                         cross-dataset near-duplicate review (16, all kept)
+                                      plantdoc_internal_duplicate_resolution.csv (24 records)
+  mapping/                            action_mapping_review.csv (28 rows: 10 approved,
+                                      1 excluded, 17 needs_review)
   interim/eda_summary.csv
-  mapping/                            EMPTY
+human_review/                         preserved human decisions + immutable review inputs
 DATASETS.md                           acquisition spec (see §5 for its errors)
 ```
 
 All notebooks are Colab-first with a local fallback, auto-detect which datasets are present, and parse cleanly.
+
+### 6.1 Data and governance state — as of R2B.1
+
+Two things are easy to conflate and must not be: the **immutable acquired corpus**
+(what the sources contain, pinned by revision) and the **effective Dataset V1**
+(what remains after recorded human decisions are applied). Neither is frozen.
+
+| | Acquired (immutable) | Effective Dataset V1 |
+|---|---:|---:|
+| PlantDoc | **2,578** at commit `5467f601` | **2,564** (14 removed by 12 duplicate decisions) |
+| PlantVillage (`color`) | **54,305** at HF revision `9e975998` | unchanged — no exclusions applied |
+
+Nothing was deleted from disk and no image bytes were modified. `plantdoc_manifest.csv`
+still holds all 2,578 rows; the effective set is a derived manifest, with every
+difference traceable to a named human decision in
+`data/exclusions/plantdoc_internal_duplicate_resolution.csv`.
+
+**Every remotely acquired component is pinned to one immutable revision** — image
+archive, split files, and leaf map alike — and digest-verified on fetch. A branch
+name is refused, not resolved.
+
+#### Remediation rounds
+
+| Round | Scope | Status |
+|---|---|---|
+| **R2A** | Cross-dataset leakage identity authentication (canonical pair identity, fresh-vs-persisted set equality) | **Complete.** Gate passes: 0 exact, 16 near, all 16 adjudicated `keep`. |
+| **R2B** | PlantDoc internal exact-duplicate remediation (12 groups, 24 records) | **Mechanics accepted with required fixes** by independent audit. 10 groups retain one canonical record, 2 retain none; 0 exact duplicates survive. |
+| **R2B.1** | The audit's required fixes: fail-closed readiness and approval validation, PlantVillage revision pinning, pHash scalability, this document | **This round.** |
+
+#### What is NOT settled
+
+| Dimension | Status |
+|---|---|
+| **Dataset V1 freeze** | **NOT FROZEN.** No freeze artifact, no approval. `reports/dataset_v1_freeze_readiness.json` reports `not_ready`. |
+| PlantDoc disease→action mapping | **17 of 28** classes still `needs_review`; 10 approved (all healthy, under `policy:healthy-monitor-v1`), 1 excluded (arthropod pest, out of disease-action scope). |
+| PlantVillage action mapping | **0 of 38** classes decided. |
+| Harm matrix | **Not approved.** `harm_v0_template` is `pending` with incomplete weights; no production matrix exists. |
+| G07 / G08 / G10 canonical relabels | **Pending independent second review.** Packet at `reports/plantdoc_label_second_review/`; no verdict recorded. |
+| Audit findings AUD-EC-005/006/007 | **Open.** No independent sign-off artifact exists. |
+| **Training** | **NOT STARTED.** No model, checkpoint, or metric. |
+| **Phase 2** | **NOT AUTHORIZED.** |
+
+No audit finding above is closed, and none may be recorded as closed without a
+validated sign-off artifact naming it. The readiness gate distinguishes four kinds
+of condition — machine, human scientific, governance approval, and independent
+audit — and no code path can manufacture, infer, or default any of the last three.
 
 ### ⚠️ What the existing numbers actually are
 
@@ -297,7 +354,7 @@ dataset,n_images,n_classes,imbalance_ratio,largest_class,smallest_class,corrupt_
 plantdoc,407,27,23.2,Apple Scab Leaf (93),Corn Gray leaf spot (4),0,400,800,640,0.48
 ```
 
-- **407 images** against PlantDoc's real 2,598 — roughly 16% of the dataset.
+- **407 images** against PlantDoc's acquired 2,578 — roughly 16% of the dataset. (Superseded: the full corpus is now acquired; see §6.1.)
 - `train/` contains **only three classes** (Apple Scab Leaf, Apple leaf, Apple rust leaf); the rest failed to download.
 - The confusion matrix figure is **3×3**, not 27×27.
 - The abstention curve reports full-coverage accuracy **0.414** on a three-class problem where chance is 0.333, from a model trained in ~3 seconds.
@@ -445,7 +502,7 @@ Also disclose that PlantWild and PlantDoc images were collected via web image se
 ## 11. Open questions and blockers
 
 1. **The submission deadline is unresolved** — 31 July (Registration page) versus 15 August (CFP page). Today is 28 July. The difference between three days and eighteen days changes every downstream decision, including whether severity is attempted at all. **Contact `ica@iitrpr.ac.in`.**
-2. **The full PlantDoc re-download has not completed.** All current numbers are from a 16% subset.
+2. ~~The full PlantDoc re-download has not completed.~~ **Resolved.** PlantDoc is fully acquired (2,578/2,578 at the pinned commit) and PlantVillage pixels are materialised (54,305). The EDA figures in §6 are still the old 16% subset and remain plumbing checks, not results.
 3. Whether virtual presentation is permitted for an author unable to travel to India, and whether any fee reduction exists.
 4. Whether the 8,000 healthy images are inside the PlantSeg v7 archive (the landing text emphasises the masked set).
 

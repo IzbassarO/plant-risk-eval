@@ -87,6 +87,13 @@ if [ -f data/manifests/plantdoc_effective_manifest.csv ]; then
     || fail "the effective PlantDoc dataset does not match a fresh rebuild from the recorded decisions"
 else echo "  (no effective manifest yet)"; fi
 
+# The second-review packet is derived from the resolution table. If it has
+# drifted, a reviewer would be looking at a decision that is no longer in force.
+if [ -f reports/plantdoc_label_second_review/packet_manifest.json ]; then
+  "$PY" scripts/build_plantdoc_second_review_packet.py --check \
+    || fail "the relabel second-review packet does not match the current decisions"
+fi
+
 echo; echo "-- [HARD 11/11] preserved human-review evidence is unaltered --"
 if [ -d human_review ]; then
   "$PY" scripts/build_human_review_evidence_manifest.py --check \
