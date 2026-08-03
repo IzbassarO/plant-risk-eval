@@ -1,0 +1,15 @@
+{
+  "_note": "SHA-256 of every preserved human-review artifact. Evidence is append-only: a decision file is added beside the inputs the reviewer saw, never over them. No wall-clock field, so this manifest is byte-deterministic and can be re-derived.",
+  "artifacts": {
+    "README.md": "c1372f73e9de798bcffd83d71e0834a52d6fab8dcf3df39b21138fcf4d265b42",
+    "plantdoc_exact_duplicates/adjudicated/PLANTDOC_EXACT_DUPLICATE_ADJUDICATION_PROPOSAL.md": "b95e27c20087ff300f61fbb3486fff16ec46f9c1571b3a158edb9c85bfaa910e",
+    "plantdoc_exact_duplicates/adjudicated/plantdoc_exact_duplicate_adjudication_validation.json": "a6c2db024145404fb8e9e544e42c2d9fb94449c071619fd3603dd4df2758c906",
+    "plantdoc_exact_duplicates/adjudicated/plantdoc_exact_duplicate_groups.adjudicated.csv": "6a21f927a58006644713769435e2709725dd36650388a989bddfcb8867f8a7ef",
+    "plantdoc_exact_duplicates/original/PLANTDOC_EXACT_DUPLICATE_HUMAN_REVIEW.md": "e6f286020c27abd21a42650f2659727c12d1edded6090883ce6b9f3f839da18c",
+    "plantdoc_exact_duplicates/original/packet_manifest.json": "658a57876b90ebdf5a02715736939a1e4d5d5b73dc6388529e6887b39b88acae",
+    "plantdoc_exact_duplicates/original/plantdoc_exact_duplicate_groups.csv": "8fb8cc8a2a7064599a4f979d829ac6badb27d7b7e329325214386c1917ec3553",
+    "plantdoc_exact_duplicates/original/plantdoc_exact_duplicate_members.csv": "628cdb029f99eb8fc76a4a568d85e627af620dfa881c9be261f2fca2a31b82ad"
+  },
+  "file_count": 8,
+  "root": "human_review"
+}

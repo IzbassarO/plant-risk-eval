@@ -1,0 +1,12 @@
+{
+  "source_csv": "/mnt/data/plantdoc_exact_duplicate_review/plantdoc_exact_duplicate_review/plantdoc_exact_duplicate_groups.csv",
+  "output_csv": "/mnt/data/plantdoc_exact_duplicate_groups.adjudicated.csv",
+  "output_sha256": "6a21f927a58006644713769435e2709725dd36650388a989bddfcb8867f8a7ef",
+  "rows": 12,
+  "terminal_rows": 12,
+  "keep_one_record": 10,
+  "exclude_all_records": 2,
+  "move_to_train": 10,
+  "unresolved_decisions": [],
+  "members_csv_untouched_sha256": "628cdb029f99eb8fc76a4a568d85e627af620dfa881c9be261f2fca2a31b82ad"
+}

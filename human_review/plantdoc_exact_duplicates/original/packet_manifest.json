@@ -1,0 +1,28 @@
+{
+  "_note": "SHA-256 of every packet artifact. No wall-clock field, so the packet is byte-deterministic and can be re-derived and compared.",
+  "aggregate": {
+    "byte_identical_groups": 12,
+    "cross_class_cross_split": 8,
+    "cross_class_groups": 9,
+    "cross_class_same_split": 1,
+    "cross_split_groups": 11,
+    "groups": 12,
+    "pixel_identical_groups": 12,
+    "records": 24,
+    "same_class_cross_split": 3,
+    "same_class_same_split": 0
+  },
+  "artifacts": {
+    "PLANTDOC_EXACT_DUPLICATE_HUMAN_REVIEW.md": "e6f286020c27abd21a42650f2659727c12d1edded6090883ce6b9f3f839da18c",
+    "README.md": "4a5bdc8cf487f4cc5ce971fda5a6a57f04eccaa04da8d0051f3e0bb2b7975074",
+    "contact_sheet_01.png": "5c8ab2d6ea436fd822589242cb2587b3e2a91fb5d21a8b6abe14b22a6da89265",
+    "contact_sheet_02.png": "27d9831e7f658efb614d2092785b98dbf57ed625db70cf0d666e7590b50ce70f",
+    "contact_sheet_03.png": "b4cbae78a0e94c21f27406116208912317021ebb45c51c5c63db330f66be7583",
+    "contact_sheet_04.png": "d6adbfe7b45727414e92f326262f84a6453a407c748cdee6aafd551c95184291",
+    "plantdoc_exact_duplicate_groups.csv": "8fb8cc8a2a7064599a4f979d829ac6badb27d7b7e329325214386c1917ec3553",
+    "plantdoc_exact_duplicate_members.csv": "628cdb029f99eb8fc76a4a568d85e627af620dfa881c9be261f2fca2a31b82ad"
+  },
+  "dataset": "PlantDoc",
+  "group_schema": "ica26.datasets.duplicate_group/1",
+  "source_revision": "5467f6012d78d1c446145d5f582da6096f852ae8"
+}
