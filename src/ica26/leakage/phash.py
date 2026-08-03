@@ -75,12 +75,46 @@ def hamming_hex(a: str, b: str) -> int:
     return hamming_int(int(a, 16), int(b, 16))
 
 
+class HashParameterError(ValueError):
+    """Raised for a hash width or threshold that cannot be searched exactly."""
+
+
+def hash_bits(hash_size: int = DEFAULT_HASH_SIZE) -> int:
+    """Bit width of an ``imagehash.phash`` of side ``hash_size``."""
+    if int(hash_size) < 1:
+        raise HashParameterError(f"hash_size must be >= 1, got {hash_size!r}")
+    return int(hash_size) * int(hash_size)
+
+
+def validate_search_params(threshold: int, bits: int) -> None:
+    """Reject parameters for which banded search is not exact.
+
+    Banding needs ``threshold + 1`` bands of at least one bit each. Past that
+    point a band would be zero-width, every hash would share it, and the search
+    would silently degrade to an all-pairs scan wearing an index's clothes --
+    the failure mode worth being loud about.
+    """
+    if int(bits) < 1:
+        raise HashParameterError(f"hash width must be >= 1 bit, got {bits!r}")
+    if int(threshold) < 0:
+        raise HashParameterError(f"threshold must be >= 0, got {threshold!r}")
+    if int(threshold) >= int(bits):
+        raise HashParameterError(
+            f"threshold {threshold} is not less than the {bits}-bit hash width; "
+            "every pair would match and the result would be meaningless")
+    if int(threshold) + 1 > int(bits):
+        raise HashParameterError(
+            f"threshold {threshold} needs {int(threshold) + 1} bands but the hash is "
+            f"only {bits} bits wide")
+
+
 def _band_defs(threshold: int, bits: int = 64) -> list[tuple[int, int]]:
     """Split ``bits`` into (threshold+1) contiguous bands. Returns [(shift, mask)].
 
     Pigeonhole: two hashes within Hamming ``threshold`` must match exactly on at
     least one band, so banding never misses a true near-duplicate.
     """
+    validate_search_params(threshold, bits)
     b = threshold + 1
     base = bits // b
     defs, shift = [], 0
@@ -209,6 +243,97 @@ def _row_fields(df: pd.DataFrame, i: int, side: str) -> dict:
     }
 
 
+def _distinct_keys(keys: Sequence[int]) -> dict[int, list[int]]:
+    """``hash value -> record indices``. Collapses identical hashes."""
+    out: dict[int, list[int]] = {}
+    for i, k in enumerate(keys):
+        out.setdefault(k, []).append(i)
+    return out
+
+
+def _near_key_pairs(
+    uniq_a: dict[int, list[int]],
+    uniq_b: dict[int, list[int]],
+    *,
+    threshold: int,
+    bits: int,
+    intra: bool,
+) -> tuple[dict[tuple[int, int], int], int]:
+    """Near pairs between DISTINCT hash values. Returns (pairs, verifications).
+
+    Exactness is unchanged and rests on the same pigeonhole argument as before:
+    two hashes within Hamming ``threshold`` agree exactly on at least one of
+    ``threshold + 1`` bands, so bucketing by band value can never miss a true
+    pair. What changed is what happens *inside* a bucket.
+
+    The previous implementation enumerated every pair in every bucket into one
+    shared ``candidates`` set before verifying any of them. That is a Theta(m^2)
+    structure in both time and memory per bucket, built whether or not the bucket
+    contains a single real pair -- and a bucket is exactly where duplicates pile
+    up, so the worst case arrived precisely when the data was most degenerate.
+
+    Two changes remove it:
+
+    * **Identical hashes are collapsed first.** Duplicate images are the dominant
+      source of bucket density, and they are already reported by the exact path;
+      searching over distinct values leaves the near search proportional to the
+      number of distinct hashes, not the number of records.
+    * **Each bucket is searched with a BK-tree instead of enumerated.** A query
+      prunes any subtree whose edge distance cannot reach the radius, so
+      far-apart hashes that merely happen to share a band are never paired up.
+      Confirmed pairs are accumulated; candidates are not. Peak memory is
+      therefore bounded by the OUTPUT, not by bucket size squared.
+
+    Complexity: exact search is O(N). Near search is
+    O((t+1) * sum over buckets of BK-tree query cost) plus O(|output|). When a
+    bucket genuinely contains m mutually-near hashes the work is Theta(m^2) --
+    but so is the output, so that case is optimal rather than pathological. No
+    intermediate structure ever exceeds the size of the result.
+    """
+    found: dict[tuple[int, int], int] = {}
+    verifications = 0
+    if threshold < 1 or not uniq_a or not uniq_b:
+        return found, verifications
+
+    for shift, mask in _band_defs(threshold, bits):
+        buckets_a: dict[int, list[int]] = {}
+        for k in uniq_a:
+            buckets_a.setdefault((k >> shift) & mask, []).append(k)
+
+        if intra:
+            for members in buckets_a.values():
+                if len(members) < 2:
+                    continue
+                tree = BKTree()
+                for k in members:
+                    tree.add(k, k)
+                for k in members:
+                    for other, _payload, d in tree.query(k, threshold):
+                        verifications += 1
+                        if d <= 0 or d > threshold:
+                            continue        # identical value, or out of radius
+                        lo, hi = (k, other) if k < other else (other, k)
+                        found[(lo, hi)] = d
+        else:
+            buckets_b: dict[int, list[int]] = {}
+            for k in uniq_b:
+                buckets_b.setdefault((k >> shift) & mask, []).append(k)
+            for band_value, members in buckets_a.items():
+                partners = buckets_b.get(band_value)
+                if not partners:
+                    continue
+                tree = BKTree()
+                for k in members:
+                    tree.add(k, k)
+                for kb_key in partners:
+                    for ka_key, _payload, d in tree.query(kb_key, threshold):
+                        verifications += 1
+                        if d <= 0 or d > threshold:
+                            continue
+                        found[(ka_key, kb_key)] = d
+    return found, verifications
+
+
 def find_duplicates(
     index_a: pd.DataFrame,
     index_b: Optional[pd.DataFrame] = None,
@@ -218,60 +343,61 @@ def find_duplicates(
     """Exact (distance 0) and near (0 < d <= threshold) duplicate pairs.
 
     ``index_b=None`` -> intra-dataset (i<j, no self/reversed pairs). Otherwise
-    cross-dataset. Uses a hash-dictionary for exact and a BK-tree for near.
+    cross-dataset. Exact matches come from a hash dictionary; near matches from
+    banded multi-index hashing over DISTINCT hash values, each bucket searched
+    with a BK-tree (see :func:`_near_key_pairs`).
+
+    Raises :class:`HashParameterError` for a threshold that the hash width cannot
+    support exactly, rather than silently returning a degraded result.
+
     Returns {"exact": DataFrame, "near": DataFrame, "summary": dict}.
     """
     a = index_a.reset_index(drop=True)
     intra = index_b is None
     b = a if intra else index_b.reset_index(drop=True)
+    bits = hash_bits(hash_size)
+    if threshold >= 1:
+        validate_search_params(threshold, bits)
     ka = [int(h, 16) for h in a["phash"]] if len(a) else []
-    kb = [int(h, 16) for h in b["phash"]] if len(b) else []
+    kb = ka if intra else ([int(h, 16) for h in b["phash"]] if len(b) else [])
 
-    # ---- exact: hash -> member indices ----
+    for keys, frame in ((ka, a),) if intra else ((ka, a), (kb, b)):
+        for k in keys:
+            if k < 0 or k.bit_length() > bits:
+                raise HashParameterError(
+                    f"index contains a {k.bit_length()}-bit hash, wider than the "
+                    f"declared {bits}-bit width (hash_size={hash_size})")
+
+    # ---- exact: hash -> member indices (O(N), output-sized) ----
+    uniq_a = _distinct_keys(ka)
+    uniq_b = uniq_a if intra else _distinct_keys(kb)
+
     exact_pairs: list[tuple[int, int]] = []
     if intra:
-        buckets: dict[int, list[int]] = {}
-        for i, k in enumerate(ka):
-            buckets.setdefault(k, []).append(i)
-        for members in buckets.values():
+        for members in uniq_a.values():
             for x in range(len(members)):
                 for y in range(x + 1, len(members)):
                     exact_pairs.append((members[x], members[y]))
     else:
-        from_a: dict[int, list[int]] = {}
-        for i, k in enumerate(ka):
-            from_a.setdefault(k, []).append(i)
-        for j, k in enumerate(kb):
-            for i in from_a.get(k, []):
-                exact_pairs.append((i, j))
+        for k, js in uniq_b.items():
+            for i in uniq_a.get(k, []):
+                for j in js:
+                    exact_pairs.append((i, j))
 
-    # ---- near: banded multi-index hashing (distribution-independent, ~O(N)) ----
-    # Pigeonhole: if Hamming(a,b) <= t then a,b agree exactly on >=1 of (t+1)
-    # bands. Bucket by band value, verify candidates. This avoids the BK-tree's
-    # degenerate behaviour on far-apart (uniform) hashes.
+    # ---- near: banded search over distinct values, BK-tree per bucket ----
+    key_pairs, verifications = _near_key_pairs(
+        uniq_a, uniq_b, threshold=threshold, bits=bits, intra=intra)
+
     near_pairs: list[tuple[int, int, int]] = []
-    if threshold >= 1 and ka and kb:
-        bands = _band_defs(threshold)
-        candidates: set[tuple[int, int]] = set()
-        for shift, mask in bands:
-            from_a: dict[int, list[int]] = {}
-            for i, k in enumerate(ka):
-                from_a.setdefault((k >> shift) & mask, []).append(i)
-            if intra:
-                for members in from_a.values():
-                    m = len(members)
-                    for x in range(m):
-                        for y in range(x + 1, m):
-                            i, j = members[x], members[y]
-                            candidates.add((i, j) if i < j else (j, i))
-            else:
-                for j, k in enumerate(kb):
-                    for i in from_a.get((k >> shift) & mask, []):
-                        candidates.add((i, j))
-        for i, j in candidates:
-            d = hamming_int(ka[i], kb[j])
-            if 0 < d <= threshold:
-                near_pairs.append((i, j, d))
+    for (key_x, key_y), d in key_pairs.items():
+        if intra:
+            for i in uniq_a[key_x]:
+                for j in uniq_a[key_y]:
+                    near_pairs.append((i, j, d) if i < j else (j, i, d))
+        else:
+            for i in uniq_a[key_x]:
+                for j in uniq_b[key_y]:
+                    near_pairs.append((i, j, d))
 
     # ---- assemble frames ----
     def _mk(pairs_with_kind):
@@ -300,6 +426,12 @@ def find_duplicates(
         "datasets_b": sorted(b["dataset"].unique().tolist()) if len(b) else [],
         "n_exact_pairs": int(len(exact)),
         "n_near_pairs": int(len(near)),
+        "n_distinct_hashes_a": int(len(uniq_a)),
+        "n_distinct_hashes_b": int(len(uniq_b)),
+        # Diagnostic, not authoritative: how many candidate distances the near
+        # search actually evaluated. A regression here means the index stopped
+        # pruning and drifted back toward an all-pairs scan.
+        "n_near_verifications": int(verifications),
     }
     return {"exact": exact, "near": near, "summary": summary}
 

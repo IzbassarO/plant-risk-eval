@@ -167,21 +167,44 @@ def step_plantvillage(data_dir: Path, config: str = "color", do_download: bool =
     for d in (hf_dir, extract_dir, man_dir):
         d.mkdir(parents=True, exist_ok=True)
 
-    acq_cmd = (f"hf_hub_download('{PLANTVILLAGE_REPO}','data.zip',repo_type='dataset',"
-               f"revision='{PLANTVILLAGE_REV}')")
+    # R2B.1 Finding 3: every remotely acquired component -- archive, splits, leaf
+    # map -- comes from ONE immutable revision and is digest-verified. The module
+    # constant is the single source of that pin.
+    if PV.PLANTVILLAGE_REVISION != PLANTVILLAGE_REV:
+        raise RuntimeError(
+            f"pinned revision disagreement: script has {PLANTVILLAGE_REV}, "
+            f"ica26.datasets.plantvillage has {PV.PLANTVILLAGE_REVISION}")
+    acq_cmd = (f"fetch_pinned('data.zip', repo='{PLANTVILLAGE_REPO}', "
+               f"revision='{PLANTVILLAGE_REV}')  # digest-verified")
+    components = []
     t0 = time.perf_counter()
     if do_download:
-        log("PlantVillage: downloading data.zip (authoritative HF; ~2 GB, resumable)")
-        zip_path = hf_hub_download(PLANTVILLAGE_REPO, "data.zip", repo_type="dataset",
-                                   revision=PLANTVILLAGE_REV, local_dir=str(hf_dir))
+        log("PlantVillage: downloading data.zip (authoritative HF, pinned; ~2 GB, resumable)")
+        zip_local, zip_prov = PV.fetch_pinned("data.zip", revision=PLANTVILLAGE_REV,
+                                              repo=PLANTVILLAGE_REPO, local_dir=str(hf_dir))
+        zip_path, _ = str(zip_local), components.append(zip_prov)
     else:
         zip_path = str(hf_dir / "data.zip")
         if not Path(zip_path).exists():
             raise FileNotFoundError(f"data.zip not present at {zip_path}; run with download enabled")
+        observed = PV._sha256_of(zip_path)
+        expected = PV.PINNED_COMPONENT_DIGESTS.get("data.zip")
+        if expected and observed != expected:
+            raise PV.SourcePinError(
+                f"local data.zip digest {observed} != pinned {expected}; the cached "
+                "archive is not the frozen revision's")
+        components.append({"component": "data.zip", "repo": PLANTVILLAGE_REPO,
+                           "revision": PLANTVILLAGE_REV, "requested_path": "data.zip",
+                           "resolved_url": f"https://huggingface.co/datasets/{PLANTVILLAGE_REPO}"
+                                           f"/resolve/{PLANTVILLAGE_REV}/data.zip",
+                           "expected_sha256": expected or "", "observed_sha256": observed,
+                           "digest_verified": bool(expected) and observed == expected,
+                           "source": "local cache"})
 
-    # Determine the color relpaths from the authoritative split files.
-    tr = hf_hub_download(PLANTVILLAGE_REPO, f"splits/{config}_train.txt", repo_type="dataset",
-                         revision=PLANTVILLAGE_REV)
+    # Determine the color relpaths from the authoritative split files (pinned).
+    tr, tr_prov = PV.fetch_pinned(f"splits/{config}_train.txt", revision=PLANTVILLAGE_REV,
+                                  repo=PLANTVILLAGE_REPO)
+    components.append(tr_prov)
     sample_rel = next(l.strip() for l in open(tr) if l.strip())
 
     # Extract only the requested config's members (keeps disk down).
@@ -259,6 +282,13 @@ def step_plantvillage(data_dir: Path, config: str = "color", do_download: bool =
     summary["execution_seconds"] = round(secs, 1)
     summary["disk_bytes"] = disk_bytes
     summary["source_revision"] = PLANTVILLAGE_REV
+    # Merge the archive/split provenance gathered here with the split+leaf-map
+    # provenance the module recorded, keyed by component so neither is lost.
+    merged = {c["component"]: c for c in
+              (out["snapshot"].get("components") or []) + components}
+    summary["source_components"] = [merged[k] for k in sorted(merged)]
+    summary["all_components_pinned"] = all(
+        c["revision"] == PLANTVILLAGE_REV for c in merged.values())
     M.write_summary(summary, man_dir / "plantvillage_summary.json")
     log(f"PlantVillage: rows={n} pixels={n_pixels} corrupt={n_corrupt} "
         f"decode {decode_ok}/{len(sample_idx)} sha {sha_ok}/{sha_checked} "
