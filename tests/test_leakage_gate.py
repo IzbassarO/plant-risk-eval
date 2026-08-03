@@ -39,12 +39,15 @@ from ica26.leakage.gate import (
 # Fixtures: synthetic datasets, manifests, pair table, review + exclusion files
 # --------------------------------------------------------------------------- #
 PAIR_TABLE_COLUMNS = [
+    "canonical_pair_id", "pair_schema",
     "training_relpath", "evaluation_relpath", "training_class", "evaluation_class",
+    "training_sha256", "evaluation_sha256",
     "training_phash", "evaluation_phash", "hamming_distance", "classification",
     "review_status", "proposed_disposition", "notes",
 ]
 REVIEW_COLUMNS = [
-    "pair_id", "training_dataset", "training_relative_path", "training_class",
+    "canonical_pair_id", "pair_id",
+    "training_dataset", "training_relative_path", "training_class",
     "training_sha256", "evaluation_dataset", "evaluation_relative_path",
     "evaluation_class", "evaluation_sha256", "phash_distance", "contact_sheet",
     "human_decision", "decision_reason", "reviewer", "reviewed_at", "final_disposition",
@@ -55,8 +58,9 @@ REVIEWED_EXCL_COLUMNS = [
     "source_review_file",
 ]
 EXACT_EXCL_COLUMNS = [
-    "evaluation_dataset", "evaluation_relpath", "evaluation_class",
-    "training_dataset", "training_relpath", "training_class",
+    "canonical_pair_id", "pair_schema",
+    "evaluation_dataset", "evaluation_relpath", "evaluation_class", "evaluation_sha256",
+    "training_dataset", "training_relpath", "training_class", "training_sha256",
     "hamming_distance", "reason", "provenance", "action", "status",
 ]
 
@@ -121,10 +125,32 @@ class Env:
                     if self.overlap else [])
         _write_csv(self.pair_table, PAIR_TABLE_COLUMNS, rows)
 
+    def _sha(self, manifest, relpath):
+        import csv as _csv
+        with open(manifest, newline="", encoding="utf-8") as fh:
+            for r in _csv.DictReader(fh):
+                if r["relpath"] == relpath:
+                    return r["sha256"]
+        return ""
+
+    def exact_identity(self):
+        from ica26.leakage.gate import PairIdentity
+        return PairIdentity(
+            training_dataset="train_ds", training_relpath=self.T_REL, training_class="c",
+            training_sha256=self._sha(self.tr_man, self.T_REL),
+            evaluation_dataset="eval_ds", evaluation_relpath=self.E_REL,
+            evaluation_class="c", evaluation_sha256=self._sha(self.ev_man, self.E_REL),
+            phash_distance=0, classification="exact")
+
     def write_exact_exclusion(self, **over):
-        row = {"evaluation_dataset": "eval_ds", "evaluation_relpath": self.E_REL,
-               "evaluation_class": "c", "training_dataset": "train_ds",
+        ident = self.exact_identity()
+        row = {"canonical_pair_id": ident.canonical_pair_id,
+               "pair_schema": "ica26.leakage.pair/1",
+               "evaluation_dataset": "eval_ds", "evaluation_relpath": self.E_REL,
+               "evaluation_class": "c", "evaluation_sha256": ident.evaluation_sha256,
+               "training_dataset": "train_ds",
                "training_relpath": self.T_REL, "training_class": "c",
+               "training_sha256": ident.training_sha256,
                "hamming_distance": "0", "reason": "exact duplicate",
                "provenance": "test", "action": "propose_exclude_from_evaluation",
                "status": "proposed"}
@@ -293,6 +319,7 @@ AUTHORITATIVE = {NEAR.key: NEAR}
 
 def _review_row(**over):
     row = {
+        "canonical_pair_id": NEAR.canonical_pair_id,
         "pair_id": "ndp-01",
         "training_dataset": NEAR.training_dataset,
         "training_relative_path": NEAR.training_relpath,
@@ -356,14 +383,17 @@ def test_duplicate_pair_id_is_a_violation(tmp_path):
 
 
 def test_duplicate_identity_is_a_violation(tmp_path):
+    """A second row for the same pair under a different display label."""
     a = _auth(tmp_path, [_review_row(), _review_row(pair_id="ndp-02")])
     assert not a.ok
-    assert any("duplicate pair identity" in v for v in a.violations)
+    assert any("duplicate canonical_pair_id" in v for v in a.violations)
+    assert a.resolved == 1
 
 
 def test_unknown_pair_id_row_is_a_violation(tmp_path):
     a = _auth(tmp_path, [_review_row(), _review_row(
-        pair_id="ndp-99", training_relative_path="t/ghost.jpg",
+        pair_id="ndp-99", canonical_pair_id="near-ffffffffffffffff",
+        training_relative_path="t/ghost.jpg",
         evaluation_relative_path="e/ghost.jpg")])
     assert not a.ok
     assert any("unknown or surplus review row" in v for v in a.violations)
@@ -378,7 +408,8 @@ def test_missing_authoritative_pair_is_a_violation(tmp_path):
         evaluation_relpath="e/d.jpg", evaluation_class="B", evaluation_sha256="f" * 64,
         phash_distance=5, classification="near")
     two[other.key] = other
-    a = _auth(tmp_path, [_review_row()], authoritative=two)
+    # `other` sorts first (distance 5), so NEAR's authoritative display id is ndp-02.
+    a = _auth(tmp_path, [_review_row(pair_id="ndp-02")], authoritative=two)
     assert not a.ok
     assert any("has no review row" in v for v in a.violations)
     assert a.unresolved == 1
@@ -500,7 +531,8 @@ def test_pair_table_disagreeing_with_fresh_computation_is_incomplete(clean_env):
         "hamming_distance": "3", "classification": "near"}])
     gate = clean_env.compute()
     assert gate.status == "incomplete"
-    assert any("regenerate the leakage step" in v for v in gate.authorization_violations)
+    assert any("which fresh detection did not produce" in v
+               for v in gate.authorization_violations)
 
 
 # --------------------------------------------------------------------------- #
@@ -598,12 +630,26 @@ def test_exact_authenticator_requires_one_record_per_pair(tmp_path):
 
 def test_exact_authenticator_accepts_a_matching_record(tmp_path):
     p = _write_csv(tmp_path / "x.csv", EXACT_EXCL_COLUMNS, [{
+        "canonical_pair_id": EXACT.canonical_pair_id,
         "training_dataset": "PlantVillage", "training_relpath": "t/x.jpg",
-        "training_class": "A", "evaluation_dataset": "PlantDoc",
-        "evaluation_relpath": "e/y.jpg", "evaluation_class": "B",
+        "training_class": "A", "training_sha256": EXACT.training_sha256,
+        "evaluation_dataset": "PlantDoc", "evaluation_relpath": "e/y.jpg",
+        "evaluation_class": "B", "evaluation_sha256": EXACT.evaluation_sha256,
         "hamming_distance": "0"}])
     a = authenticate_exact_exclusions(p, {EXACT.key: EXACT})
     assert a.ok and a.excluded == 1
+
+
+def test_exact_authenticator_rejects_a_record_without_canonical_id(tmp_path):
+    p = _write_csv(tmp_path / "x.csv", EXACT_EXCL_COLUMNS, [{
+        "training_dataset": "PlantVillage", "training_relpath": "t/x.jpg",
+        "training_class": "A", "training_sha256": EXACT.training_sha256,
+        "evaluation_dataset": "PlantDoc", "evaluation_relpath": "e/y.jpg",
+        "evaluation_class": "B", "evaluation_sha256": EXACT.evaluation_sha256,
+        "hamming_distance": "0"}])
+    a = authenticate_exact_exclusions(p, {EXACT.key: EXACT})
+    assert not a.ok
+    assert any("canonical_pair_id" in v for v in a.violations)
 
 
 def test_exact_authenticator_with_no_pairs_and_no_records_is_clean(tmp_path):

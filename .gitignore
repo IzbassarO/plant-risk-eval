@@ -25,6 +25,11 @@ data/interim/*
 # Contact sheets are ~4.1 MB of derived collages regenerable from raw data via
 # `python scripts/prepare_human_review.py`; the reviewer uses them locally.
 reports/near_duplicate_contact_sheets/
+# Same policy for the PlantDoc duplicate packet: the CSV/JSON/Markdown evidence
+# and decision forms ARE tracked, but the ~1.7 MB of rendered collages are
+# regenerable via `python scripts/build_plantdoc_duplicate_packet.py`. Their
+# SHA-256 values stay recorded in packet_manifest.json.
+reports/plantdoc_exact_duplicate_review/*.png
 # Legacy CPU smoke-run figures, superseded and not referenced by any report.
 reports/_legacy_smoke_figures/
 # Point-in-time remediation backups (local history only).

@@ -293,7 +293,7 @@ def build_source_inventory() -> dict:
            "distinct images are representable (requires a case-safe naming scheme, already applied "
            "in `data/manifests/plantdoc_source_inventory.csv`).",
            ""]
-    (REPORTS / "PLANTDOC_CASE_COLLISION_REVIEW.md").write_text("\n".join(md))
+    _atomic_write_text(REPORTS / "PLANTDOC_CASE_COLLISION_REVIEW.md", "\n".join(md))
 
     return {"upstream": len(upstream), "pairs": len(pairs), "findings": pair_findings,
             "materialized_content": int(materialized_content),
@@ -353,7 +353,8 @@ def _contain(im: Image.Image, box: int, bg=(235, 235, 235)) -> Image.Image:
 # rather than silently re-attaching a stale verdict.
 # --------------------------------------------------------------------------- #
 REVIEW_COLUMNS = [
-    "pair_id", "training_dataset", "training_relative_path", "training_class",
+    "canonical_pair_id", "pair_id",
+    "training_dataset", "training_relative_path", "training_class",
     "training_sha256", "evaluation_dataset", "evaluation_relative_path",
     "evaluation_class", "evaluation_sha256", "phash_distance", "contact_sheet",
     "human_decision", "decision_reason", "reviewer", "reviewed_at", "final_disposition",
@@ -361,6 +362,8 @@ REVIEW_COLUMNS = [
 
 #: Fields that define a pair. Drift in any of them invalidates a prior decision.
 #: `contact_sheet` is deliberately excluded: re-paging the sheets is cosmetic.
+#: Both relative paths ARE identity: R1-HIGH-002 found that path drift produced a
+#: dropped row plus a blank new row instead of raising.
 IDENTITY_COLUMNS = (
     "training_dataset", "training_relative_path", "training_class", "training_sha256",
     "evaluation_dataset", "evaluation_relative_path", "evaluation_class",
@@ -393,6 +396,26 @@ def _read_rows(path: Path) -> list[dict]:
         return list(csv.DictReader(fh))
 
 
+def _atomic_write_text(path: Path, text: str) -> Path:
+    """Temp file + os.replace, so an interrupted write cannot truncate a report."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".part")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+    return path
+
+
+def _atomic_save_image(image, path: Path) -> Path:
+    """Atomic image write, same reasoning as _atomic_write_text."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".part.png")
+    image.save(tmp)
+    os.replace(tmp, path)
+    return path
+
+
 def _atomic_write_rows(path: Path, columns, rows) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -406,8 +429,27 @@ def _atomic_write_rows(path: Path, columns, rows) -> Path:
 
 
 def _identity_key(row: dict) -> tuple:
+    """Path key. Lookup convenience only -- authority is `canonical_pair_id`."""
     return ((row.get("training_relative_path") or "").strip(),
             (row.get("evaluation_relative_path") or "").strip())
+
+
+def _canonical_id(row: dict) -> str:
+    """Recompute the identity digest for a row, so it can never be trusted as-is."""
+    from ica26.leakage.gate import PairIdentity
+
+    return PairIdentity(
+        training_dataset=(row.get("training_dataset") or "").strip(),
+        training_relpath=(row.get("training_relative_path") or "").strip(),
+        training_class=(row.get("training_class") or "").strip(),
+        training_sha256=(row.get("training_sha256") or "").strip(),
+        evaluation_dataset=(row.get("evaluation_dataset") or "").strip(),
+        evaluation_relpath=(row.get("evaluation_relative_path") or "").strip(),
+        evaluation_class=(row.get("evaluation_class") or "").strip(),
+        evaluation_sha256=(row.get("evaluation_sha256") or "").strip(),
+        phash_distance=int(str(row.get("phash_distance") or 0).strip() or 0),
+        classification="near",
+    ).canonical_pair_id
 
 
 def _has_decision(row: dict) -> bool:
@@ -424,44 +466,70 @@ def merge_near_review(fresh: list[dict], existing: list[dict],
     reachable through an explicit CLI flag.
     """
     report = {"preserved": [], "new": [], "dropped": [], "drift": [], "reset": bool(reset)}
+    fresh = [dict(r, canonical_pair_id=_canonical_id(r)) for r in fresh]
     if reset:
         report["new"] = [r["pair_id"] for r in fresh]
         return fresh, report
 
-    prior = {}
+    # Index prior decisions by CANONICAL identity. Any change to an identity
+    # field -- including either relative path -- changes the canonical id, so a
+    # drifted decided record simply cannot be found and is caught below.
+    prior_by_canonical: dict[str, dict] = {}
+    prior_by_path: dict[tuple, dict] = {}
     for r in existing:
-        prior.setdefault(_identity_key(r), r)
+        prior_by_canonical.setdefault(_canonical_id(r), r)
+        prior_by_path.setdefault(_identity_key(r), r)
 
-    # Stable ids: keep the id a decided pair already has; mint above the high-water
-    # mark so a new pair can never reuse a retired label.
-    used_ids = {(r.get("pair_id") or "").strip() for r in existing}
+    fresh_canonical = {r["canonical_pair_id"] for r in fresh}
+
+    # Any DECIDED prior record whose canonical identity is not reproduced by the
+    # fresh set is drift. R1-HIGH-002: this previously surfaced as a dropped row
+    # plus a blank new row, which loses the decision without saying so.
+    for cid, old in prior_by_canonical.items():
+        if cid in fresh_canonical or not _has_decision(old):
+            continue
+        key = _identity_key(old)
+        match = next((r for r in fresh if _identity_key(r) == key), None)
+        if match is not None:
+            changed = [c for c in IDENTITY_COLUMNS
+                       if (old.get(c) or "").strip() != (match.get(c) or "").strip()]
+            reason = f"identity fields changed: {changed}"
+        else:
+            reason = "the pair is no longer detected under this identity"
+        report["drift"].append({
+            "pair_id": (old.get("pair_id") or "").strip(),
+            "canonical_pair_id": cid,
+            "key": list(key),
+            "reason": reason,
+        })
+
+    if report["drift"]:
+        detail = "; ".join(f"{d['pair_id'] or d['canonical_pair_id']} — {d['reason']}"
+                           for d in report["drift"])
+        raise HumanDecisionDrift(
+            f"{len(report['drift'])} decided pair(s) no longer match their recorded "
+            f"canonical identity: {detail}. A prior verdict cannot be re-attached to a "
+            "pair whose identity changed, and dropping it silently would lose the "
+            "decision. Nothing was written. Re-review those pairs, or re-run with "
+            "--reset-human-decisions to discard every decision (destructive)."
+        )
+
+    # Stable display ids: keep the label a pair already has; mint above the
+    # high-water mark so a new pair can never reuse a retired label.
     next_n = 0
-    for pid in used_ids:
+    for pid in {(r.get("pair_id") or "").strip() for r in existing}:
         if pid.startswith("ndp-") and pid[4:].isdigit():
             next_n = max(next_n, int(pid[4:]))
 
     merged = []
     for row in fresh:
-        key = _identity_key(row)
-        old = prior.pop(key, None)
+        old = prior_by_canonical.get(row["canonical_pair_id"])
         if old is None:
             next_n += 1
             row = dict(row, pair_id=f"ndp-{next_n:02d}")
             report["new"].append(row["pair_id"])
             merged.append(row)
             continue
-
-        mismatched = [c for c in IDENTITY_COLUMNS
-                      if (old.get(c) or "").strip() != (row.get(c) or "").strip()]
-        if mismatched and _has_decision(old):
-            report["drift"].append({
-                "pair_id": (old.get("pair_id") or "").strip(),
-                "key": list(key),
-                "changed_fields": mismatched,
-            })
-            merged.append(row)
-            continue
-
         out = dict(row)
         if (old.get("pair_id") or "").strip():
             out["pair_id"] = old["pair_id"].strip()
@@ -471,24 +539,18 @@ def merge_near_review(fresh: list[dict], existing: list[dict],
         if _has_decision(old):
             report["preserved"].append(out["pair_id"])
 
-    for key, old in prior.items():
+    # Undecided prior rows that vanished are reported, not an error.
+    for cid, old in prior_by_canonical.items():
+        if cid in fresh_canonical:
+            continue
         report["dropped"].append({
             "pair_id": (old.get("pair_id") or "").strip(),
-            "key": list(key),
+            "canonical_pair_id": cid,
+            "key": list(_identity_key(old)),
             "had_decision": _has_decision(old),
             "human_decision": (old.get("human_decision") or "").strip(),
             "final_disposition": (old.get("final_disposition") or "").strip(),
         })
-
-    if report["drift"]:
-        detail = "; ".join(
-            f"{d['pair_id']} changed {d['changed_fields']}" for d in report["drift"])
-        raise HumanDecisionDrift(
-            f"{len(report['drift'])} decided pair(s) no longer match their recorded "
-            f"identity: {detail}. A prior verdict cannot be re-attached to a pair whose "
-            "content changed. Re-review those pairs, or re-run with "
-            "--reset-human-decisions to discard every decision (destructive)."
-        )
     return merged, report
 
 
@@ -594,7 +656,7 @@ def build_near_duplicate_packet(*, reset_human_decisions: bool = False) -> dict:
         for j, panel in enumerate(chunk):
             page.paste(panel, (0, 40 + j * PANEL_H))
         out = sheets_dir / f"contact_sheet_{pg+1:02d}.png"
-        page.save(out)
+        _atomic_save_image(page, out)
         sheet_files.append(str(out.relative_to(REPO)))
 
     # ---- review CSV: merge prior decisions by canonical identity ----
@@ -630,7 +692,7 @@ def build_near_duplicate_packet(*, reset_human_decisions: bool = False) -> dict:
                   f"`{r['evaluation_relative_path']}` | `{Path(r['contact_sheet']).name}` |")
     md += ["", "_Automated visual-similarity notes on the contact sheets are non-authoritative "
            "heuristics and must not substitute for human judgement._", ""]
-    (REPORTS / "NEAR_DUPLICATE_HUMAN_REVIEW.md").write_text("\n".join(md))
+    _atomic_write_text(REPORTS / "NEAR_DUPLICATE_HUMAN_REVIEW.md", "\n".join(md))
 
     return {"n_pairs": n, "sheets": sheet_files, "csv_rows": len(rows),
             "changes": change_report, "exclusions": excl_report}
@@ -681,7 +743,7 @@ def _write_change_report(change: dict, excl: dict, n_pairs: int) -> Path:
               "", "The leakage gate treats these as authorization violations until the "
               "exclusion rows exist.", ""]
     out = REPORTS / "NEAR_DUPLICATE_REVIEW_CHANGES.md"
-    out.write_text("\n".join(L))
+    _atomic_write_text(out, "\n".join(L))
     return out
 
 
@@ -740,7 +802,7 @@ def build_mapping_checklist() -> dict:
             _human_choice_line(r),
             "",
         ]
-    (REPORTS / "ACTION_MAPPING_HUMAN_CHECKLIST.md").write_text("\n".join(md))
+    _atomic_write_text(REPORTS / "ACTION_MAPPING_HUMAN_CHECKLIST.md", "\n".join(md))
     return {"rows": n, "needs_review": needs, "approved": approved, "excluded": excluded}
 
 

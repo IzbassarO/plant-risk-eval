@@ -876,13 +876,39 @@ def step_leakage(data_dir: Path, repo_dir: Path, threshold: int = PHASH_THRESHOL
     reports.mkdir(parents=True, exist_ok=True)
     excl_dir.mkdir(parents=True, exist_ok=True)
 
+    # Canonical identities are derived from the MANIFESTS, so the persisted table
+    # carries the same identity the gate recomputes from fresh detection
+    # (R1-CRIT-001). Class labels come from the manifest, not from the index.
+    from ica26.leakage.gate import CANONICAL_PAIR_SCHEMA, PairIdentity
+
+    man_dir = data_dir / "manifests"
+    tr_sha = dict(zip(*_manifest_cols(man_dir / "plantvillage_manifest.csv", "sha256")))
+    ev_sha = dict(zip(*_manifest_cols(man_dir / "plantdoc_manifest.csv", "sha256")))
+    tr_cls = dict(zip(*_manifest_cols(man_dir / "plantvillage_manifest.csv", "class_label")))
+    ev_cls = dict(zip(*_manifest_cols(man_dir / "plantdoc_manifest.csv", "class_label")))
+
+    def _identity(t_rel, e_rel, distance, kind) -> PairIdentity:
+        return PairIdentity(
+            training_dataset="PlantVillage", training_relpath=t_rel,
+            training_class=tr_cls.get(t_rel, ""), training_sha256=tr_sha.get(t_rel, ""),
+            evaluation_dataset="PlantDoc", evaluation_relpath=e_rel,
+            evaluation_class=ev_cls.get(e_rel, ""), evaluation_sha256=ev_sha.get(e_rel, ""),
+            phash_distance=int(distance), classification=kind,
+        )
+
     def _rows(df, kind):
         out = []
         for _, r in df.iterrows():
             pending = kind == "near"
+            ident = _identity(r["path_a"], r["path_b"], r["distance"], kind)
             out.append({
+                "canonical_pair_id": ident.canonical_pair_id,
+                "pair_schema": CANONICAL_PAIR_SCHEMA,
                 "training_relpath": r["path_a"], "evaluation_relpath": r["path_b"],
-                "training_class": r["class_a"], "evaluation_class": r["class_b"],
+                "training_class": ident.training_class,
+                "evaluation_class": ident.evaluation_class,
+                "training_sha256": ident.training_sha256,
+                "evaluation_sha256": ident.evaluation_sha256,
                 "training_phash": hmap_a.get(r["path_a"], ""),
                 "evaluation_phash": hmap_b.get(r["path_b"], ""),
                 "hamming_distance": int(r["distance"]), "classification": kind,
@@ -895,7 +921,9 @@ def step_leakage(data_dir: Path, repo_dir: Path, threshold: int = PHASH_THRESHOL
             })
         return out
 
-    cols = ["training_relpath", "evaluation_relpath", "training_class", "evaluation_class",
+    cols = ["canonical_pair_id", "pair_schema",
+            "training_relpath", "evaluation_relpath", "training_class", "evaluation_class",
+            "training_sha256", "evaluation_sha256",
             "training_phash", "evaluation_phash", "hamming_distance", "classification",
             "review_status", "proposed_disposition", "notes"]
     pairs_df = pd.DataFrame(_rows(res["exact"], "exact") + _rows(res["near"], "near"), columns=cols)
@@ -921,18 +949,25 @@ def step_leakage(data_dir: Path, repo_dir: Path, threshold: int = PHASH_THRESHOL
     # Exact cross-dataset duplicates -> propose EXCLUDING the evaluation image.
     excl_rows = []
     for _, r in res["exact"].iterrows():
+        ident = _identity(r["path_a"], r["path_b"], r["distance"], "exact")
         excl_rows.append({
+            "canonical_pair_id": ident.canonical_pair_id,
+            "pair_schema": CANONICAL_PAIR_SCHEMA,
             "evaluation_dataset": "PlantDoc", "evaluation_relpath": r["path_b"],
-            "evaluation_class": r["class_b"], "training_dataset": "PlantVillage",
-            "training_relpath": r["path_a"], "training_class": r["class_a"],
+            "evaluation_class": ident.evaluation_class,
+            "evaluation_sha256": ident.evaluation_sha256,
+            "training_dataset": "PlantVillage",
+            "training_relpath": r["path_a"], "training_class": ident.training_class,
+            "training_sha256": ident.training_sha256,
             "hamming_distance": int(r["distance"]),
             "reason": "exact cross-dataset perceptual-hash duplicate with a training image",
             "provenance": f"{res['summary']['phash_algorithm']} d=0 vs PlantVillage color @ {PLANTVILLAGE_REV[:8]}",
             "action": "propose_exclude_from_evaluation", "status": "proposed",
         })
     excl_df = pd.DataFrame(excl_rows, columns=[
-        "evaluation_dataset", "evaluation_relpath", "evaluation_class",
-        "training_dataset", "training_relpath", "training_class",
+        "canonical_pair_id", "pair_schema",
+        "evaluation_dataset", "evaluation_relpath", "evaluation_class", "evaluation_sha256",
+        "training_dataset", "training_relpath", "training_class", "training_sha256",
         "hamming_distance", "reason", "provenance", "action", "status"])
     if len(excl_df):
         excl_df = excl_df.sort_values(["evaluation_relpath", "training_relpath"]).reset_index(drop=True)
@@ -964,6 +999,18 @@ def step_leakage(data_dir: Path, repo_dir: Path, threshold: int = PHASH_THRESHOL
         f"proposed_exclusions={len(excl_df)} skipped={skipped_train + skipped_eval}")
     return {"summary": summary, "n_exact": n_exact, "n_near": n_near, "n_pending": n_near,
             "n_excluded": int(len(excl_df)), "skipped": skipped_train + skipped_eval}
+
+
+def _manifest_cols(manifest_csv: Path, column: str) -> tuple[list[str], list[str]]:
+    """(relpaths, values) for one manifest column. Manifests are the authority."""
+    import csv as _csv
+
+    keys, vals = [], []
+    with open(manifest_csv, newline="", encoding="utf-8") as fh:
+        for r in _csv.DictReader(fh):
+            keys.append(r["relpath"])
+            vals.append(r[column])
+    return keys, vals
 
 
 def _csv_rows(path: Path) -> int:

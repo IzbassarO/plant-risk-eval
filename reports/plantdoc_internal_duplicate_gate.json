@@ -1,0 +1,38 @@
+{
+  "cross_class_groups": 9,
+  "cross_split_groups": 11,
+  "dataset": "PlantDoc",
+  "group_schema": "ica26.datasets.duplicate_group/1",
+  "input_digests": {
+    "duplicate_groups": "8fb8cc8a2a7064599a4f979d829ac6badb27d7b7e329325214386c1917ec3553",
+    "duplicate_members": "628cdb029f99eb8fc76a4a568d85e627af620dfa881c9be261f2fca2a31b82ad",
+    "group_schema": "a137dc467d1a88f0ac010732e4bfcca35dce77ce5f226a81911762fbd5d843f9",
+    "plantdoc_manifest": "548b815197c51bc26ea6adb2080b93cd670426623ca13d6eee8a43d49fb4ba55"
+  },
+  "provenance": {
+    "command": "build_plantdoc_internal_duplicate_gate.py",
+    "review_packet": "reports/plantdoc_exact_duplicate_review",
+    "source_revision": "5467f6012d78d1c446145d5f582da6096f852ae8"
+  },
+  "resolved_groups": 0,
+  "schema_version": "1.0",
+  "status": "incomplete",
+  "total_groups": 12,
+  "total_records": 24,
+  "unresolved_group_ids": [
+    "pdup-00d12bcd997986d0",
+    "pdup-0e389c7e23bd56b9",
+    "pdup-1de023f9a042587b",
+    "pdup-37644c61e7e47362",
+    "pdup-454040445d1210af",
+    "pdup-7ec26dad51adee34",
+    "pdup-884a18bbd9375029",
+    "pdup-a4b93bd747ef3454",
+    "pdup-b521e39920981129",
+    "pdup-e05ca426fe0bf730",
+    "pdup-eeff73e307da9ed1",
+    "pdup-f7ce4475e7faab5c"
+  ],
+  "unresolved_groups": 12,
+  "violations": []
+}

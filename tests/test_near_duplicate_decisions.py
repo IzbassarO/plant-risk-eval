@@ -147,7 +147,7 @@ def test_persisted_gate_matches_the_recorded_review(repo_root):
     import json
 
     gate = json.loads((repo_root / "reports/leakage_gate.json").read_text())
-    assert gate["schema_version"] == "2.0"
+    assert gate["schema_version"] == "2.1"
     assert gate["near_duplicate_count"] == 16
     assert gate["near_resolved_count"] == 16
     assert gate["near_kept_count"] == 16
@@ -158,3 +158,31 @@ def test_persisted_gate_matches_the_recorded_review(repo_root):
     assert gate["authorization_violations"] == []
     assert gate["status"] == "pass"
     assert "generated_at" not in gate
+    recon = gate["provenance"]["pair_identity_reconciliation"]
+    assert recon["equal"] is True
+    assert recon["fresh_count"] == recon["persisted_count"] == 16
+    assert recon["fresh_only"] == [] and recon["persisted_only"] == []
+
+
+def test_recorded_review_carries_identity_derived_canonical_ids(repo_root, authoritative):
+    """Display ids label; canonical ids authorise (R1-HIGH-001)."""
+    import csv as _csv
+    from ica26.leakage.gate import display_pair_ids
+
+    near = {k: v for k, v in authoritative.items() if v.classification == "near"}
+    display = display_pair_ids(near.values())
+    with open(repo_root / REVIEW_CSV, newline="", encoding="utf-8") as fh:
+        rows = list(_csv.DictReader(fh))
+    for r in rows:
+        pair = near[(r["training_relative_path"], r["evaluation_relative_path"])]
+        assert r["canonical_pair_id"] == pair.canonical_pair_id
+        assert r["pair_id"] == display[pair.canonical_pair_id]
+
+
+def test_every_recorded_timestamp_is_strict_iso8601(recorded):
+    from ica26.leakage.gate import parse_review_timestamp
+
+    for r in recorded:
+        dt, err = parse_review_timestamp(r["reviewed_at"])
+        assert err is None, err
+        assert dt.utcoffset() is not None

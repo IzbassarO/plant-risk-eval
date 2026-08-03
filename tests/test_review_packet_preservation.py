@@ -119,11 +119,25 @@ def test_contact_sheet_repaging_is_not_identity_drift(phr):
     ("training_class", "OTHER"),
     ("evaluation_class", "OTHER"),
     ("training_dataset", "OTHER"),
+    # R1-HIGH-002: BOTH relative paths are identity. Previously a path change
+    # produced a dropped row plus a blank new row instead of raising.
+    ("training_relative_path", "t/moved.jpg"),
+    ("evaluation_relative_path", "e/moved.jpg"),
 ])
 def test_identity_drift_on_a_decided_pair_fails_closed(phr, field, value):
+    with pytest.raises(phr.HumanDecisionDrift):
+        phr.merge_near_review([_fresh(**{field: value})], [_decided()])
+
+
+@pytest.mark.parametrize("field,value", [
+    ("training_relative_path", "t/moved.jpg"),
+    ("evaluation_relative_path", "e/moved.jpg"),
+])
+def test_path_drift_writes_nothing(phr, field, value, tmp_path):
+    """The decision must not silently reappear as a dropped + blank pair."""
     with pytest.raises(phr.HumanDecisionDrift) as e:
         phr.merge_near_review([_fresh(**{field: value})], [_decided()])
-    assert field in str(e.value)
+    assert "Nothing was written" in str(e.value)
 
 
 def test_identity_drift_on_an_undecided_pair_is_fine(phr):
@@ -137,13 +151,18 @@ def test_identity_drift_on_an_undecided_pair_is_fine(phr):
 # --------------------------------------------------------------------------- #
 # Removed pairs are reported, never silently dropped
 # --------------------------------------------------------------------------- #
-def test_removed_pair_is_reported_with_its_decision(phr):
-    merged, report = phr.merge_near_review([], [_decided()])
+def test_removing_a_decided_pair_fails_closed(phr):
+    """R1-HIGH-002: losing a decision must stop the run, not be logged."""
+    with pytest.raises(phr.HumanDecisionDrift) as e:
+        phr.merge_near_review([], [_decided()])
+    assert "ndp-01" in str(e.value)
+
+
+def test_removing_an_undecided_pair_is_only_reported(phr):
+    merged, report = phr.merge_near_review([], [_fresh()])
     assert merged == []
     assert len(report["dropped"]) == 1
-    d = report["dropped"][0]
-    assert d["pair_id"] == "ndp-01" and d["had_decision"] is True
-    assert d["human_decision"] == "clearly_different"
+    assert report["dropped"][0]["had_decision"] is False
 
 
 # --------------------------------------------------------------------------- #
@@ -211,6 +230,7 @@ def test_repository_review_is_fully_decided_and_stable(phr, repo_root):
               newline="", encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))
     assert len(rows) == 16
+    assert all(r["canonical_pair_id"].startswith("near-") for r in rows)
     merged, report = phr.merge_near_review([dict(r, **{c: "" for c in phr.DECISION_COLUMNS})
                                             for r in rows], rows)
     assert len(report["preserved"]) == 16

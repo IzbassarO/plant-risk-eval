@@ -1,1 +1,1 @@
-evaluation_dataset,evaluation_relpath,evaluation_class,training_dataset,training_relpath,training_class,hamming_distance,reason,provenance,action,status
+canonical_pair_id,pair_schema,evaluation_dataset,evaluation_relpath,evaluation_class,evaluation_sha256,training_dataset,training_relpath,training_class,training_sha256,hamming_distance,reason,provenance,action,status

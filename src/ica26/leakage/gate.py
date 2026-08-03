@@ -43,9 +43,13 @@ from ..datasets.manifest import sha256_of_file
 from .phash import find_duplicates, index_from_manifest, PHASH_ALGORITHM
 
 # 2.0: identity-authenticated review, record-derived exact exclusions, full input
-# binding, and a byte-deterministic artifact. A 1.x gate is rejected, never
-# reinterpreted -- its counts do not mean the same thing.
-SCHEMA_VERSION = "2.0"
+#      binding, and a byte-deterministic artifact.
+# 2.1: canonical pair identities, fresh-vs-persisted identity-SET equality (not
+#      count equality), authenticated display ids, and strict ISO-8601 review
+#      timestamps.
+# A gate from an older schema is rejected, never reinterpreted -- its counts do
+# not mean the same thing.
+SCHEMA_VERSION = "2.1"
 GATE_STATUSES = ("pass", "fail", "incomplete")
 DEFAULT_THRESHOLD = 6  # brief §8.4: perceptual-hash dedup at Hamming <= 6
 
@@ -85,13 +89,30 @@ class LeakageGateError(RuntimeError):
 
 # --------------------------------------------------------------------------- #
 # Canonical pair identity
+#
+# A pair's scientific identity is its two endpoints and their relationship --
+# never its label and never its position in a file. `pair_id` is a DISPLAY name
+# for humans; it authorises nothing (R1-HIGH-001). The authority is
+# `canonical_pair_id`, the digest of an explicitly versioned serialization of
+# every immutable field, so the same pair yields the same id on any machine, in
+# any row order, in any file.
+#
+# The serialization is versioned because changing it changes every id. Bump
+# CANONICAL_PAIR_SCHEMA rather than editing the field list in place.
 # --------------------------------------------------------------------------- #
+CANONICAL_PAIR_SCHEMA = "ica26.leakage.pair/1"
+
+#: Hex digits of the identity digest kept in a canonical id. 16 hex = 64 bits.
+CANONICAL_ID_HEX = 16
+
+
 @dataclass(frozen=True)
 class PairIdentity:
     """Immutable identity of one detected cross-dataset duplicate pair.
 
-    Endpoint digests come from the CURRENT manifests, never from the review file,
-    so editing a SHA-256 in the review CSV cannot make it authenticate.
+    Endpoint digests and class labels come from the CURRENT manifests, never from
+    a review or pair-table row, so editing either cannot make a forgery
+    authenticate.
     """
 
     training_dataset: str
@@ -104,13 +125,71 @@ class PairIdentity:
     evaluation_sha256: str
     phash_distance: int
     classification: str  # "exact" | "near"
+    phash_algorithm: str = PHASH_ALGORITHM
+    phash_bits: int = 64
 
     @property
     def key(self) -> tuple[str, str]:
+        """Path key. Convenient for lookup; NOT sufficient for authorization."""
         return (self.training_relpath, self.evaluation_relpath)
 
+    def canonical_serialization(self) -> str:
+        """Deterministic, versioned serialization of every immutable field.
+
+        Only serialization is normalised (key order, separators, integer typing);
+        no scientific value is altered, trimmed, case-folded, or defaulted.
+        """
+        return json.dumps({
+            "schema": CANONICAL_PAIR_SCHEMA,
+            "pair_type": self.classification,
+            "training_dataset": self.training_dataset,
+            "training_relpath": self.training_relpath,
+            "training_class": self.training_class,
+            "training_sha256": self.training_sha256,
+            "evaluation_dataset": self.evaluation_dataset,
+            "evaluation_relpath": self.evaluation_relpath,
+            "evaluation_class": self.evaluation_class,
+            "evaluation_sha256": self.evaluation_sha256,
+            "phash_distance": int(self.phash_distance),
+            "phash_algorithm": self.phash_algorithm,
+            "phash_bits": int(self.phash_bits),
+        }, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+    @property
+    def canonical_pair_id(self) -> str:
+        """Namespaced identity digest, e.g. ``near-1a2b3c4d5e6f7a8b``.
+
+        The pair type is in the prefix AND inside the serialization, so an exact
+        pair and a near pair over the same endpoints can never collide.
+        """
+        digest = hashlib.sha256(
+            self.canonical_serialization().encode("utf-8")).hexdigest()
+        return f"{self.classification}-{digest[:CANONICAL_ID_HEX]}"
+
     def as_dict(self) -> dict:
-        return asdict(self)
+        d = asdict(self)
+        d["canonical_pair_id"] = self.canonical_pair_id
+        return d
+
+
+def display_pair_ids(pairs: Iterable[PairIdentity]) -> dict[str, str]:
+    """Authoritative ``canonical_pair_id -> display id`` map (``ndp-01`` …).
+
+    Display ids are assigned from a canonical SORT of the identities, so they are
+    reproducible and independent of file order. They exist for human legibility
+    only; :func:`authenticate_near_review` verifies a review row's display id
+    against this map but never authorises on it.
+    """
+    ordered = sorted(pairs, key=lambda p: (p.classification, p.phash_distance,
+                                           p.training_relpath, p.evaluation_relpath))
+    prefix = {"near": "ndp", "exact": "xdp"}
+    counters: dict[str, int] = {}
+    out: dict[str, str] = {}
+    for p in ordered:
+        n = counters.get(p.classification, 0) + 1
+        counters[p.classification] = n
+        out[p.canonical_pair_id] = f"{prefix.get(p.classification, p.classification)}-{n:02d}"
+    return out
 
 
 def _read_csv(path: str | Path) -> list[dict]:
@@ -120,6 +199,10 @@ def _read_csv(path: str | Path) -> list[dict]:
 
 def _manifest_sha_index(manifest_csv: str | Path) -> dict[str, str]:
     return {r["relpath"]: r["sha256"] for r in _read_csv(manifest_csv)}
+
+
+def _manifest_class_index(manifest_csv: str | Path) -> dict[str, str]:
+    return {r["relpath"]: r["class_label"] for r in _read_csv(manifest_csv)}
 
 
 def build_authoritative_pairs(
@@ -176,6 +259,17 @@ def build_authoritative_pairs(
         if key in pairs:
             violations.append(f"{where}: duplicate pair in the authoritative table")
             continue
+
+        # The table may DECLARE endpoint digests. The manifest is the authority,
+        # so a declared digest is never used -- but it must not be allowed to
+        # assert something false, or a reader (or a later tool) could trust it.
+        for col, want in (("training_sha256", tr_sha[t_rel]),
+                          ("evaluation_sha256", ev_sha[e_rel])):
+            declared = (r.get(col) or "").strip()
+            if declared and declared != want:
+                violations.append(
+                    f"{where}: table declares {col} '{declared}' but the manifest "
+                    f"records '{want}'")
         pairs[key] = PairIdentity(
             training_dataset=training_dataset,
             training_relpath=t_rel,
@@ -189,6 +283,102 @@ def build_authoritative_pairs(
             classification=classification,
         )
     return pairs, violations
+
+
+def build_fresh_pairs(
+    result: dict,
+    training_manifest: str | Path,
+    evaluation_manifest: str | Path,
+    *,
+    training_dataset: str,
+    evaluation_dataset: str,
+    hash_bits: int = 64,
+) -> dict[str, PairIdentity]:
+    """Canonical identities derived DIRECTLY from a fresh detection result.
+
+    Class labels and endpoint digests are taken from the manifests, so a fresh
+    identity cannot inherit a forged value from any persisted table. Keyed by
+    ``canonical_pair_id``.
+    """
+    tr_sha = _manifest_sha_index(training_manifest)
+    ev_sha = _manifest_sha_index(evaluation_manifest)
+    tr_cls = _manifest_class_index(training_manifest)
+    ev_cls = _manifest_class_index(evaluation_manifest)
+
+    out: dict[str, PairIdentity] = {}
+    for classification in ("exact", "near"):
+        frame = result.get(classification)
+        if frame is None:
+            continue
+        for _, r in frame.iterrows():
+            t_rel, e_rel = str(r["path_a"]), str(r["path_b"])
+            pair = PairIdentity(
+                training_dataset=training_dataset,
+                training_relpath=t_rel,
+                training_class=tr_cls.get(t_rel, ""),
+                training_sha256=tr_sha.get(t_rel, ""),
+                evaluation_dataset=evaluation_dataset,
+                evaluation_relpath=e_rel,
+                evaluation_class=ev_cls.get(e_rel, ""),
+                evaluation_sha256=ev_sha.get(e_rel, ""),
+                phash_distance=int(r["distance"]),
+                classification=classification,
+                phash_bits=hash_bits,
+            )
+            out[pair.canonical_pair_id] = pair
+    return out
+
+
+def reconcile_pair_sets(
+    fresh: dict[str, PairIdentity],
+    persisted: dict[tuple[str, str], PairIdentity],
+) -> tuple[list[str], dict]:
+    """Require EXACT canonical identity-set equality, not equal counts.
+
+    Counting was the R1-CRIT-001 hole: a forged table naming unrelated endpoints
+    with the right row count authorised an unrelated exclusion. Equality of the
+    canonical id sets makes every substitution -- changed endpoint, class, path,
+    distance, or exact/near type -- a mismatch, even when the counts agree.
+
+    Returns ``(violations, report)``.
+    """
+    persisted_by_id: dict[str, PairIdentity] = {}
+    duplicates: list[str] = []
+    for p in persisted.values():
+        cid = p.canonical_pair_id
+        if cid in persisted_by_id:
+            duplicates.append(cid)
+        persisted_by_id[cid] = p
+
+    fresh_only = sorted(set(fresh) - set(persisted_by_id))
+    persisted_only = sorted(set(persisted_by_id) - set(fresh))
+
+    violations: list[str] = []
+    for cid in fresh_only:
+        p = fresh[cid]
+        violations.append(
+            f"freshly detected {p.classification} pair {cid} "
+            f"({p.training_relpath} -> {p.evaluation_relpath}) is absent from the "
+            "persisted pair table")
+    for cid in persisted_only:
+        p = persisted_by_id[cid]
+        violations.append(
+            f"persisted pair table lists {p.classification} pair {cid} "
+            f"({p.training_relpath} -> {p.evaluation_relpath}) which fresh detection "
+            "did not produce")
+    for cid in sorted(set(duplicates)):
+        violations.append(f"persisted pair table contains duplicate identity {cid}")
+
+    report = {
+        "schema": CANONICAL_PAIR_SCHEMA,
+        "fresh_count": len(fresh),
+        "persisted_count": len(persisted_by_id),
+        "equal": not violations,
+        "fresh_only": fresh_only,
+        "persisted_only": persisted_only,
+        "duplicates": sorted(set(duplicates)),
+    }
+    return violations, report
 
 
 # --------------------------------------------------------------------------- #
@@ -209,6 +399,31 @@ class ReviewAuthorization:
     def as_dict(self) -> dict:
         return {"resolved": self.resolved, "kept": self.kept, "excluded": self.excluded,
                 "unresolved": self.unresolved, "violations": sorted(self.violations)}
+
+
+def parse_review_timestamp(value: str, *, now: Optional[datetime] = None) -> tuple[Optional[datetime], Optional[str]]:
+    """Strict ISO-8601 with an explicit UTC offset. Returns ``(dt, error)``.
+
+    A review timestamp is provenance, so it must actually be a timestamp. R1
+    accepted any non-blank string -- ``tomorrow`` authenticated. Requirements:
+    parseable ISO-8601, a real calendar date, an explicit timezone offset (a
+    naive stamp is ambiguous across reviewers), and not in the future.
+    """
+    raw = (value or "").strip()
+    if not raw:
+        return None, "reviewed_at is blank"
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None, (f"reviewed_at '{raw}' is not a valid ISO-8601 timestamp "
+                      "(expected e.g. 2026-08-02T21:10:00+05:00)")
+    if dt.tzinfo is None or dt.utcoffset() is None:
+        return None, (f"reviewed_at '{raw}' has no timezone offset; an explicit "
+                      "offset is required so the instant is unambiguous")
+    reference = now or datetime.now(timezone.utc)
+    if dt > reference:
+        return None, f"reviewed_at '{raw}' is in the future"
+    return dt, None
 
 
 def _identity_mismatches(row: dict, pair: PairIdentity) -> list[str]:
@@ -257,12 +472,17 @@ def authenticate_near_review(
     exclusions = _read_csv(reviewed_exclusions_csv) if (
         reviewed_exclusions_csv and Path(reviewed_exclusions_csv).exists()) else []
 
+    # Authoritative display-id map, derived from the identities themselves.
+    display = display_pair_ids(authoritative_near.values())
+
     seen_ids: dict[str, int] = {}
+    seen_canonical: dict[str, int] = {}
     seen_keys: dict[tuple[str, str], int] = {}
     credited: set[tuple[str, str]] = set()
 
     for i, r in enumerate(rows, start=2):
         pid = (r.get("pair_id") or "").strip()
+        cid = (r.get("canonical_pair_id") or "").strip()
         key = ((r.get("training_relative_path") or "").strip(),
                (r.get("evaluation_relative_path") or "").strip())
         where = f"near-review row {i} (pair_id '{pid or '<blank>'}')"
@@ -274,6 +494,13 @@ def authenticate_near_review(
             auth.violations.append(f"{where}: duplicate pair_id, first seen at row {seen_ids[pid]}")
             continue
         seen_ids[pid] = i
+        if cid and cid in seen_canonical:
+            auth.violations.append(
+                f"{where}: duplicate canonical_pair_id '{cid}', first seen at row "
+                f"{seen_canonical[cid]}")
+            continue
+        if cid:
+            seen_canonical[cid] = i
         if key in seen_keys:
             auth.violations.append(
                 f"{where}: duplicate pair identity, first seen at row {seen_keys[key]}")
@@ -290,6 +517,26 @@ def authenticate_near_review(
         mismatches = _identity_mismatches(r, pair)
         if mismatches:
             auth.violations.append(f"{where}: identity mismatch -- " + "; ".join(mismatches))
+            continue
+
+        # The canonical id is the authority; the display id is only a label and
+        # must match the map derived from the identities (R1-HIGH-001).
+        expected_cid = pair.canonical_pair_id
+        if not cid:
+            auth.violations.append(
+                f"{where}: missing canonical_pair_id (expected '{expected_cid}'); "
+                "a display pair_id authorises nothing")
+            continue
+        if cid != expected_cid:
+            auth.violations.append(
+                f"{where}: canonical_pair_id '{cid}' does not match the identity-derived "
+                f"'{expected_cid}'")
+            continue
+        expected_display = display.get(expected_cid)
+        if expected_display and pid != expected_display:
+            auth.violations.append(
+                f"{where}: display pair_id '{pid}' does not match the authoritative "
+                f"display id '{expected_display}' for {expected_cid}")
             continue
 
         decision = (r.get("human_decision") or "").strip()
@@ -311,6 +558,11 @@ def authenticate_near_review(
         if missing_attr:
             auth.violations.append(
                 f"{where}: terminal decision without attribution {missing_attr}")
+            continue
+
+        _, ts_error = parse_review_timestamp(r.get("reviewed_at"))
+        if ts_error:
+            auth.violations.append(f"{where}: {ts_error}")
             continue
 
         if disposition == "exclude_evaluation":
@@ -416,13 +668,20 @@ def authenticate_exact_exclusions(
         expected = {
             "training_dataset": pair.training_dataset,
             "training_class": pair.training_class,
+            "training_sha256": pair.training_sha256,
             "evaluation_dataset": pair.evaluation_dataset,
             "evaluation_class": pair.evaluation_class,
+            "evaluation_sha256": pair.evaluation_sha256,
             "hamming_distance": str(pair.phash_distance),
+            "canonical_pair_id": pair.canonical_pair_id,
         }
         for col, want in expected.items():
             got = (r.get(col) or "").strip()
-            if got != want:
+            if not got:
+                auth.violations.append(
+                    f"{where}: required identity column '{col}' is missing or blank "
+                    f"(expected '{want}')")
+            elif got != want:
                 auth.violations.append(
                     f"{where}: {col} is '{got}', authoritative value is '{want}'")
         auth.excluded += 1
@@ -579,29 +838,39 @@ def compute_gate(
     authoritative_near = {k: v for k, v in pairs.items() if v.classification == "near"}
     authoritative_exact = {k: v for k, v in pairs.items() if v.classification == "exact"}
 
-    # The pair table must describe the SAME computation we just ran; otherwise the
-    # identities we authenticate against are not the ones that were detected.
-    if len(authoritative_near) != near_detected:
-        table_violations.append(
-            f"pair table lists {len(authoritative_near)} near pair(s) but the fresh "
-            f"computation detected {near_detected}; regenerate the leakage step")
-    if len(authoritative_exact) != exact_detected:
-        table_violations.append(
-            f"pair table lists {len(authoritative_exact)} exact pair(s) but the fresh "
-            f"computation detected {exact_detected}; regenerate the leakage step")
+    # The persisted table must describe the SAME pairs we just detected -- by
+    # IDENTITY, not by count. Counting was R1-CRIT-001: a forged table naming
+    # unrelated endpoints with the right row count authorised an unrelated
+    # exclusion. Compare the canonical id sets instead (R1-CRIT-001).
+    fresh_pairs = build_fresh_pairs(
+        res, training_manifest, evaluation_manifest,
+        training_dataset=training_dataset, evaluation_dataset=evaluation_dataset,
+    )
+    set_violations, identity_report = reconcile_pair_sets(fresh_pairs, pairs)
+    table_violations = list(table_violations) + set_violations
 
-    review = authenticate_near_review(near_review, authoritative_near, reviewed_exclusions)
-    exact = authenticate_exact_exclusions(exact_exclusions, authoritative_exact)
-
-    violations = sorted(table_violations + review.violations + exact.violations)
-    unresolved = max(0, (exact_detected - exact.excluded) + review.unresolved)
-
-    if skipped > 0 or table_violations:
+    # Identity-set equality is a PRECONDITION. If it fails we are authenticating
+    # against the wrong identities, so review/exclusion arithmetic is meaningless
+    # and is not run at all.
+    if table_violations:
+        review = ReviewAuthorization(unresolved=len(authoritative_near))
+        exact = ExactAuthorization(detected=exact_detected)
+        violations = sorted(table_violations)
+        unresolved = exact_detected + len(authoritative_near)
         status = "incomplete"
-    elif violations or unresolved > 0:
-        status = "fail"
     else:
-        status = "pass"
+        review = authenticate_near_review(near_review, authoritative_near, reviewed_exclusions)
+        exact = authenticate_exact_exclusions(exact_exclusions, authoritative_exact)
+        violations = sorted(review.violations + exact.violations)
+        unresolved = max(0, (exact_detected - exact.excluded) + review.unresolved)
+        if skipped > 0:
+            status = "incomplete"
+        elif violations or unresolved > 0:
+            status = "fail"
+        else:
+            status = "pass"
+    if skipped > 0:
+        status = "incomplete"
 
     prov = dict(provenance or {})
     prov.setdefault("phash_algorithm", PHASH_ALGORITHM)
@@ -609,6 +878,7 @@ def compute_gate(
     prov.setdefault("skipped_evaluation", len(skip_e))
     prov.setdefault("near_review_counts", review.as_dict())
     prov.setdefault("exact_exclusion_counts", exact.as_dict())
+    prov.setdefault("pair_identity_reconciliation", identity_report)
     try:
         from .. import __version__ as _v
         prov.setdefault("ica26_version", _v)

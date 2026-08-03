@@ -77,44 +77,106 @@ echo; echo "-- [HARD 9/9] leakage index parity (indexed == brute force) --"
 echo "  ok"
 
 # ------------------ STATUS checks (feed the verdict) ------------------
-echo; echo "-- [STATUS] dataset acquisition + leakage gate --"
+# R1-MED-001: a single OVERALL verdict conflated "the mechanics work" with
+# "the science is accepted", and printed PASS while 12 duplicate groups and 17
+# mappings were unreviewed. The status is now reported per dimension, and
+# SCIENTIFIC PHASE-1 STATUS is BLOCKED unless every one of them is settled.
+echo; echo "-- [STATUS] per-dimension Phase-1 status --"
 "$PY" - <<'PYEOF'
-import json, os
+import csv, json, os
+
 def load(p):
     return json.load(open(p)) if os.path.exists(p) else None
-verdict = "PASS"; reasons = []
 
-pd_sum = load("data/manifests/plantdoc_summary.json")
-if pd_sum is None:
-    verdict = "BLOCKED"; reasons.append("PlantDoc not acquired")
-elif not pd_sum.get("complete", False):
-    verdict = "PARTIAL"; rec = pd_sum.get("reconciliation", {})
-    reasons.append(f"PlantDoc incomplete ({rec.get('downloaded_image_count')}/{rec.get('upstream_repository_count')})")
+def rows(p):
+    if not os.path.exists(p):
+        return []
+    with open(p, newline="", encoding="utf-8") as fh:
+        return list(csv.DictReader(fh))
 
+notes = []
+
+# 1) mechanical/data acquisition ------------------------------------------- #
+data_status, pd_sum = "PASS", load("data/manifests/plantdoc_summary.json")
 pv_sum = load("data/manifests/plantvillage_summary.json")
+if pd_sum is None:
+    data_status = "BLOCKED"; notes.append("PlantDoc not acquired")
+elif not pd_sum.get("complete", False):
+    rec = pd_sum.get("reconciliation", {})
+    data_status = "PARTIAL"
+    notes.append(f"PlantDoc incomplete ({rec.get('manifest_count')}/"
+                 f"{rec.get('upstream_repository_count')})")
 if pv_sum is None:
-    verdict = "BLOCKED"; reasons.append("PlantVillage not executed")
+    data_status = "BLOCKED"; notes.append("PlantVillage not executed")
 elif not pv_sum.get("pixels_materialized", False):
-    if verdict == "PASS": verdict = "PARTIAL"
-    reasons.append("PlantVillage pixels not materialized (leaf_id structure acquired; images pending)")
+    data_status = "PARTIAL" if data_status == "PASS" else data_status
+    notes.append("PlantVillage pixels not materialized")
 
+# 2) cross-dataset leakage gate -------------------------------------------- #
 gate = load("reports/leakage_gate.json")
 if gate is None:
-    reasons.append("no cross-dataset leakage gate yet (cross-dataset eval blocked)")
-    if verdict == "PASS": verdict = "PARTIAL"
-elif gate.get("status") != "pass":
-    reasons.append(f"leakage gate status={gate.get('status')} (cross-dataset eval blocked)")
-    if verdict == "PASS": verdict = "PARTIAL"
+    cross_status = "FAIL"; notes.append("no cross-dataset leakage gate")
+else:
+    cross_status = "PASS" if gate.get("status") == "pass" else "FAIL"
+    if cross_status != "PASS":
+        notes.append(f"cross-dataset gate status={gate.get('status')}")
 
-print("  verdict:", verdict)
-for r in reasons: print("   -", r)
-open("/tmp/ica_verdict.txt", "w").write(verdict)
+# 3) internal PlantDoc duplicate review ------------------------------------ #
+idg = load("reports/plantdoc_internal_duplicate_gate.json")
+if idg is None:
+    dup_status = "INCOMPLETE"
+    notes.append("no internal duplicate gate; run "
+                 "scripts/build_plantdoc_internal_duplicate_gate.py")
+else:
+    dup_status = {"pass": "PASS", "fail": "FAIL"}.get(idg.get("status"), "INCOMPLETE")
+    if dup_status != "PASS":
+        notes.append(f"{idg.get('unresolved_groups')} of {idg.get('total_groups')} "
+                     f"PlantDoc exact-duplicate group(s) unresolved "
+                     f"({idg.get('cross_split_groups')} cross train/test, "
+                     f"{idg.get('cross_class_groups')} contradictory labels)")
+
+# 4) disease->action mapping review ---------------------------------------- #
+mapping = rows("data/mapping/action_mapping_review.csv")
+pv_classes = {r["class_label"] for r in rows("data/manifests/plantvillage_manifest.csv")}
+pv_mapped = {r["dataset_class"] for r in mapping if r.get("dataset") == "PlantVillage"}
+needs = sum(1 for r in mapping if r.get("review_status") == "needs_review")
+map_status = "PASS"
+if needs:
+    map_status = "INCOMPLETE"
+    notes.append(f"{needs} PlantDoc disease mapping row(s) still needs_review")
+if pv_classes and not pv_mapped:
+    map_status = "INCOMPLETE"
+    notes.append(f"PlantVillage action-mapping coverage 0/{len(pv_classes)}")
+
+# 5) Dataset V1 freeze ------------------------------------------------------ #
+v1_status = "PASS" if os.path.exists("data/manifests/dataset_v1_freeze.json") else "NOT STARTED"
+if v1_status != "PASS":
+    notes.append("Dataset V1 is not frozen")
+
+scientific = "ACCEPTED" if (
+    data_status == "PASS" and cross_status == "PASS" and dup_status == "PASS"
+    and map_status == "PASS" and v1_status == "PASS") else "BLOCKED"
+
+print(f"  MECHANICAL / DATA CHECKS ....... {data_status}")
+print(f"  CROSS-DATASET GATE ............. {cross_status}")
+print(f"  INTERNAL DUPLICATE REVIEW ...... {dup_status}")
+print(f"  MAPPING REVIEW ................. {map_status}")
+print(f"  DATASET V1 FREEZE .............. {v1_status}")
+print(f"  SCIENTIFIC PHASE-1 STATUS ...... {scientific}")
+if notes:
+    print("  reasons:")
+    for n in notes:
+        print("   -", n)
+open("/tmp/ica_verdict.txt", "w").write(scientific)
 PYEOF
 
 V=$(cat /tmp/ica_verdict.txt 2>/dev/null || echo BLOCKED)
-echo; echo "================ OVERALL: $V ================"
-echo "(HARD checks all passed. Exit: 0=PASS, 2=PARTIAL/BLOCKED, 1=FAIL.)"
+echo
+echo "================ SCIENTIFIC PHASE-1 STATUS: $V ================"
+echo "(The HARD checks above are mechanical only. They do NOT constitute"
+echo " scientific acceptance; see the per-dimension status. Exit: 0=ACCEPTED,"
+echo " 2=BLOCKED, 1=a hard check failed.)"
 case "$V" in
-  PASS) exit 0 ;;
+  ACCEPTED) exit 0 ;;
   *) exit 2 ;;
 esac

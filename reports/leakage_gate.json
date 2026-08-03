@@ -5,10 +5,10 @@
   "exact_excluded_count": 0,
   "input_digests": {
     "evaluation_manifest": "548b815197c51bc26ea6adb2080b93cd670426623ca13d6eee8a43d49fb4ba55",
-    "exact_exclusions": "0cacb177b00395cd0b5841b5eda18afbb2f8565f9787c8e8fba9dcf691837d83",
-    "leakage_config": "bf22dd2c15c223597abd607c1cad2efbec276e7aafb0bfa9afc9b3db019caec4",
-    "near_review": "381a971c1bb6e9808a82fde61eabe1bec307e57b5892cd2a55e0b256c04c9205",
-    "pair_table": "16d187c4f711d03aecf498fa157bdca3ea14061751a2587a09a442af029912c2",
+    "exact_exclusions": "5b8ba8fae9b96319c8ed64f8d37d6d05d0362c481a7085003fc53d38df4d82c7",
+    "leakage_config": "04dcf567bc1446bd60138732f51afb874c2962ee0b87ab5dbc2e3945a4de81cf",
+    "near_review": "bd065737da2b3eedca33be2c1db05947677a86be6ebc671871a26bea1685385b",
+    "pair_table": "928c29e52818cad2090db2fee21367da0eae78164c7420d42a2716ca8fcf671a",
     "reviewed_exclusions": "6ef83daba8e9f070d8191acc6c4f7212ec503a69f4da6136893e616ed6a9ee3a",
     "training_manifest": "b9acc43637ef2e930bd9e5e8a09b1d5025c720d65f9dd3fc9aabdfbd7e399591"
   },
@@ -32,12 +32,21 @@
       "unresolved": 0,
       "violations": []
     },
+    "pair_identity_reconciliation": {
+      "duplicates": [],
+      "equal": true,
+      "fresh_count": 16,
+      "fresh_only": [],
+      "persisted_count": 16,
+      "persisted_only": [],
+      "schema": "ica26.leakage.pair/1"
+    },
     "phash_algorithm": "imagehash.phash",
     "skipped_evaluation": 0,
     "skipped_training": 0,
     "training_config": "color"
   },
-  "schema_version": "2.0",
+  "schema_version": "2.1",
   "status": "pass",
   "threshold": 6,
   "training_dataset": "PlantVillage",
