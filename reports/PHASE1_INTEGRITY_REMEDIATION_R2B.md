@@ -340,10 +340,12 @@ Every command below was run at the final tree state.
 | 8 | `python scripts/build_human_review_evidence_manifest.py --check` | 0 |
 | 9 | `python scripts/run_phase1_data_completion.py --steps gate --no-download` | 0 |
 | 10 | `python -m ica26.portability` | 0 |
-| 11 | `python -m pytest -q` | 0 — **430 passed** |
-| 12 | `bash scripts/run_phase1_checks.sh` | 2 — all 11 hard checks PASS; BLOCKED on mapping + freeze |
+| 11 | `python scripts/build_dataset_v1_freeze_readiness.py` | 1 — `not_ready`, 9/15 satisfied |
+| 12 | `python scripts/build_dataset_v1_freeze_readiness.py --check` | 1 — current, still not ready |
+| 13 | `python -m pytest -q` | 0 — **454 passed** |
+| 14 | `bash scripts/run_phase1_checks.sh` | 2 — all 11 hard checks PASS; BLOCKED on mapping + freeze |
 
-Exit 2 from (12) is the correct outcome: `SCIENTIFIC PHASE-1 STATUS` is `BLOCKED` while the
+Exit 2 from (14) is the correct outcome: `SCIENTIFIC PHASE-1 STATUS` is `BLOCKED` while the
 mapping review is incomplete and Dataset V1 is unfrozen. It is not an R2B failure.
 
 ### Clean reconstruction, not just validation
@@ -380,12 +382,13 @@ mapping review is incomplete and Dataset V1 is unfrozen. It is not an R2B failur
 
 ## 9. Tests
 
-**430 passed** (was 338; +92).
+**454 passed** (was 338; +116).
 
 | Suite | Cases | Covers |
 |---|---:|---|
 | `tests/test_plantdoc_duplicate_remediation.py` *(new)* | **90** | all twelve G01–G12 decisions; `keep_one_record`; `exclude_all_records`; canonical label and split application; the three relabelled groups; contradictory-label groups; train/test duplicate removal; missing / duplicated / unknown / unremediable / unsupported / non-terminal decisions; missing attribution; malformed, naive and future timestamps; evidence drift on 11 columns; hash mismatch; membership change; **same-count forged group**; **same-count forged effective manifest**; silently replaced record; silently dropped group; a record claimed by two groups; changes outside the reviewed set; idempotent second execution; fresh-vs-persisted identity equality; identity primitives |
 | `tests/test_plantdoc_duplicates.py` *(updated)* | 41 | enumeration from live data; byte + pixel identity; **decision neutrality of the issued packet**; issued-vs-live group agreement; every live group terminal; packet determinism; gate counts, input binding, byte-identical rebuild; a recorded-but-unapplicable decision does **not** pass |
+| `tests/test_dataset_v1_freeze_readiness.py` *(new)* | **24** | every condition declared once and correctly typed; all 9 mechanical preconditions satisfied; all 6 scientific judgements still blocked; `not_ready` and `frozen: false`; no freeze, approval or sign-off artifact exists; input binding; no wall-clock field; byte-identical rebuild; a skipped pixel check blocks rather than passes |
 | `tests/test_leakage_gate.py`, `test_pair_identity_equality.py`, `test_near_duplicate_decisions.py`, `test_review_packet_preservation.py` | 120 | R2A, unchanged and still passing |
 
 Adversarial cases use synthetic fixtures. No test asserts on row counts alone.
@@ -431,13 +434,38 @@ now expected to fail rather than pass. Each is a tightening, not a relaxation.
 
 ### Remaining conditions preventing a Dataset V1 freeze
 
-1. **17 PlantDoc disease→action mapping rows** are still `needs_review`.
-2. **PlantVillage action-mapping coverage is 0 / 38 classes.**
-3. **AUD-EC-005 / 006 / 007** from the earlier Codex audit are still open.
-4. No freeze artifact exists — `data/manifests/dataset_v1_freeze.json` is absent, and no freeze
-   procedure, dataset card, or integrity report has been produced or approved.
-5. The effective PlantDoc dataset produced here has **not been independently audited**. R2B is the
-   remediation; the freeze decision is a separate, explicitly out-of-scope step.
+These are no longer prose. `scripts/build_dataset_v1_freeze_readiness.py` evaluates every
+precondition and writes `reports/dataset_v1_freeze_readiness.json` +
+`reports/DATASET_V1_FREEZE_READINESS.md` — one reproducible answer instead of a reader
+assembling it from five reports. It is deliberately incapable of freezing anything: it writes no
+freeze artifact, approves nothing, and changes no record.
+
+**Status: `NOT_READY` — 9 of 15 preconditions satisfied.** Every *mechanical* precondition is
+green; every remaining blocker is a *scientific judgement*, and a judgement is satisfied only by
+an explicit decision artifact. Absence is a blocker, never a default.
+
+| # | Blocker | Kind | Detail |
+|---|---|---|---|
+| 1 | `disease_action_mapping_reviewed` | human | 17 of 28 rows still `needs_review` |
+| 2 | `plantvillage_action_mapping_coverage` | human | coverage 0 / 38 PlantVillage classes |
+| 3 | `harm_matrix_approved` | human | `harm_v0_template` is `pending`, weights incomplete |
+| 4 | `open_audit_findings_closed` | human | AUD-EC-005 / 006 / 007 open; no sign-off artifact |
+| 5 | `remediation_independently_audited` | human | R2B has not itself been re-audited |
+| 6 | `freeze_approval_recorded` | human | no approval artifact; the decision has not been taken |
+
+Satisfied (machine): PlantDoc acquisition 2,578/2,578 · PlantVillage 54,305 materialized ·
+cross-dataset gate schema 2.1 pass with every bound digest current · internal duplicate gate
+schema 2.0 pass · effective dataset byte-identical to a fresh rebuild · effective dataset sound
+(2,564 records, 2,564 distinct digests, 0 exact duplicates, unique relpaths and identities) ·
+all 2,564 records re-hashed from disk and matching · preserved evidence intact · anonymity clean.
+
+Skipping a check does not pass it: `--skip-pixel-verification` leaves
+`effective_dataset_pixels_verified` **blocked**, because an unverified check is
+indistinguishable from a failing one.
+
+The artifacts a human must produce to clear blockers 4–6 are specified by path and shape in
+`DATASET_V1_FREEZE_READINESS.md`. None of them was created here — creating them would be taking
+the decision.
 
 ### Explicit statements
 

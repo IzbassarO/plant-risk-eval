@@ -186,9 +186,23 @@ if pv_classes and not pv_mapped:
     notes.append(f"PlantVillage action-mapping coverage 0/{len(pv_classes)}")
 
 # 5) Dataset V1 freeze ------------------------------------------------------ #
+# The freeze readiness assessment is the single reproducible answer to "may we
+# freeze?". It decides nothing and freezes nothing; it enumerates every
+# precondition and names the ones a human still has to settle.
 v1_status = "PASS" if os.path.exists("data/manifests/dataset_v1_freeze.json") else "NOT STARTED"
 if v1_status != "PASS":
     notes.append("Dataset V1 is not frozen")
+ready = load("reports/dataset_v1_freeze_readiness.json")
+if ready is None:
+    notes.append("no freeze-readiness assessment; run "
+                 "scripts/build_dataset_v1_freeze_readiness.py")
+else:
+    facts.append(f"freeze readiness: {ready['satisfied']} of "
+                 f"{ready['satisfied'] + ready['blocked']} precondition(s) satisfied "
+                 f"-> {ready['status']}")
+    for cid in ready["blockers"]:
+        c = next(x for x in ready["conditions"] if x["id"] == cid)
+        notes.append(f"freeze blocker [{c['kind']}] {cid}: {c['detail']}")
 
 scientific = "ACCEPTED" if (
     data_status == "PASS" and cross_status == "PASS" and dup_status == "PASS"

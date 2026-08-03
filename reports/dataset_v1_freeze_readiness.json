@@ -1,0 +1,152 @@
+{
+  "blocked": 6,
+  "blockers": [
+    "disease_action_mapping_reviewed",
+    "plantvillage_action_mapping_coverage",
+    "harm_matrix_approved",
+    "open_audit_findings_closed",
+    "remediation_independently_audited",
+    "freeze_approval_recorded"
+  ],
+  "conditions": [
+    {
+      "detail": "complete=True; manifest 2578 of upstream 2578",
+      "evidence": "data/manifests/plantdoc_summary.json",
+      "id": "plantdoc_acquired",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "PlantDoc is acquired to the frozen upstream snapshot"
+    },
+    {
+      "detail": "pixels_materialized=True; 54305 image(s)",
+      "evidence": "data/manifests/plantvillage_summary.json",
+      "id": "plantvillage_materialized",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "PlantVillage pixels are materialized"
+    },
+    {
+      "detail": "schema 2.1, exact 0, near 16 all resolved, 0 unresolved, 0 violations, every bound input digest current",
+      "evidence": "reports/leakage_gate.json",
+      "id": "cross_dataset_leakage_gate",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "Cross-dataset leakage gate passes"
+    },
+    {
+      "detail": "schema 2.0, 12/12 groups adjudicated and applied, 10 retained, 14 excluded, fresh==persisted",
+      "evidence": "reports/plantdoc_internal_duplicate_gate.json",
+      "id": "internal_duplicate_gate",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "PlantDoc internal duplicate gate passes"
+    },
+    {
+      "detail": "fresh 2564 == persisted 2564, identity digest 2c258bc766bef7da\u2026, byte-identical",
+      "evidence": "data/manifests/plantdoc_effective_manifest.csv",
+      "id": "effective_dataset_current",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "The effective dataset matches a fresh rebuild from the decisions"
+    },
+    {
+      "detail": "2564 record(s), 2564 distinct digest(s), 0 exact duplicates, unique relpaths and identities, 28 class(es)",
+      "evidence": "data/manifests/plantdoc_effective_manifest.csv",
+      "id": "effective_dataset_integrity",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "The effective dataset is internally sound"
+    },
+    {
+      "detail": "all 2564 record(s) re-hashed from disk and matching",
+      "evidence": "data/manifests/plantdoc_effective_manifest.csv",
+      "id": "effective_dataset_pixels_verified",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "Every effective record's bytes match its recorded digest"
+    },
+    {
+      "detail": "8 preserved artifact(s), all digests current",
+      "evidence": "human_review/evidence_manifest.json",
+      "id": "human_review_evidence_intact",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "Preserved human-review evidence is unaltered"
+    },
+    {
+      "detail": "0 error(s), 0 warning(s)",
+      "evidence": "src/ica26/portability.py",
+      "id": "anonymity",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "No machine-specific or personal identifier in paper artifacts"
+    },
+    {
+      "detail": "17 of 28 row(s) still needs_review",
+      "evidence": "data/mapping/action_mapping_review.csv",
+      "id": "disease_action_mapping_reviewed",
+      "kind": "human",
+      "status": "blocked",
+      "title": "Every disease->action mapping row carries a terminal human decision"
+    },
+    {
+      "detail": "coverage 0/38 PlantVillage class(es)",
+      "evidence": "data/mapping/action_mapping_review.csv",
+      "id": "plantvillage_action_mapping_coverage",
+      "kind": "human",
+      "status": "blocked",
+      "title": "Every PlantVillage class has an action mapping"
+    },
+    {
+      "detail": "matrix 'harm_v0_template' review_status='pending', is_example=False",
+      "evidence": "configs/harm_matrix_template.yaml",
+      "id": "harm_matrix_approved",
+      "kind": "human",
+      "status": "blocked",
+      "title": "A human-approved harm matrix exists"
+    },
+    {
+      "detail": "no sign-off artifact; ['AUD-EC-005', 'AUD-EC-006', 'AUD-EC-007'] remain open",
+      "evidence": "reports/DATASET_V1_AUDIT_SIGNOFF.json",
+      "id": "open_audit_findings_closed",
+      "kind": "human",
+      "status": "blocked",
+      "title": "Open audit findings are closed by an independent re-audit"
+    },
+    {
+      "detail": "not recorded in any sign-off artifact",
+      "evidence": "reports/DATASET_V1_AUDIT_SIGNOFF.json",
+      "id": "remediation_independently_audited",
+      "kind": "human",
+      "status": "blocked",
+      "title": "The R2B duplicate remediation has itself been independently audited"
+    },
+    {
+      "detail": "no approval artifact; the freeze decision has not been taken",
+      "evidence": "data/manifests/dataset_v1_freeze_approval.json",
+      "id": "freeze_approval_recorded",
+      "kind": "human",
+      "status": "blocked",
+      "title": "A human has recorded an explicit Dataset V1 freeze approval"
+    }
+  ],
+  "dataset": "Dataset V1",
+  "frozen": false,
+  "input_digests": {
+    "action_mapping_review": "4efb48a4a5aac5c61bf80ce42ad7821d6772c7994313ba9c1bb38cde08588b06",
+    "duplicate_resolution": "88976a8846ec1ae37cb318e30d02d57bd9a78bea8fde49e4367bf60f9a90cc6c",
+    "effective_manifest": "36ee9ece519d11dd0f38aed53d6177fe19728349025665ebd843b2ab9c4cb3fc",
+    "human_review_evidence": "bff37d8c76b3ebcccb7f028afe57286c30896a6583afcfb80f1cabfb87f4453f",
+    "internal_duplicate_gate": "e022c99a40424f1bc12ebcf4339be7a14e038028b88ff4a7b05dc51c2e53f6c8",
+    "leakage_gate": "d5c720192dbe109c22e60ff07f4c23714b83df7302d48bcadb94c78bbcdb1b3c",
+    "plantdoc_manifest": "548b815197c51bc26ea6adb2080b93cd670426623ca13d6eee8a43d49fb4ba55"
+  },
+  "provenance": {
+    "command": "build_dataset_v1_freeze_readiness.py",
+    "freezes_nothing": true,
+    "pixel_verification": true
+  },
+  "satisfied": 9,
+  "schema_version": "1.0",
+  "status": "not_ready"
+}
