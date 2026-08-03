@@ -205,6 +205,28 @@ def find_duplicate_groups(
     return groups
 
 
+def display_group_ids(groups: Sequence[DuplicateGroup]) -> dict[str, str]:
+    """Authoritative ``canonical_content_id -> display id`` map (``G01`` …).
+
+    Assigned from a canonical SORT of the groups' byte digests, so they are
+    reproducible and independent of enumeration order. Display ids exist for
+    human legibility only; they authorise nothing, and every consumer derives
+    them from this one function so a packet and a gate can never disagree.
+    """
+    return {g.canonical_content_id: f"G{i:02d}"
+            for i, g in enumerate(sorted(groups, key=lambda g: g.byte_sha256), 1)}
+
+
+def member_ids(group: DuplicateGroup, display: str) -> dict[str, str]:
+    """``active_relative_path -> member id`` (``G01-m1`` …) for one group.
+
+    Members are numbered in the group's own canonical member order, which
+    :func:`find_duplicate_groups` fixes by relative path.
+    """
+    return {m.active_relative_path: f"{display}-m{i}"
+            for i, m in enumerate(group.members, 1)}
+
+
 def aggregate(groups: Sequence[DuplicateGroup]) -> dict:
     """Counts a reader needs before deciding anything. Purely descriptive."""
     return {
@@ -238,7 +260,12 @@ class InternalDuplicateGate:
 
     Overloading one artifact with two different scientific questions is how a
     'pass' comes to mean less than a reader assumes. This one answers exactly:
-    *has a human adjudicated every intra-dataset exact-duplicate group?*
+    *has a human adjudicated every intra-dataset exact-duplicate group, and does
+    the effective dataset contain precisely what those decisions authorise?*
+
+    Schema 2.0 (R2B) added the second half. A 1.0 gate is rejected rather than
+    reinterpreted: its ``pass`` meant only that decisions had been recorded, not
+    that they had been applied, so the two statuses are not comparable.
     """
 
     schema_version: str
@@ -255,6 +282,9 @@ class InternalDuplicateGate:
     unresolved_group_ids: list = field(default_factory=list)
     input_digests: dict = field(default_factory=dict)
     provenance: dict = field(default_factory=dict)
+    remediation: dict = field(default_factory=dict)
+    identity_reconciliation: dict = field(default_factory=dict)
+    group_outcomes: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -277,11 +307,30 @@ class InternalDuplicateGate:
         return path
 
 
-INTERNAL_GATE_SCHEMA_VERSION = "1.0"
+# 1.0: adjudication completeness only -- did a human decide every group?
+# 2.0: R2B. The gate additionally proves the decisions were APPLIED: one
+#      canonical record per keep_one_record group, zero per exclude_all_records,
+#      no surviving exact duplicate, no non-reviewed record changed, and the
+#      persisted effective dataset equal by IDENTITY SET to a fresh rebuild.
+INTERNAL_GATE_SCHEMA_VERSION = "2.0"
 
 
 def _decision_of(row: dict) -> str:
     return (row.get("group_handling_decision") or "").strip()
+
+
+def _rows_from_groups(groups: Sequence[DuplicateGroup]) -> list[dict]:
+    """Manifest-shaped rows for exactly the duplicate members.
+
+    Used when no dataset manifest is supplied: the remediation checks then run
+    over the groups' own records rather than being skipped. Verification is never
+    optional -- an unevaluated check is indistinguishable from a passing one.
+    """
+    return [{"dataset": m.dataset, "split": m.split, "class_label": m.class_label,
+             "relpath": m.active_relative_path, "sha256": m.byte_sha256,
+             "width": m.width, "height": m.height, "mode": m.mode,
+             "n_bytes": m.byte_size}
+            for g in groups for m in g.members]
 
 
 def build_internal_duplicate_gate(
@@ -291,13 +340,37 @@ def build_internal_duplicate_gate(
     dataset: str,
     input_digests: Optional[dict] = None,
     provenance: Optional[dict] = None,
+    manifest_rows: Optional[Sequence[dict]] = None,
+    persisted_effective: Optional[Sequence[dict]] = None,
 ) -> InternalDuplicateGate:
-    """Resolve only when EVERY group carries a terminal human decision.
+    """Resolve only when every group is decided AND the decisions are applied.
 
-    A group with no decision row, a blank decision, an unsupported decision, a
-    non-terminal decision, a duplicate decision row, or a decision for an unknown
-    group all prevent ``pass``. There is no count parameter and no override.
+    Adjudication half (schema 1.0): a group with no decision row, a blank
+    decision, an unsupported decision, a non-terminal decision, a duplicate
+    decision row, or a decision for an unknown group all prevent ``pass``.
+
+    Remediation half (schema 2.0): the recorded decisions are applied to
+    ``manifest_rows`` and the result is verified — exactly one retained record
+    per ``keep_one_record`` group and zero per ``exclude_all_records``, the
+    adjudicated label and split on every retained record, no exact duplicate
+    surviving anywhere (so none across train and test), no duplicated record
+    identity, and **no change to any record outside the reviewed set**. When
+    ``persisted_effective`` is given, the persisted file must equal a fresh
+    rebuild by identity SET, not by row count.
+
+    There is no count parameter and no override, and no check is skippable: with
+    no manifest supplied the remediation runs over the groups' own members.
     """
+    from .duplicate_remediation import (
+        REMEDIATION_SCHEMA,
+        apply_adjudication,
+        build_effective_records,
+        identity_set_digest,
+        reconcile_identity_sets,
+        verify_effective_records,
+    )
+
+    decisions = list(decisions)
     by_id = {g.canonical_content_id: g for g in groups}
     violations: list[str] = []
     seen: dict[str, int] = {}
@@ -345,10 +418,68 @@ def build_internal_duplicate_gate(
     unresolved = sorted(set(by_id) - resolved)
     agg = aggregate(groups)
 
+    # ---- remediation half (schema 2.0) ------------------------------------- #
+    # Applying decisions we could not authenticate would be meaningless, so the
+    # remediation runs only once the adjudication half is clean -- the same
+    # precondition discipline the cross-dataset gate uses for identity equality.
+    source_rows = list(manifest_rows) if manifest_rows is not None else _rows_from_groups(groups)
+    remediation: dict = {"schema": None, "evaluated": False, "ok": False}
+    reconciliation: dict = {"evaluated": False, "equal": False}
+    outcomes: list = []
+
+    if violations or unresolved:
+        remediation["reason"] = (
+            "not evaluated: the adjudication is not clean, so applying it would "
+            "authenticate against decisions that were never credited")
+        reconciliation["reason"] = remediation["reason"]
+    else:
+        adj = apply_adjudication(groups, decisions)
+        effective, build_violations = build_effective_records(source_rows, adj)
+        verify_violations, report = verify_effective_records(
+            source_rows, effective, adj, groups)
+        remediation_violations = list(adj.violations) + list(build_violations) + list(verify_violations)
+        violations.extend(remediation_violations)
+
+        remediation = {
+            "schema": REMEDIATION_SCHEMA,
+            "evaluated": True,
+            "ok": not remediation_violations,
+            "manifest_supplied": manifest_rows is not None,
+            "effective_identity_digest": identity_set_digest(effective),
+            **report,
+        }
+        outcomes = sorted(
+            ({"display_group_id": g.display_group_id,
+              "group_id": g.group_id,
+              "action": g.action,
+              "retained_record_count": len(g.retained),
+              "excluded_record_count": len(g.excluded),
+              "retained": sorted(m.member.active_relative_path for m in g.retained),
+              "excluded": sorted(m.member.active_relative_path for m in g.excluded),
+              "effective_split": next((m.effective_split for m in g.retained), ""),
+              "effective_class_label": next((m.effective_class_label for m in g.retained), "")}
+             for g in adj.groups.values()),
+            key=lambda d: d["display_group_id"])
+
+        if persisted_effective is None:
+            reconciliation = {
+                "evaluated": False, "equal": False,
+                "reason": "no persisted effective dataset was supplied for comparison"}
+            violations.append(
+                "no persisted effective dataset was supplied; fresh-vs-persisted "
+                "equality could not be proved")
+        else:
+            set_violations, reconciliation = reconcile_identity_sets(
+                effective, list(persisted_effective))
+            reconciliation["evaluated"] = True
+            violations.extend(set_violations)
+
     if violations:
         status = "fail"
     elif unresolved:
         status = "incomplete"
+    elif not (remediation.get("ok") and reconciliation.get("equal")):
+        status = "fail"
     else:
         status = "pass"
 
@@ -367,4 +498,36 @@ def build_internal_duplicate_gate(
         unresolved_group_ids=unresolved,
         input_digests=dict(sorted((input_digests or {}).items())),
         provenance=dict(sorted((provenance or {}).items())),
+        remediation=dict(sorted(remediation.items())),
+        identity_reconciliation=dict(sorted(reconciliation.items())),
+        group_outcomes=outcomes,
     )
+
+
+def validate_internal_gate(gate: Optional[InternalDuplicateGate]) -> list[str]:
+    """Fail-closed validation for consumers. Empty list == the gate authorises use.
+
+    A caller must never read ``status`` alone: a gate from schema 1.0 says only
+    that decisions were recorded, and an unevaluated remediation block is
+    indistinguishable from a passing one if you do not look.
+    """
+    if gate is None:
+        return ["internal duplicate gate is missing"]
+    errors: list[str] = []
+    if gate.schema_version != INTERNAL_GATE_SCHEMA_VERSION:
+        return [f"unsupported internal-duplicate gate schema '{gate.schema_version}' "
+                f"(expected {INTERNAL_GATE_SCHEMA_VERSION}); an older gate did not "
+                "verify that decisions were applied"]
+    if gate.status != "pass":
+        errors.append(f"gate status is '{gate.status}', not 'pass'")
+    if gate.unresolved_groups:
+        errors.append(f"{gate.unresolved_groups} unadjudicated duplicate group(s)")
+    if gate.violations:
+        errors.append(f"{len(gate.violations)} violation(s), first: {gate.violations[0]}")
+    if not (gate.remediation or {}).get("evaluated"):
+        errors.append("the remediation half of the gate was never evaluated")
+    elif not gate.remediation.get("ok"):
+        errors.append("the remediation did not verify")
+    if not (gate.identity_reconciliation or {}).get("equal"):
+        errors.append("persisted and freshly reconstructed identity sets are not equal")
+    return errors

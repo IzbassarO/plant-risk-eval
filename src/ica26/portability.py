@@ -37,7 +37,12 @@ _COMPILED = [(name, re.compile(pat)) for name, pat in FORBIDDEN_PATTERNS]
 DEFAULT_INCLUDE_GLOBS = [
     "data/manifests/*.csv", "data/manifests/*.json",
     "data/mapping/*.csv",
+    "data/exclusions/*.csv",
     "data/interim/*.csv",
+    # Preserved human-review evidence is submitted alongside the paper, and a
+    # reviewer's scratch path or account name would deanonymise them as surely
+    # as it would us.
+    "human_review/**/*.csv", "human_review/**/*.json", "human_review/**/*.md",
     "reports/leakage_*.csv", "reports/leakage_*.json",
     "reports/*REMEDIATION*.md",
     "reports/PLANTDOC_COUNT_RECONCILIATION.md",

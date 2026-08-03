@@ -15,8 +15,17 @@ This gate reports `incomplete` until a human records a terminal decision for
 EVERY enumerated group, and `fail` on any authorization violation. There is no
 count parameter and no override. It decides nothing itself.
 
+Schema 2.0 (R2B) added the second half of the question. "A human decided" is not
+the same claim as "the decision was applied", so the gate now also proves the
+effective dataset is exactly what those decisions authorise: one canonical record
+per `keep_one_record` group and none per `exclude_all_records`, the adjudicated
+label and split on every retained record, no exact duplicate surviving anywhere,
+no record outside the reviewed set changed, and the persisted effective manifest
+equal to a fresh rebuild by identity SET rather than by row count.
+
 Bound inputs (digested, and re-digested on validation): the PlantDoc manifest,
-the duplicate group table, the member table, and the schema/policy version.
+the duplicate group table, the member table, the resolution table, the effective
+manifest, and the schema/policy version.
 
 Deterministic: no wall-clock field, so repeated builds are byte-identical.
 Exit codes: 0 pass, 1 fail/incomplete, 2 missing input, 3 stale (--check).
@@ -48,6 +57,8 @@ ACTIVE_ROOT = Path("data/raw/plantdoc")
 PACKET_DIR = Path("reports/plantdoc_exact_duplicate_review")
 GROUPS_CSV = PACKET_DIR / "plantdoc_exact_duplicate_groups.csv"
 MEMBERS_CSV = PACKET_DIR / "plantdoc_exact_duplicate_members.csv"
+RESOLUTION_CSV = Path("data/exclusions/plantdoc_internal_duplicate_resolution.csv")
+EFFECTIVE_CSV = Path("data/manifests/plantdoc_effective_manifest.csv")
 OUT = Path("reports/plantdoc_internal_duplicate_gate.json")
 SOURCE_REVISION = "5467f6012d78d1c446145d5f582da6096f852ae8"
 
@@ -81,8 +92,9 @@ def main(argv=None) -> int:
         for r in read_csv(REPO / COLLISION_MAP):
             original_of[r["collision_safe_relative_path"]] = r["original_archive_path"]
 
+    manifest_rows = read_csv(REPO / MANIFEST)
     groups = find_duplicate_groups(
-        read_csv(REPO / MANIFEST), dataset="PlantDoc",
+        manifest_rows, dataset="PlantDoc",
         source_revision=SOURCE_REVISION, active_root=REPO / ACTIVE_ROOT,
         original_path_of=original_of)
 
@@ -91,19 +103,33 @@ def main(argv=None) -> int:
         print(f"[internal-dup-gate] no review packet at {GROUPS_CSV}; every group is "
               "unresolved. Run scripts/build_plantdoc_duplicate_packet.py.")
 
+    # The persisted effective dataset is compared against a fresh rebuild by
+    # IDENTITY SET. A missing file is not "nothing to compare" -- it means the
+    # decisions have not been applied, so the gate must not pass.
+    persisted_effective = (read_csv(REPO / EFFECTIVE_CSV)
+                           if (REPO / EFFECTIVE_CSV).exists() else None)
+    if persisted_effective is None and decisions:
+        print(f"[internal-dup-gate] no effective manifest at {EFFECTIVE_CSV}; run "
+              "scripts/apply_plantdoc_duplicate_adjudication.py.")
+
     digests = {}
     for name, p in (("plantdoc_manifest", MANIFEST),
                     ("duplicate_groups", GROUPS_CSV),
-                    ("duplicate_members", MEMBERS_CSV)):
+                    ("duplicate_members", MEMBERS_CSV),
+                    ("duplicate_resolution", RESOLUTION_CSV),
+                    ("effective_manifest", EFFECTIVE_CSV)):
         digests[name] = sha256_of(REPO / p) if (REPO / p).exists() else "<absent>"
     digests["group_schema"] = hashlib.sha256(
         DUPLICATE_GROUP_SCHEMA.encode("utf-8")).hexdigest()
 
     gate = build_internal_duplicate_gate(
         groups, decisions, dataset="PlantDoc", input_digests=digests,
+        manifest_rows=manifest_rows, persisted_effective=persisted_effective,
         provenance={"command": "build_plantdoc_internal_duplicate_gate.py",
                     "source_revision": SOURCE_REVISION,
-                    "review_packet": str(PACKET_DIR)})
+                    "review_packet": str(PACKET_DIR),
+                    "resolution_table": str(RESOLUTION_CSV),
+                    "effective_manifest": str(EFFECTIVE_CSV)})
 
     agg = aggregate(groups)
     print(f"[internal-dup-gate] groups={gate.total_groups} records={gate.total_records} "
@@ -111,6 +137,16 @@ def main(argv=None) -> int:
     print(f"[internal-dup-gate] resolved={gate.resolved_groups} "
           f"unresolved={gate.unresolved_groups} violations={len(gate.violations)} "
           f"-> status={gate.status}")
+    rem = gate.remediation or {}
+    if rem.get("evaluated"):
+        print(f"[internal-dup-gate] remediation: retained={rem.get('retained_records')} "
+              f"excluded={rem.get('excluded_records')} "
+              f"effective={rem.get('effective_records')}/{rem.get('source_records')} "
+              f"surviving_exact_duplicate_groups={rem.get('surviving_exact_duplicate_groups')} "
+              f"ok={rem.get('ok')}")
+        rec = gate.identity_reconciliation or {}
+        print(f"[internal-dup-gate] fresh-vs-persisted: fresh={rec.get('fresh_count')} "
+              f"persisted={rec.get('persisted_count')} equal={rec.get('equal')}")
     for v in gate.violations[:10]:
         print(f"  VIOLATION {v}")
 

@@ -2,37 +2,244 @@
   "cross_class_groups": 9,
   "cross_split_groups": 11,
   "dataset": "PlantDoc",
+  "group_outcomes": [
+    {
+      "action": "keep_one_record",
+      "display_group_id": "G01",
+      "effective_class_label": "Blueberry leaf",
+      "effective_split": "train",
+      "excluded": [
+        "test/Blueberry leaf/blueberry-leaves-normal-above-and-iron-deficient-below-bgahf8.jpg"
+      ],
+      "excluded_record_count": 1,
+      "group_id": "pdup-f7ce4475e7faab5c",
+      "retained": [
+        "train/Blueberry leaf/blueberry-leaves-normal-above-and-iron-deficient-below-bgahf8.jpg"
+      ],
+      "retained_record_count": 1
+    },
+    {
+      "action": "keep_one_record",
+      "display_group_id": "G02",
+      "effective_class_label": "Tomato leaf yellow virus",
+      "effective_split": "train",
+      "excluded": [
+        "test/Tomato leaf yellow virus/tylcv-seminar-1-638.jpg"
+      ],
+      "excluded_record_count": 1,
+      "group_id": "pdup-b521e39920981129",
+      "retained": [
+        "train/Tomato leaf yellow virus/tylcv-seminar-1-638.jpg"
+      ],
+      "retained_record_count": 1
+    },
+    {
+      "action": "exclude_all_records",
+      "display_group_id": "G03",
+      "effective_class_label": "",
+      "effective_split": "",
+      "excluded": [
+        "test/Potato leaf early blight/backus-056-potato-blight.jpg",
+        "train/Potato leaf late blight/backus-056-potato-blight.jpg"
+      ],
+      "excluded_record_count": 2,
+      "group_id": "pdup-0e389c7e23bd56b9",
+      "retained": [],
+      "retained_record_count": 0
+    },
+    {
+      "action": "keep_one_record",
+      "display_group_id": "G04",
+      "effective_class_label": "Corn Gray leaf spot",
+      "effective_split": "train",
+      "excluded": [
+        "test/Corn leaf blight/2015070295153021.jpg"
+      ],
+      "excluded_record_count": 1,
+      "group_id": "pdup-454040445d1210af",
+      "retained": [
+        "train/Corn Gray leaf spot/2015070295153021.jpg"
+      ],
+      "retained_record_count": 1
+    },
+    {
+      "action": "keep_one_record",
+      "display_group_id": "G05",
+      "effective_class_label": "Corn Gray leaf spot",
+      "effective_split": "train",
+      "excluded": [
+        "test/Corn leaf blight/corn-gray-leaf-spot-f4.jpg"
+      ],
+      "excluded_record_count": 1,
+      "group_id": "pdup-a4b93bd747ef3454",
+      "retained": [
+        "train/Corn Gray leaf spot/corn-gray-leaf-spot-f4.jpg"
+      ],
+      "retained_record_count": 1
+    },
+    {
+      "action": "keep_one_record",
+      "display_group_id": "G06",
+      "effective_class_label": "Tomato Septoria leaf spot",
+      "effective_split": "train",
+      "excluded": [
+        "test/Tomato Septoria leaf spot/early-blight-septoria-ls-fig-3.jpg"
+      ],
+      "excluded_record_count": 1,
+      "group_id": "pdup-7ec26dad51adee34",
+      "retained": [
+        "train/Tomato Septoria leaf spot/early-blight-septoria-ls-fig-3.jpg"
+      ],
+      "retained_record_count": 1
+    },
+    {
+      "action": "keep_one_record",
+      "display_group_id": "G07",
+      "effective_class_label": "Potato leaf late blight",
+      "effective_split": "train",
+      "excluded": [
+        "test/Potato leaf late blight/irish-blight-symptoms-on-potato-leaves-atmf8b.jpg"
+      ],
+      "excluded_record_count": 1,
+      "group_id": "pdup-00d12bcd997986d0",
+      "retained": [
+        "train/Potato leaf early blight/irish-blight-symptoms-on-potato-leaves-atmf8b.jpg"
+      ],
+      "retained_record_count": 1
+    },
+    {
+      "action": "keep_one_record",
+      "display_group_id": "G08",
+      "effective_class_label": "Tomato leaf late blight",
+      "effective_split": "train",
+      "excluded": [
+        "test/Potato leaf late blight/5816740026_d42ef24413_Phytophthora-Infestans.jpg"
+      ],
+      "excluded_record_count": 1,
+      "group_id": "pdup-884a18bbd9375029",
+      "retained": [
+        "train/Potato leaf early blight/5816740026_d42ef24413_Phytophthora-Infestans.jpg"
+      ],
+      "retained_record_count": 1
+    },
+    {
+      "action": "keep_one_record",
+      "display_group_id": "G09",
+      "effective_class_label": "Potato leaf early blight",
+      "effective_split": "train",
+      "excluded": [
+        "test/Potato leaf late blight/1421_0.jpeg?itok=FMtmgePj.jpg"
+      ],
+      "excluded_record_count": 1,
+      "group_id": "pdup-1de023f9a042587b",
+      "retained": [
+        "train/Potato leaf early blight/1421_0.jpeg?itok=FMtmgePj.jpg"
+      ],
+      "retained_record_count": 1
+    },
+    {
+      "action": "keep_one_record",
+      "display_group_id": "G10",
+      "effective_class_label": "Tomato leaf bacterial spot",
+      "effective_split": "train",
+      "excluded": [
+        "test/Tomato leaf bacterial spot/tomato_V8.jpg"
+      ],
+      "excluded_record_count": 1,
+      "group_id": "pdup-e05ca426fe0bf730",
+      "retained": [
+        "train/Tomato Septoria leaf spot/tomato_V8.jpg"
+      ],
+      "retained_record_count": 1
+    },
+    {
+      "action": "exclude_all_records",
+      "display_group_id": "G11",
+      "effective_class_label": "",
+      "effective_split": "",
+      "excluded": [
+        "train/Potato leaf early blight/18028_1.jpg",
+        "train/Potato leaf late blight/24064_1.jpg"
+      ],
+      "excluded_record_count": 2,
+      "group_id": "pdup-37644c61e7e47362",
+      "retained": [],
+      "retained_record_count": 0
+    },
+    {
+      "action": "keep_one_record",
+      "display_group_id": "G12",
+      "effective_class_label": "Corn leaf blight",
+      "effective_split": "train",
+      "excluded": [
+        "test/Corn Gray leaf spot/IMG_42231.jpg"
+      ],
+      "excluded_record_count": 1,
+      "group_id": "pdup-eeff73e307da9ed1",
+      "retained": [
+        "train/Corn leaf blight/IMG_42231.jpg"
+      ],
+      "retained_record_count": 1
+    }
+  ],
   "group_schema": "ica26.datasets.duplicate_group/1",
+  "identity_reconciliation": {
+    "equal": true,
+    "evaluated": true,
+    "fresh_count": 2564,
+    "fresh_digest": "2c258bc766bef7daa9e5af02a5798a000f9dd427d463a014c7b0204a6959d1d6",
+    "fresh_only": [],
+    "persisted_count": 2564,
+    "persisted_digest": "2c258bc766bef7daa9e5af02a5798a000f9dd427d463a014c7b0204a6959d1d6",
+    "persisted_only": [],
+    "schema": "ica26.datasets.effective_record/1"
+  },
   "input_digests": {
-    "duplicate_groups": "8fb8cc8a2a7064599a4f979d829ac6badb27d7b7e329325214386c1917ec3553",
+    "duplicate_groups": "9cc04ebb62b98063c44a81496926ea04dbb32c5ea75b45cc5c30121c1f2f229c",
     "duplicate_members": "628cdb029f99eb8fc76a4a568d85e627af620dfa881c9be261f2fca2a31b82ad",
+    "duplicate_resolution": "88976a8846ec1ae37cb318e30d02d57bd9a78bea8fde49e4367bf60f9a90cc6c",
+    "effective_manifest": "36ee9ece519d11dd0f38aed53d6177fe19728349025665ebd843b2ab9c4cb3fc",
     "group_schema": "a137dc467d1a88f0ac010732e4bfcca35dce77ce5f226a81911762fbd5d843f9",
     "plantdoc_manifest": "548b815197c51bc26ea6adb2080b93cd670426623ca13d6eee8a43d49fb4ba55"
   },
   "provenance": {
     "command": "build_plantdoc_internal_duplicate_gate.py",
+    "effective_manifest": "data/manifests/plantdoc_effective_manifest.csv",
+    "resolution_table": "data/exclusions/plantdoc_internal_duplicate_resolution.csv",
     "review_packet": "reports/plantdoc_exact_duplicate_review",
     "source_revision": "5467f6012d78d1c446145d5f582da6096f852ae8"
   },
-  "resolved_groups": 0,
-  "schema_version": "1.0",
-  "status": "incomplete",
+  "remediation": {
+    "distinct_byte_digests": 2564,
+    "effective_identity_digest": "2c258bc766bef7daa9e5af02a5798a000f9dd427d463a014c7b0204a6959d1d6",
+    "effective_records": 2564,
+    "evaluated": true,
+    "excluded_records": 14,
+    "groups": 12,
+    "groups_by_action": {
+      "exclude_all_records": 2,
+      "keep_one_record": 10
+    },
+    "manifest_supplied": true,
+    "non_reviewed_records_unchanged": true,
+    "ok": true,
+    "removed_records": 14,
+    "retained_records": 10,
+    "reviewed_records": 24,
+    "schema": "ica26.datasets.duplicate_remediation/1",
+    "source_records": 2578,
+    "surviving_contradictory_label_groups": 0,
+    "surviving_cross_split_duplicate_groups": 0,
+    "surviving_exact_duplicate_groups": 0,
+    "unique_effective_identities": true,
+    "unique_relpaths": true
+  },
+  "resolved_groups": 12,
+  "schema_version": "2.0",
+  "status": "pass",
   "total_groups": 12,
   "total_records": 24,
-  "unresolved_group_ids": [
-    "pdup-00d12bcd997986d0",
-    "pdup-0e389c7e23bd56b9",
-    "pdup-1de023f9a042587b",
-    "pdup-37644c61e7e47362",
-    "pdup-454040445d1210af",
-    "pdup-7ec26dad51adee34",
-    "pdup-884a18bbd9375029",
-    "pdup-a4b93bd747ef3454",
-    "pdup-b521e39920981129",
-    "pdup-e05ca426fe0bf730",
-    "pdup-eeff73e307da9ed1",
-    "pdup-f7ce4475e7faab5c"
-  ],
-  "unresolved_groups": 12,
+  "unresolved_group_ids": [],
+  "unresolved_groups": 0,
   "violations": []
 }

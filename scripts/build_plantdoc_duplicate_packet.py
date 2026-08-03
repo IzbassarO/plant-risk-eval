@@ -49,7 +49,9 @@ from ica26.datasets.duplicates import (  # noqa: E402
     GROUP_HANDLING_DECISIONS,
     SPLIT_HANDLING_DECISIONS,
     aggregate,
+    display_group_ids,
     find_duplicate_groups,
+    member_ids,
 )
 
 MANIFEST = Path("data/manifests/plantdoc_manifest.csv")
@@ -332,8 +334,10 @@ def main(argv=None) -> int:
           f"cross_split={agg['cross_split_groups']} cross_class={agg['cross_class_groups']}")
 
     # Human-friendly labels, assigned from a canonical sort so they are stable.
+    # Derived from the shared helper so the packet, the remediation and the gate
+    # can never disagree about which group is G07.
     ordered = sorted(groups, key=lambda g: g.byte_sha256)
-    display = {g.canonical_content_id: f"G{i:02d}" for i, g in enumerate(ordered, 1)}
+    display = display_group_ids(groups)
 
     packet = REPO / args.packet_dir
     groups_csv = packet / "plantdoc_exact_duplicate_groups.csv"
@@ -374,10 +378,11 @@ def main(argv=None) -> int:
     member_rows = []
     for g in ordered:
         cid = g.canonical_content_id
-        for i, m in enumerate(g.members, 1):
+        ids = member_ids(g, display[cid])
+        for m in g.members:
             member_rows.append({
                 "group_id": cid, "display_group_id": display[cid],
-                "member_id": f"{display[cid]}-m{i}", **m.as_dict(),
+                "member_id": ids[m.active_relative_path], **m.as_dict(),
             })
 
     sheets = ([] if args.check
@@ -419,8 +424,13 @@ def main(argv=None) -> int:
 
     print(f"[dup-packet] wrote {len(artifacts) + len(sheets) + 1} artifact(s) to "
           f"{args.packet_dir}")
-    print(f"[dup-packet] ALL {len(group_rows)} group decision field(s) are blank — "
-          "no decision was made")
+    # Report what the decision columns actually hold. A hard-coded "no decision
+    # was made" would keep printing after a human had decided, which is exactly
+    # the kind of stale reassurance this packet exists to avoid.
+    decided = sum(1 for r in group_rows if r["group_handling_decision"])
+    print(f"[dup-packet] decisions carried over from the existing packet: "
+          f"{decided} recorded, {len(group_rows) - decided} blank — this script "
+          "originated none of them")
     return 0
 
 

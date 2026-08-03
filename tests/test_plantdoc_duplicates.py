@@ -2,9 +2,15 @@
 
 R1-CRIT-002: the restored PlantDoc V1 contains groups of records whose FILE BYTES
 are identical. Most straddle train/test, and most give identical pixels two
-different diagnosis labels. These tests pin the enumeration, prove the packet is
-decision-neutral and deterministic, and prove the gate cannot report `pass` while
-a single group is unadjudicated.
+different diagnosis labels. These tests pin the enumeration, prove the packet the
+reviewer received was decision-neutral and deterministic, and prove the gate
+cannot report `pass` while a single group is unadjudicated.
+
+The reviewer has since decided all twelve groups, so the *live* packet now
+carries those decisions. Decision-neutrality is therefore asserted against the
+preserved pre-adjudication packet under `human_review/`, which is the artifact
+the claim was ever about. What the decisions did to the dataset is tested in
+`tests/test_plantdoc_duplicate_remediation.py`.
 
 Nothing here decides anything, and nothing here may fill a decision field.
 """
@@ -32,7 +38,12 @@ GROUPS_CSV = f"{PACKET}/plantdoc_exact_duplicate_groups.csv"
 MEMBERS_CSV = f"{PACKET}/plantdoc_exact_duplicate_members.csv"
 GATE_JSON = "reports/plantdoc_internal_duplicate_gate.json"
 
-#: Decision columns the packet MUST leave blank.
+#: The packet exactly as issued to the reviewer, preserved unmodified. This is
+#: what "the pipeline offered no recommendation" is a claim about.
+ORIGINAL_PACKET = "human_review/plantdoc_exact_duplicates/original"
+ORIGINAL_GROUPS_CSV = f"{ORIGINAL_PACKET}/plantdoc_exact_duplicate_groups.csv"
+
+#: Decision columns the packet MUST leave blank when it is issued.
 DECISION_COLUMNS = ("group_handling_decision", "canonical_label_decision",
                     "split_handling_decision", "decision_reason", "reviewer",
                     "reviewed_at")
@@ -124,15 +135,37 @@ def test_members_carry_full_provenance(members, repo_root):
 
 
 # --------------------------------------------------------------------------- #
-# Decision neutrality
+# Decision neutrality — asserted on the packet AS ISSUED
 # --------------------------------------------------------------------------- #
+@pytest.fixture(scope="module")
+def issued_groups(repo_root):
+    return _rows(repo_root / ORIGINAL_GROUPS_CSV)
+
+
 @pytest.mark.parametrize("column", DECISION_COLUMNS)
-def test_every_decision_field_is_blank(groups, column):
-    assert all(not (g[column] or "").strip() for g in groups), column
+def test_every_decision_field_was_blank_when_issued(issued_groups, column):
+    assert all(not (g[column] or "").strip() for g in issued_groups), column
 
 
-def test_no_group_is_marked_resolved(groups):
-    assert all(g["current_status"] == "unresolved" for g in groups)
+def test_no_group_was_marked_resolved_when_issued(issued_groups):
+    assert all(g["current_status"] == "unresolved" for g in issued_groups)
+
+
+def test_the_issued_packet_enumerated_exactly_the_live_groups(issued_groups, groups):
+    """The reviewer decided the groups that actually exist -- no more, no fewer."""
+    assert len(issued_groups) == len(groups) == 12
+    for column in ("canonical_content_id", "byte_sha256", "decoded_rgb_sha256",
+                   "member_count", "crosses_split", "crosses_class", "train_count",
+                   "test_count", "class_count", "class_labels", "display_group_id"):
+        assert ({g[column] for g in issued_groups} == {g[column] for g in groups}), column
+
+
+def test_every_live_group_now_carries_a_terminal_decision(groups):
+    for g in groups:
+        assert g["group_handling_decision"] in GROUP_HANDLING_DECISIONS
+        assert g["group_handling_decision"] != "needs_further_review"
+        assert g["current_status"] == "decision_recorded"
+        assert g["decision_reason"] and g["reviewer"] and g["reviewed_at"]
 
 
 def test_markdown_offers_no_recommendation(repo_root):
@@ -174,14 +207,16 @@ def test_no_source_record_was_changed(repo_root):
 # --------------------------------------------------------------------------- #
 # Internal duplicate gate
 # --------------------------------------------------------------------------- #
-def test_shipped_gate_is_incomplete(gate):
-    assert gate["status"] == "incomplete"
+def test_shipped_gate_enumerates_the_full_problem(gate):
+    """The counts the gate reports are the ones the re-audit found."""
     assert gate["total_groups"] == 12
     assert gate["total_records"] == 24
-    assert gate["resolved_groups"] == 0
-    assert gate["unresolved_groups"] == 12
+    assert gate["cross_split_groups"] == 11
+    assert gate["cross_class_groups"] == 9
+    assert gate["resolved_groups"] == 12
+    assert gate["unresolved_groups"] == 0
+    assert gate["unresolved_group_ids"] == []
     assert gate["violations"] == []
-    assert len(gate["unresolved_group_ids"]) == 12
 
 
 def test_gate_binds_its_inputs(gate):
@@ -201,7 +236,7 @@ def test_gate_rebuild_is_byte_identical(repo_root):
          str(repo_root / "scripts/build_plantdoc_internal_duplicate_gate.py"), "--check"],
         cwd=str(repo_root), capture_output=True, text=True)
     assert "check OK" in r.stdout, r.stdout + r.stderr
-    assert r.returncode == 1        # OK but still incomplete -> non-zero
+    assert r.returncode == 0         # byte-identical AND passing
 
 
 # --------------------------------------------------------------------------- #
@@ -226,7 +261,23 @@ def _group(**over):
 
 
 def _decision(g, **over):
+    """A decision row that reproduces the group's evidence field-for-field.
+
+    The evidence columns are not decoration: a row that fails to reproduce them
+    is refused, so a helper that omitted them would test the wrong rejection.
+    """
+    from ica26.datasets.duplicates import display_group_ids
+
     row = {"canonical_content_id": g.canonical_content_id,
+           "group_id": g.canonical_content_id,
+           "display_group_id": display_group_ids([g])[g.canonical_content_id],
+           "byte_sha256": g.byte_sha256,
+           "decoded_rgb_sha256": g.decoded_rgb_sha256,
+           "member_count": str(g.member_count),
+           "crosses_split": "true" if g.crosses_split else "false",
+           "crosses_class": "true" if g.crosses_class else "false",
+           "train_count": str(g.train_count), "test_count": str(g.test_count),
+           "class_count": str(g.class_count), "class_labels": " | ".join(g.classes),
            "group_handling_decision": "keep_all_records",
            "decision_reason": "reviewed", "reviewer": "human_reviewer_1",
            "reviewed_at": "2026-08-02T21:10:00+05:00"}
@@ -240,10 +291,18 @@ def test_no_decisions_is_incomplete():
     assert out.status == "incomplete" and out.unresolved_groups == 1
 
 
-def test_all_terminal_decisions_pass():
+def test_a_recorded_decision_is_credited_but_does_not_by_itself_pass():
+    """Schema 2.0: "a human decided" and "the decision was applied" are two claims.
+
+    ``keep_all_records`` is terminal, so the adjudication half credits the group —
+    and the gate still refuses, because leaving byte-identical pixels on both
+    sides of the split is not something this pipeline will materialise.
+    """
     g = _group()
     out = build_internal_duplicate_gate([g], [_decision(g)], dataset="PlantDoc")
-    assert out.status == "pass" and out.resolved_groups == 1
+    assert out.resolved_groups == 1 and out.unresolved_groups == 0
+    assert out.status == "fail"
+    assert any("has no defined remediation" in v for v in out.violations)
 
 
 def test_one_missing_decision_prevents_pass():
