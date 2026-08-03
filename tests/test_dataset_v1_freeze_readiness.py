@@ -24,11 +24,27 @@ MACHINE_CONDITIONS = {
     "internal_duplicate_gate", "effective_dataset_current", "effective_dataset_integrity",
     "effective_dataset_pixels_verified", "human_review_evidence_intact", "anonymity",
 }
-#: Preconditions that are scientific judgements. No artifact, no credit.
-HUMAN_CONDITIONS = {
+#: Domain judgements about the data itself.
+HUMAN_SCIENTIFIC_CONDITIONS = {
     "disease_action_mapping_reviewed", "plantvillage_action_mapping_coverage",
-    "harm_matrix_approved", "open_audit_findings_closed",
-    "remediation_independently_audited", "freeze_approval_recorded",
+    "harm_matrix_approved", "relabel_second_scientific_review",
+}
+#: A decision to proceed, taken by an accountable owner.
+GOVERNANCE_CONDITIONS = {"freeze_approval_recorded"}
+#: A verdict by someone who did not do the work.
+INDEPENDENT_AUDIT_CONDITIONS = {"open_audit_findings_closed"}
+
+#: Everything that is not the pipeline's to settle. R2B.1 split these by KIND:
+#: a governance approval cannot stand in for a scientific judgement, and neither
+#: can stand in for an independent audit.
+HUMAN_CONDITIONS = (HUMAN_SCIENTIFIC_CONDITIONS | GOVERNANCE_CONDITIONS
+                    | INDEPENDENT_AUDIT_CONDITIONS)
+
+KIND_OF = {
+    **{c: "machine" for c in MACHINE_CONDITIONS},
+    **{c: "human_scientific" for c in HUMAN_SCIENTIFIC_CONDITIONS},
+    **{c: "governance_approval" for c in GOVERNANCE_CONDITIONS},
+    **{c: "independent_audit" for c in INDEPENDENT_AUDIT_CONDITIONS},
 }
 
 
@@ -47,11 +63,33 @@ def test_every_condition_is_declared_exactly_once(by_id, readiness):
     assert len(readiness["conditions"]) == len(by_id)
 
 
-def test_conditions_are_typed_machine_or_human(by_id):
+def test_conditions_carry_their_correct_kind(by_id):
     for cid, c in by_id.items():
-        assert c["kind"] == ("machine" if cid in MACHINE_CONDITIONS else "human"), cid
+        assert c["kind"] == KIND_OF[cid], cid
         assert c["status"] in ("satisfied", "blocked")
         assert c["detail"], cid
+
+
+def test_the_four_kinds_are_all_represented(by_id):
+    """Collapsing these into one 'human' bucket is what R2B.1 undid."""
+    kinds = {c["kind"] for c in by_id.values()}
+    assert kinds == {"machine", "human_scientific", "governance_approval",
+                     "independent_audit"}
+
+
+def test_every_condition_binds_the_digest_of_its_evidence(by_id):
+    """A verdict must not outlive the artifact it was computed from."""
+    for cid, c in by_id.items():
+        assert c["evidence"], cid
+        digest = c["evidence_digest"]
+        assert digest == "<absent>" or (len(digest) == 64 and
+                                        all(ch in "0123456789abcdef" for ch in digest)), cid
+
+
+def test_conditions_awaiting_a_human_artifact_record_it_as_absent(by_id):
+    for cid in ("freeze_approval_recorded", "open_audit_findings_closed",
+                "relabel_second_scientific_review"):
+        assert by_id[cid]["evidence_digest"] == "<absent>", cid
 
 
 @pytest.mark.parametrize("cid", sorted(MACHINE_CONDITIONS))
@@ -61,9 +99,25 @@ def test_every_mechanical_precondition_is_satisfied(by_id, cid):
 
 
 @pytest.mark.parametrize("cid", sorted(HUMAN_CONDITIONS))
-def test_every_scientific_judgement_is_still_blocked(by_id, cid):
+def test_every_human_decision_is_still_blocked(by_id, cid):
     """None of these has been decided. A default-yes here would be the whole bug."""
     assert by_id[cid]["status"] == "blocked", by_id[cid]["detail"]
+
+
+def test_mapping_readiness_names_the_undecided_classes(by_id):
+    """R2B.1 Finding 1: the verdict reports identities, not just a count."""
+    detail = by_id["disease_action_mapping_reviewed"]["detail"]
+    assert "non-terminal" in detail and "not terminal" in detail
+    assert "coverage 11/28" in detail
+
+    pv = by_id["plantvillage_action_mapping_coverage"]["detail"]
+    assert "coverage 0/38" in pv and "missing" in pv
+
+
+def test_approval_conditions_say_the_decision_was_not_taken(by_id):
+    for cid in ("freeze_approval_recorded", "open_audit_findings_closed",
+                "relabel_second_scientific_review"):
+        assert "has not been taken" in by_id[cid]["detail"], cid
 
 
 def test_dataset_v1_is_not_ready_and_not_frozen(readiness):
@@ -72,6 +126,15 @@ def test_dataset_v1_is_not_ready_and_not_frozen(readiness):
     assert readiness["satisfied"] == len(MACHINE_CONDITIONS)
     assert readiness["blocked"] == len(HUMAN_CONDITIONS)
     assert set(readiness["blockers"]) == HUMAN_CONDITIONS
+
+
+def test_the_assessment_records_the_schemas_it_validated_against(readiness):
+    prov = readiness["provenance"]
+    assert prov["approval_schema"] == "ica26.governance.approval/1"
+    assert prov["mapping_readiness_schema"] == "ica26.governance.mapping_readiness/1"
+    assert prov["condition_kinds"] == ["machine", "human_scientific",
+                                       "governance_approval", "independent_audit"]
+    assert len(prov["repository_commit"]) == 40
 
 
 def test_the_assessment_freezes_nothing(repo_root, readiness):

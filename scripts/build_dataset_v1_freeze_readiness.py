@@ -37,6 +37,7 @@ import os
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Optional
 
 REPO = Path(__file__).resolve().parent.parent
 SRC = REPO / "src"
@@ -48,6 +49,9 @@ from ica26.datasets.duplicate_remediation import (  # noqa: E402
 )
 from ica26.datasets.duplicates import (  # noqa: E402
     InternalDuplicateGate, validate_internal_gate,
+)
+from ica26.governance import (  # noqa: E402
+    APPROVAL_SCHEMA, MAPPING_READINESS_SCHEMA,
 )
 from ica26.schemas import IMAGE_MANIFEST_COLUMNS  # noqa: E402
 
@@ -66,26 +70,49 @@ HARM_TEMPLATE = Path("configs/harm_matrix_template.yaml")
 EVIDENCE_MANIFEST = Path("human_review/evidence_manifest.json")
 
 #: Artifacts a HUMAN must produce. Their absence is a blocker, never a default.
+#: Each is validated against a versioned schema in `ica26.governance.approvals`;
+#: a file that merely exists, or says `{"approved": true}`, satisfies nothing.
 AUDIT_SIGNOFF = Path("reports/DATASET_V1_AUDIT_SIGNOFF.json")
 FREEZE_APPROVAL = Path("data/manifests/dataset_v1_freeze_approval.json")
+SECOND_REVIEW = Path("human_review/plantdoc_label_second_review/second_review.json")
+SECOND_REVIEW_PACKET = Path("reports/plantdoc_label_second_review")
 FREEZE_ARTIFACT = Path("data/manifests/dataset_v1_freeze.json")
 
 OUT_JSON = Path("reports/dataset_v1_freeze_readiness.json")
 OUT_MD = Path("reports/DATASET_V1_FREEZE_READINESS.md")
 
 #: Audit findings that must be closed before a freeze. Closure is asserted by a
-#: human sign-off artifact, never inferred from the presence of a report.
-REQUIRED_CLOSED_FINDINGS = ("AUD-EC-005", "AUD-EC-006", "AUD-EC-007")
+#: validated human sign-off artifact, never inferred from the presence of a
+#: report. Sourced from the approval spec so the two cannot drift apart.
+from ica26.governance import AUDIT_SIGNOFF_SPEC as _SIGNOFF_SPEC  # noqa: E402
+
+REQUIRED_CLOSED_FINDINGS = _SIGNOFF_SPEC.required_findings
+
+
+#: How a condition can be settled. Collapsing these into one "human" bucket hid
+#: that they need different KINDS of artifact -- a scientific judgement, a
+#: governance decision, and an independent audit are not interchangeable.
+CONDITION_KINDS = ("machine", "human_scientific", "governance_approval",
+                   "independent_audit")
 
 
 @dataclass
 class Condition:
     id: str
     title: str
-    kind: str          # "machine" | "human"
+    kind: str          # one of CONDITION_KINDS
     status: str        # "satisfied" | "blocked"
     detail: str
     evidence: str = ""
+    #: SHA-256 of the artifact this verdict was computed from, so a condition
+    #: cannot keep its answer after its evidence changes. "<absent>" when the
+    #: artifact does not exist -- which is itself a blocking state.
+    evidence_digest: str = ""
+
+    def __post_init__(self):
+        if self.kind not in CONDITION_KINDS:
+            raise ValueError(f"unknown condition kind '{self.kind}' "
+                             f"(allowed: {list(CONDITION_KINDS)})")
 
     @property
     def ok(self) -> bool:
@@ -134,14 +161,30 @@ def atomic_write_text(path: Path, text: str) -> Path:
     return path
 
 
-def _c(cid, title, kind, ok, detail, evidence="") -> Condition:
-    return Condition(cid, title, kind, "satisfied" if ok else "blocked", detail, evidence)
+def _digest_of(repo: Path, evidence: str) -> str:
+    """Digest the artifact a condition was judged from. Absence is recorded."""
+    if not evidence:
+        return ""
+    target = repo / evidence
+    if target.is_dir():
+        parts = []
+        for f in sorted(target.rglob("*")):
+            if f.is_file():
+                parts.append(f"{f.relative_to(target)}:{sha256_of(f)}")
+        return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+    return sha256_of(target) if target.exists() else "<absent>"
+
+
+def _c(cid, title, kind, ok, detail, evidence="", repo: Path = REPO) -> Condition:
+    return Condition(cid, title, kind, "satisfied" if ok else "blocked", detail,
+                     evidence, _digest_of(repo, evidence))
 
 
 # --------------------------------------------------------------------------- #
 # Conditions
 # --------------------------------------------------------------------------- #
-def evaluate(repo: Path, *, verify_pixels: bool) -> list[Condition]:
+def evaluate(repo: Path, *, verify_pixels: bool,
+             head_commit: Optional[str] = None) -> list[Condition]:
     out: list[Condition] = []
 
     # --- acquisition ------------------------------------------------------- #
@@ -240,34 +283,57 @@ def evaluate(repo: Path, *, verify_pixels: bool) -> list[Condition]:
     # --- anonymity ----------------------------------------------------------- #
     from ica26.portability import validate_portability
     port = validate_portability(repo)
+    # Report WHERE, never WHAT: quoting the offending string would write the
+    # identifier straight back into this artifact, which the next run would then
+    # report -- a leak that feeds itself.
+    leak_files = sorted({i.where for i in port.errors})
     out.append(_c("anonymity", "No machine-specific or personal identifier in paper artifacts",
                   "machine", port.ok,
                   port.summary() if port.ok else
-                  f"{len(port.errors)} finding(s), first: {port.errors[0].message}",
-                  "src/ica26/portability.py"))
+                  f"{len(port.errors)} identifier(s) in {len(leak_files)} file(s): "
+                  f"{leak_files[:5]}",
+                  "src/ica26/portability.py", repo))
 
-    # --- mapping review (human) ---------------------------------------------- #
-    mapping = read_csv(repo / MAPPING_REVIEW) if (repo / MAPPING_REVIEW).exists() else []
-    needs = [r for r in mapping if (r.get("review_status") or "").strip() == "needs_review"]
+    # --- mapping readiness (human scientific) -------------------------------- #
+    # R2B.1 Finding 1: the old predicates were `needs_review == 0` and "a row
+    # exists for this class". Both fail open -- rename the status, or add an
+    # empty row, and they go green. Readiness is now decided against the class
+    # identity set the dataset actually has, with an allow-list of terminal
+    # statuses and the full evidence gate on every approved row.
+    from ica26.evaluation.scope import load_scope
+    from ica26.governance import evaluate_mapping_readiness
+
+    mapping_rows = read_csv(repo / MAPPING_REVIEW) if (repo / MAPPING_REVIEW).exists() else []
+    mapping_digest = sha256_of(repo / MAPPING_REVIEW) if (repo / MAPPING_REVIEW).exists() else "<absent>"
+    try:
+        scope = load_scope(repo / "configs/evaluation_scope.yaml")
+        out_of_action = {k[1] for k in scope.out_of_scope("include_action_evaluation")}
+    except Exception:                                          # noqa: BLE001
+        out_of_action = set()
+
+    effective = read_csv(repo / EFFECTIVE) if (repo / EFFECTIVE).exists() else []
+    plantdoc_classes = {r["class_label"] for r in effective}
+    pd_ready = evaluate_mapping_readiness(
+        mapping_rows, dataset="PlantDoc", expected_classes=plantdoc_classes,
+        artifact=str(MAPPING_REVIEW), artifact_digest=mapping_digest,
+        out_of_action_scope_classes=out_of_action)
     out.append(_c("disease_action_mapping_reviewed",
-                  "Every disease->action mapping row carries a terminal human decision",
-                  "human", bool(mapping) and not needs,
-                  f"{len(needs)} of {len(mapping)} row(s) still needs_review"
-                  if mapping else "no mapping review file",
-                  str(MAPPING_REVIEW)))
+                  "Every PlantDoc class carries a terminal, evidence-gated mapping decision",
+                  "human_scientific", pd_ready.satisfied, pd_ready.detail(),
+                  str(MAPPING_REVIEW), repo))
 
     pv_classes = {r["class_label"] for r in read_csv(repo / PLANTVILLAGE_MANIFEST)} if (
         repo / PLANTVILLAGE_MANIFEST).exists() else set()
-    pv_mapped = {(r.get("dataset_class") or "").strip() for r in mapping
-                 if (r.get("dataset") or "").strip() == "PlantVillage"}
-    covered = pv_classes & pv_mapped
+    pv_ready = evaluate_mapping_readiness(
+        mapping_rows, dataset="PlantVillage", expected_classes=pv_classes,
+        artifact=str(MAPPING_REVIEW), artifact_digest=mapping_digest,
+        out_of_action_scope_classes=out_of_action)
     out.append(_c("plantvillage_action_mapping_coverage",
-                  "Every PlantVillage class has an action mapping",
-                  "human", bool(pv_classes) and covered == pv_classes,
-                  f"coverage {len(covered)}/{len(pv_classes)} PlantVillage class(es)",
-                  str(MAPPING_REVIEW)))
+                  "Every PlantVillage class carries a terminal, evidence-gated mapping decision",
+                  "human_scientific", pv_ready.satisfied, pv_ready.detail(),
+                  str(MAPPING_REVIEW), repo))
 
-    # --- harm matrix (human) -------------------------------------------------- #
+    # --- harm matrix (human scientific) --------------------------------------- #
     try:
         from ica26.evaluation import harm
         m = harm.load_reviewed_matrix(repo / HARM_TEMPLATE)
@@ -277,38 +343,50 @@ def evaluate(repo: Path, *, verify_pixels: bool) -> list[Condition]:
     except Exception as exc:                                  # noqa: BLE001
         ready, detail = False, f"could not load a reviewed harm matrix: {exc}"
     out.append(_c("harm_matrix_approved", "A human-approved harm matrix exists",
-                  "human", ready, detail, str(HARM_TEMPLATE)))
+                  "human_scientific", ready, detail, str(HARM_TEMPLATE), repo))
 
-    # --- audit sign-off (human) ------------------------------------------------ #
-    signoff = read_json(repo / AUDIT_SIGNOFF)
-    closed = {str(x) for x in (signoff or {}).get("closed_findings", [])}
-    missing = [f for f in REQUIRED_CLOSED_FINDINGS if f not in closed]
-    remediation_audited = bool((signoff or {}).get("r2b_remediation_independently_audited"))
+    # --- second scientific review of the canonical relabels ------------------- #
+    # R2B.1 Finding 5: three canonical labels rest on one anonymous rationale
+    # with no independently citable diagnostic source.
+    from ica26.governance import SECOND_REVIEW_SPEC, validate_approval_file
+    second = validate_approval_file(repo / SECOND_REVIEW, SECOND_REVIEW_SPEC,
+                                    repo=repo, expected_commit=head_commit)
+    relabelled = _relabelled_group_ids(repo)
+    out.append(_c("relabel_second_scientific_review",
+                  f"The canonical relabels {relabelled} carry an independent second review",
+                  "human_scientific", second.satisfied,
+                  second.detail() + (f"; packet pending at {SECOND_REVIEW_PACKET}"
+                                     if not second.present else ""),
+                  str(SECOND_REVIEW), repo))
+
+    # --- audit sign-off (independent audit) ----------------------------------- #
+    from ica26.governance import AUDIT_SIGNOFF_SPEC
+    signoff = validate_approval_file(repo / AUDIT_SIGNOFF, AUDIT_SIGNOFF_SPEC,
+                                     repo=repo, expected_commit=head_commit)
     out.append(_c("open_audit_findings_closed",
-                  "Open audit findings are closed by an independent re-audit",
-                  "human", bool(signoff) and not missing,
-                  f"no sign-off artifact; {list(REQUIRED_CLOSED_FINDINGS)} remain open"
-                  if signoff is None else
-                  (f"still open: {missing}" if missing else f"closed: {sorted(closed)}"),
-                  str(AUDIT_SIGNOFF)))
-    out.append(_c("remediation_independently_audited",
-                  "The R2B duplicate remediation has itself been independently audited",
-                  "human", remediation_audited,
-                  "not recorded in any sign-off artifact" if not remediation_audited
-                  else "recorded in the audit sign-off",
-                  str(AUDIT_SIGNOFF)))
+                  f"An independent re-audit closes {list(REQUIRED_CLOSED_FINDINGS)}",
+                  "independent_audit", signoff.satisfied, signoff.detail(),
+                  str(AUDIT_SIGNOFF), repo))
 
-    # --- the freeze decision itself (human) ------------------------------------ #
-    approval = read_json(repo / FREEZE_APPROVAL)
-    approved = bool((approval or {}).get("approved"))
+    # --- the freeze decision itself (governance approval) --------------------- #
+    from ica26.governance import FREEZE_APPROVAL_SPEC
+    approval = validate_approval_file(repo / FREEZE_APPROVAL, FREEZE_APPROVAL_SPEC,
+                                      repo=repo, expected_commit=head_commit)
     out.append(_c("freeze_approval_recorded",
-                  "A human has recorded an explicit Dataset V1 freeze approval",
-                  "human", approved,
-                  "no approval artifact; the freeze decision has not been taken"
-                  if approval is None else f"approved={approved}",
-                  str(FREEZE_APPROVAL)))
+                  "A human has recorded a valid, bound Dataset V1 freeze approval",
+                  "governance_approval", approval.satisfied, approval.detail(),
+                  str(FREEZE_APPROVAL), repo))
 
     return out
+
+
+def _relabelled_group_ids(repo: Path) -> list[str]:
+    """Groups whose retained record was given a different label. Derived, not fixed."""
+    if not (repo / RESOLUTION).exists():
+        return []
+    sys.path.insert(0, str(repo / "scripts"))
+    from build_plantdoc_second_review_packet import relabelled_groups  # noqa: E402
+    return relabelled_groups(read_csv(repo / RESOLUTION))
 
 
 def _leak_input_path(name: str) -> str:
@@ -422,26 +500,49 @@ def render_markdown(r: Readiness) -> str:
     for c in r.conditions:
         mark = "satisfied" if c["status"] == "satisfied" else "**BLOCKED**"
         L.append(f"| {c['title']} (`{c['id']}`) | {c['kind']} | {mark} | {c['detail']} |")
-    L += ["", "## What a human must produce", "",
-          "A `machine` condition is evaluated here from artifacts, digests, and a fresh "
-          "rebuild. A `human` condition is a scientific judgement and is satisfied **only** by "
-          "an explicit decision artifact — its absence is a blocker, never a default.", "",
-          f"| Artifact | Satisfies |", "|---|---|",
-          f"| `{AUDIT_SIGNOFF}` | `open_audit_findings_closed` — JSON with "
-          f"`closed_findings` listing at least {list(REQUIRED_CLOSED_FINDINGS)}; and "
-          "`r2b_remediation_independently_audited: true` for "
-          "`remediation_independently_audited` |",
-          f"| `{FREEZE_APPROVAL}` | `freeze_approval_recorded` — JSON with `approved: true`, "
-          "an anonymous reviewer id, and an ISO-8601 timestamp with offset |",
-          f"| `{MAPPING_REVIEW}` | the two mapping conditions, once every row carries a "
-          "terminal decision and PlantVillage coverage is complete |",
-          f"| `{HARM_TEMPLATE}` | `harm_matrix_approved`, once a non-example matrix is "
-          "approved with complete weights |", "",
+    L += ["", "## Who can settle what", "",
+          "A `machine` condition is evaluated here from artifacts, bound digests, and a "
+          "fresh rebuild. The other three are decisions, and they are **not** "
+          "interchangeable — a governance approval cannot stand in for a scientific "
+          "judgement, and neither can stand in for an independent audit. Each is satisfied "
+          "only by an explicit artifact validated against a versioned schema "
+          f"(`{APPROVAL_SCHEMA}`); absence, invalidity, or a stale binding all block.", "",
+          "| Kind | Meaning |", "|---|---|",
+          "| `machine` | The pipeline can verify it. |",
+          "| `human_scientific` | A domain judgement about the data itself. |",
+          "| `governance_approval` | A decision to proceed, taken by an accountable owner. |",
+          "| `independent_audit` | A verdict by someone who did not do the work. |", "",
+          "## What a human must produce", "",
+          "| Artifact | Satisfies | Must carry |", "|---|---|---|",
+          f"| `{AUDIT_SIGNOFF}` | `open_audit_findings_closed` | schema version, artifact "
+          f"type `dataset_v1_audit_signoff`, scope `phase1_audit_findings`, decision, "
+          f"reviewer id **and role**, ISO-8601 timestamp with offset, the repository "
+          f"commit, SHA-256 bindings for the gate and effective manifest, a rationale, "
+          f"`closed_findings` covering {list(REQUIRED_CLOSED_FINDINGS)}, "
+          "`auditor_independent_of_implementer: true`, and an explicit `not_approved` |",
+          f"| `{SECOND_REVIEW}` | `relabel_second_scientific_review` | the same core fields "
+          "with artifact type `plantdoc_label_second_review`, plus `group_verdicts` and "
+          f"`diagnostic_citations`. The pending packet is at `{SECOND_REVIEW_PACKET}` |",
+          f"| `{FREEZE_APPROVAL}` | `freeze_approval_recorded` | the same core fields with "
+          "artifact type `dataset_v1_freeze_approval` and scope `dataset_v1`, binding the "
+          "effective manifest, resolution table, and both gates |",
+          f"| `{MAPPING_REVIEW}` | both mapping conditions | one row per dataset class, each "
+          "with a terminal status (`approved` or `excluded`), the full evidence set, a "
+          "target from the approved action vocabulary, and reviewer attribution |",
+          f"| `{HARM_TEMPLATE}` | `harm_matrix_approved` | a non-example matrix, approved, "
+          "with complete weights |", "",
+          "An approval is refused for: a missing or placeholder field, an unknown decision "
+          "value, an invalid or naive timestamp, an empty reviewer, a commit that is not "
+          "HEAD, a digest that no longer matches the file it binds, the wrong artifact type "
+          "or scope, a duplicate approval for the same scope, or a timestamp predating the "
+          "commit it claims to have reviewed. A bare `{\"approved\": true}` fails on all "
+          "counts and is pinned as a test.", "",
           "## Re-deriving this assessment", "",
           "```", "python scripts/build_dataset_v1_freeze_readiness.py",
           "python scripts/build_dataset_v1_freeze_readiness.py --check", "```", "",
-          "No wall-clock field, so repeated runs are byte-identical and the assessment can be "
-          "compared across commits.", ""]
+          "No wall-clock field, so repeated runs are byte-identical and the assessment can "
+          "be compared across commits. Every condition records the SHA-256 of the artifact "
+          "it was judged from, so a verdict cannot outlive its evidence.", ""]
     return "\n".join(L)
 
 
@@ -457,7 +558,10 @@ def main(argv=None) -> int:
         print(f"[freeze-readiness] manifest not found: {PLANTDOC_MANIFEST}")
         return 2
 
-    conditions = evaluate(REPO, verify_pixels=not args.skip_pixel_verification)
+    from ica26.governance.approvals import current_commit
+    head = current_commit(REPO)
+    conditions = evaluate(REPO, verify_pixels=not args.skip_pixel_verification,
+                          head_commit=head)
     blockers = [c.id for c in conditions if not c.ok]
 
     digests = {}
@@ -467,7 +571,8 @@ def main(argv=None) -> int:
                     ("leakage_gate", LEAKAGE_GATE),
                     ("internal_duplicate_gate", INTERNAL_GATE),
                     ("action_mapping_review", MAPPING_REVIEW),
-                    ("human_review_evidence", EVIDENCE_MANIFEST)):
+                    ("human_review_evidence", EVIDENCE_MANIFEST),
+                    ("second_review_packet", SECOND_REVIEW_PACKET / "packet_manifest.json")):
         digests[name] = sha256_of(REPO / p) if (REPO / p).exists() else "<absent>"
 
     readiness = Readiness(
@@ -482,6 +587,10 @@ def main(argv=None) -> int:
         input_digests=dict(sorted(digests.items())),
         provenance={"command": "build_dataset_v1_freeze_readiness.py",
                     "freezes_nothing": True,
+                    "condition_kinds": list(CONDITION_KINDS),
+                    "approval_schema": APPROVAL_SCHEMA,
+                    "mapping_readiness_schema": MAPPING_READINESS_SCHEMA,
+                    "repository_commit": head or "<unknown>",
                     "pixel_verification": not args.skip_pixel_verification},
     )
 

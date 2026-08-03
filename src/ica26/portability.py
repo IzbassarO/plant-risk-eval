@@ -45,6 +45,13 @@ DEFAULT_INCLUDE_GLOBS = [
     "human_review/**/*.csv", "human_review/**/*.json", "human_review/**/*.md",
     "reports/leakage_*.csv", "reports/leakage_*.json",
     "reports/*REMEDIATION*.md",
+    # Freeze-readiness and governance artifacts quote artifact paths back to the
+    # reader; an unrelativised one would leak a home directory.
+    "reports/dataset_v1_*.json", "reports/DATASET_V1_*.md",
+    "reports/plantdoc_*_gate.json",
+    "reports/plantdoc_label_second_review/*.csv",
+    "reports/plantdoc_label_second_review/*.json",
+    "reports/plantdoc_label_second_review/*.md",
     "reports/PLANTDOC_COUNT_RECONCILIATION.md",
     "reports/ACTION_MAPPING_REVIEW_PACKET.md",
     "src/**/*.py",
