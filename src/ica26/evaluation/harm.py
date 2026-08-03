@@ -127,8 +127,40 @@ def harm_weighted_error(
 HARM_MATRIX_PROVENANCE_FIELDS = (
     "matrix_id", "version", "created_at", "review_status",
     "source_notes", "action_order", "weights",
+    "reviewer_id", "reviewer_role", "reviewed_at", "review_rationale",
 )
 HARM_REVIEW_STATUSES = ("pending", "needs_review", "approved", "example")
+
+# ``review_status: approved`` is a claim, not evidence of a human decision.  A
+# production matrix must identify a reviewer, their relevant role, the
+# timestamp of the review, and the substantive rationale behind it.  Keep this
+# contract local to the matrix rather than treating a generic YAML truthy value
+# as an approval artifact.
+HARM_MATRIX_APPROVAL_FIELDS = (
+    "reviewer_id", "reviewer_role", "reviewed_at", "review_rationale",
+)
+MIN_REVIEW_RATIONALE_CHARS = 40
+_PROVENANCE_PLACEHOLDERS = frozenset({
+    "", "-", "--", "?", "n/a", "na", "none", "null", "nil", "nan",
+    "tbd", "tba", "todo", "pending", "unknown", "unspecified",
+    "placeholder", "example", "sample", "test", "dummy", "fixme",
+})
+
+
+def _is_missing_provenance(value: object) -> bool:
+    """Return true for blank or placeholder-valued human provenance fields."""
+    if value is None:
+        return True
+    text = str(value).strip()
+    return not text or text.casefold() in _PROVENANCE_PLACEHOLDERS
+
+
+def _timestamp_error(field: str, value: object) -> Optional[str]:
+    """Apply the repository's strict timestamp contract to harm review fields."""
+    from ..leakage.gate import parse_review_timestamp
+
+    _, error = parse_review_timestamp(str(value or "").strip())
+    return error.replace("reviewed_at", field) if error else None
 
 
 class HarmMatrixError(RuntimeError):
@@ -137,8 +169,12 @@ class HarmMatrixError(RuntimeError):
 
 @dataclass
 class ReviewedHarmMatrix:
-    """A harm matrix carrying review provenance. Only ``review_status='approved'``
-    (and not an example) is usable by paper-result commands."""
+    """A harm matrix carrying accountable review provenance.
+
+    Paper-result commands may use it only after a complete, attributable
+    approval passes :meth:`validate_provenance`; the status string alone is
+    never sufficient.
+    """
 
     matrix_id: str
     version: str
@@ -148,6 +184,10 @@ class ReviewedHarmMatrix:
     action_order: list
     harm: Optional[HarmMatrix]
     is_example: bool = False
+    reviewer_id: str = ""
+    reviewer_role: str = ""
+    reviewed_at: str = ""
+    review_rationale: str = ""
 
     @property
     def matrix(self) -> pd.DataFrame:
@@ -164,23 +204,59 @@ class ReviewedHarmMatrix:
         return self.harm.mean_harm(*a, **k)
 
     def is_production_ready(self) -> bool:
-        return (
-            self.review_status == "approved"
-            and not self.is_example
-            and self.harm is not None
-        )
+        if (self.review_status != "approved" or self.is_example or
+                self.harm is None):
+            return False
+        # Do not let a bare ``review_status: approved`` turn an incomplete or
+        # anonymous YAML document into scientific truth.
+        return self.validate_provenance().ok
 
     def validate_provenance(self) -> ValidationResult:
         res = ValidationResult()
         for f in ("matrix_id", "version", "created_at", "source_notes"):
-            if not str(getattr(self, f, "")).strip():
-                res.add("error", f, f"provenance field '{f}' is empty")
+            if _is_missing_provenance(getattr(self, f, "")):
+                res.add("error", f, f"provenance field '{f}' is blank or a placeholder")
         if self.review_status not in HARM_REVIEW_STATUSES:
             res.add("error", "review_status", f"invalid review_status '{self.review_status}'")
         if list(self.action_order) != list(ACTION_CLASSES):
             res.add("error", "action_order", f"action_order must equal {list(ACTION_CLASSES)}")
         if self.review_status == "approved" and self.harm is None:
             res.add("error", "weights", "approved matrix must have complete weights")
+        if self.harm is not None:
+            for issue in self.harm.validate().errors:
+                res.add("error", f"weights.{issue.where}", issue.message)
+
+        if self.review_status == "approved":
+            if self.is_example:
+                res.add("error", "is_example",
+                        "an example matrix may not be approved for production")
+            for f in HARM_MATRIX_APPROVAL_FIELDS:
+                if _is_missing_provenance(getattr(self, f, "")):
+                    res.add("error", f, f"approved matrix requires accountable '{f}'")
+
+            # A date alone cannot identify a review instant.  Both stamps are
+            # required to have an explicit offset and may not point into the
+            # future, matching the human-review controls elsewhere in the repo.
+            for f in ("created_at", "reviewed_at"):
+                if not _is_missing_provenance(getattr(self, f, "")):
+                    error = _timestamp_error(f, getattr(self, f))
+                    if error:
+                        res.add("error", f, error)
+
+            rationale = str(self.review_rationale or "").strip()
+            if (not _is_missing_provenance(rationale) and
+                    len(rationale) < MIN_REVIEW_RATIONALE_CHARS):
+                res.add("error", "review_rationale",
+                        f"approved review rationale must be at least "
+                        f"{MIN_REVIEW_RATIONALE_CHARS} characters")
+            if "unfilled template" in rationale.casefold():
+                res.add("error", "review_rationale",
+                        "approved matrix still carries the unfilled-template review rationale")
+
+            notes = str(self.source_notes or "").strip()
+            if "unfilled template" in notes.casefold():
+                res.add("error", "source_notes",
+                        "approved matrix still carries the unfilled-template source notes")
         return res
 
 
@@ -209,6 +285,10 @@ def load_reviewed_matrix(path: str | Path) -> ReviewedHarmMatrix:
         action_order=list(order),
         harm=harm_obj,
         is_example=bool(data.get("is_example", False)),
+        reviewer_id=str(data.get("reviewer_id", "")),
+        reviewer_role=str(data.get("reviewer_role", "")),
+        reviewed_at=str(data.get("reviewed_at", "")),
+        review_rationale=str(data.get("review_rationale", "")),
     )
 
 

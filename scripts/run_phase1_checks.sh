@@ -8,8 +8,9 @@
 # STATUS checks (feed the verdict, do NOT hard-fail): PlantDoc completeness,
 # PlantVillage pixel materialization, leakage-gate state.
 #
-# Verdict: PASS (0) / PARTIAL|BLOCKED (2) / FAIL (1). It will NOT report PASS
-# while datasets are incomplete or a required leakage gate is missing/stale.
+# Verdict: ACCEPTED (0) / scientifically BLOCKED (2) / status-control failure
+# (3); an earlier HARD check exits 1. It will never report acceptance while a
+# required scientific decision, technical record, or control is absent/stale.
 #
 # Usage:  PYTHON=python ./scripts/run_phase1_checks.sh
 set -uo pipefail
@@ -101,125 +102,118 @@ if [ -d human_review ]; then
 else echo "  (no preserved evidence yet)"; fi
 
 # ------------------ STATUS checks (feed the verdict) ------------------
-# R1-MED-001: a single OVERALL verdict conflated "the mechanics work" with
-# "the science is accepted", and printed PASS while 12 duplicate groups and 17
-# mappings were unreviewed. The status is now reported per dimension, and
-# SCIENTIFIC PHASE-1 STATUS is BLOCKED unless every one of them is settled.
+# The strict readiness assessment is the ONLY authority for the technical
+# control plane. Every displayed dimension and the final Phase-1 verdict below
+# is derived from its fresh, validated condition set.
+echo; echo "-- [STATUS] strict Dataset V1 freeze-readiness assessment --"
+READINESS_CHECK_RC=0
+"$PY" scripts/build_dataset_v1_freeze_readiness.py --check || READINESS_CHECK_RC=$?
+
+echo; echo "-- [STATUS] validated Dataset V1 technical freeze record --"
+FREEZE_CHECK_RC=0
+"$PY" scripts/materialize_dataset_v1_freeze.py --check || FREEZE_CHECK_RC=$?
+
 echo; echo "-- [STATUS] per-dimension Phase-1 status --"
-"$PY" - <<'PYEOF'
-import csv, json, os
+READINESS_CHECK_RC="$READINESS_CHECK_RC" FREEZE_CHECK_RC="$FREEZE_CHECK_RC" "$PY" - <<'PYEOF'
+import json, os
+
+check_rc = int(os.environ.get("READINESS_CHECK_RC", "99"))
+freeze_check_rc = int(os.environ.get("FREEZE_CHECK_RC", "99"))
 
 def load(p):
-    return json.load(open(p)) if os.path.exists(p) else None
-
-def rows(p):
-    if not os.path.exists(p):
-        return []
-    with open(p, newline="", encoding="utf-8") as fh:
-        return list(csv.DictReader(fh))
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return None
 
 notes = []      # why a dimension is not settled
 facts = []      # settled results worth stating; never a reason to block
 
-# 1) mechanical/data acquisition ------------------------------------------- #
-data_status, pd_sum = "PASS", load("data/manifests/plantdoc_summary.json")
-pv_sum = load("data/manifests/plantvillage_summary.json")
-if pd_sum is None:
-    data_status = "BLOCKED"; notes.append("PlantDoc not acquired")
-elif not pd_sum.get("complete", False):
-    rec = pd_sum.get("reconciliation", {})
-    data_status = "PARTIAL"
-    notes.append(f"PlantDoc incomplete ({rec.get('manifest_count')}/"
-                 f"{rec.get('upstream_repository_count')})")
-if pv_sum is None:
-    data_status = "BLOCKED"; notes.append("PlantVillage not executed")
-elif not pv_sum.get("pixels_materialized", False):
-    data_status = "PARTIAL" if data_status == "PASS" else data_status
-    notes.append("PlantVillage pixels not materialized")
-
-# 2) cross-dataset leakage gate -------------------------------------------- #
-gate = load("reports/leakage_gate.json")
-if gate is None:
-    cross_status = "FAIL"; notes.append("no cross-dataset leakage gate")
-else:
-    cross_status = "PASS" if gate.get("status") == "pass" else "FAIL"
-    if cross_status != "PASS":
-        notes.append(f"cross-dataset gate status={gate.get('status')}")
-
-# 3) internal PlantDoc duplicate review ------------------------------------ #
-idg = load("reports/plantdoc_internal_duplicate_gate.json")
-if idg is None:
-    dup_status = "INCOMPLETE"
-    notes.append("no internal duplicate gate; run "
-                 "scripts/build_plantdoc_internal_duplicate_gate.py")
-else:
-    dup_status = {"pass": "PASS", "fail": "FAIL"}.get(idg.get("status"), "INCOMPLETE")
-    if dup_status != "PASS":
-        notes.append(f"{idg.get('unresolved_groups')} of {idg.get('total_groups')} "
-                     f"PlantDoc exact-duplicate group(s) unresolved "
-                     f"({idg.get('cross_split_groups')} cross train/test, "
-                     f"{idg.get('cross_class_groups')} contradictory labels)")
-    # R2B: `status == pass` on a schema-1.0 gate meant only that a human had
-    # decided. Reading it alone would now credit a decision that was never
-    # applied, so the remediation half is checked explicitly.
-    rem = idg.get("remediation") or {}
-    if idg.get("schema_version") != "2.0":
-        dup_status = "INCOMPLETE"
-        notes.append(f"internal duplicate gate is schema "
-                     f"{idg.get('schema_version')}; it does not verify that the "
-                     f"decisions were applied")
-    elif not (rem.get("evaluated") and rem.get("ok")
-              and (idg.get("identity_reconciliation") or {}).get("equal")):
-        dup_status = "FAIL"
-        notes.append("PlantDoc duplicate decisions are recorded but not verifiably "
-                     "applied to the effective dataset")
-    elif dup_status == "PASS":
-        facts.append(f"PlantDoc effective dataset: {rem.get('effective_records')} "
-                     f"record(s) from {rem.get('source_records')}; "
-                     f"{rem.get('retained_records')} canonical retained, "
-                     f"{rem.get('excluded_records')} removed by explicit decision")
-
-# 4) disease->action mapping review ---------------------------------------- #
-mapping = rows("data/mapping/action_mapping_review.csv")
-pv_classes = {r["class_label"] for r in rows("data/manifests/plantvillage_manifest.csv")}
-pv_mapped = {r["dataset_class"] for r in mapping if r.get("dataset") == "PlantVillage"}
-needs = sum(1 for r in mapping if r.get("review_status") == "needs_review")
-map_status = "PASS"
-if needs:
-    map_status = "INCOMPLETE"
-    notes.append(f"{needs} PlantDoc disease mapping row(s) still needs_review")
-if pv_classes and not pv_mapped:
-    map_status = "INCOMPLETE"
-    notes.append(f"PlantVillage action-mapping coverage 0/{len(pv_classes)}")
-
-# 5) Dataset V1 freeze ------------------------------------------------------ #
-# The freeze readiness assessment is the single reproducible answer to "may we
-# freeze?". It decides nothing and freezes nothing; it enumerates every
-# precondition and names the ones a human still has to settle.
-v1_status = "PASS" if os.path.exists("data/manifests/dataset_v1_freeze.json") else "NOT STARTED"
-if v1_status != "PASS":
-    notes.append("Dataset V1 is not frozen")
+# 5) Dataset V1 freeze readiness -------------------------------------------- #
+# The readiness script checks freshness before we inspect this file.  A raw
+# `dataset_v1_freeze.json` has no authority here: it can be created by anyone
+# and is not an approval or a validated freeze decision.
 ready = load("reports/dataset_v1_freeze_readiness.json")
-if ready is None:
-    notes.append("no freeze-readiness assessment; run "
-                 "scripts/build_dataset_v1_freeze_readiness.py")
-else:
-    facts.append(f"freeze readiness: {ready['satisfied']} of "
-                 f"{ready['satisfied'] + ready['blocked']} precondition(s) satisfied "
-                 f"-> {ready['status']}")
-    for cid in ready["blockers"]:
-        c = next(x for x in ready["conditions"] if x["id"] == cid)
-        notes.append(f"freeze blocker [{c['kind']}] {cid}: {c['detail']}")
+if not isinstance(ready, dict):
+    ready = None
+conditions = {c.get("id"): c for c in (ready or {}).get("conditions", [])
+              if isinstance(c, dict) and c.get("id")}
+blockers = list((ready or {}).get("blockers") or [])
+assessment_current = check_rc in (0, 1) and ready is not None
+hard_status_failure = check_rc not in (0, 1) or freeze_check_rc not in (0, 1)
+strict_ready = (
+    check_rc == 0
+    and assessment_current
+    and ready.get("status") == "ready"
+    and not blockers
+    and bool(conditions)
+    and all(c.get("status") == "satisfied" for c in conditions.values())
+)
 
-scientific = "ACCEPTED" if (
-    data_status == "PASS" and cross_status == "PASS" and dup_status == "PASS"
-    and map_status == "PASS" and v1_status == "PASS") else "BLOCKED"
+def readiness_group(ids, blocked):
+    """Render a dimension from the fresh strict assessment, never raw counts."""
+    if not assessment_current:
+        return "UNVERIFIABLE"
+    states = [conditions.get(cid, {}).get("status") for cid in ids]
+    return "PASS" if states and all(state == "satisfied" for state in states) else blocked
+
+# Derive every displayed dimension from the strict condition set rather than
+# duplicating its predicates in this shell script.
+data_status = readiness_group(("plantdoc_acquired", "plantvillage_materialized"), "PARTIAL")
+cross_status = readiness_group(("cross_dataset_leakage_gate",), "FAIL")
+dup_status = readiness_group(("internal_duplicate_gate",), "INCOMPLETE")
+map_status = readiness_group(
+    ("disease_action_mapping_reviewed", "plantvillage_action_mapping_coverage",
+     "harm_matrix_approved", "relabel_second_scientific_review"),
+    "INCOMPLETE")
+
+technical_freeze_valid = strict_ready and freeze_check_rc == 0
+if technical_freeze_valid:
+    v1_status = "FROZEN"
+elif freeze_check_rc not in (0, 1):
+    v1_status = "UNVERIFIABLE"
+elif strict_ready:
+    v1_status = "READY_FOR_FREEZE"
+elif assessment_current:
+    v1_status = "BLOCKED"
+else:
+    v1_status = "UNVERIFIABLE"
+
+if ready is None:
+    notes.append("no readable freeze-readiness assessment")
+elif check_rc == 3:
+    notes.append("persisted freeze-readiness assessment is stale")
+elif check_rc == 2:
+    notes.append("freeze-readiness assessment is missing required input(s)")
+elif check_rc not in (0, 1):
+    notes.append(f"freeze-readiness checker returned unexpected exit {check_rc}")
+elif not strict_ready:
+    notes.append("current strict freeze-readiness assessment is not_ready")
+elif freeze_check_rc == 1:
+    notes.append("no current validated technical freeze record; readiness alone does not freeze Dataset V1")
+elif freeze_check_rc != 0:
+    notes.append(f"technical freeze validator returned hard-failure exit {freeze_check_rc}")
+
+if ready is not None:
+    facts.append(f"freeze readiness: {ready.get('satisfied', 0)} of "
+                 f"{ready.get('satisfied', 0) + ready.get('blocked', 0)} "
+                 f"precondition(s) satisfied -> {ready.get('status', 'unknown')}")
+    for cid in blockers:
+        c = conditions.get(cid, {})
+        notes.append(f"freeze blocker [{c.get('kind', 'unknown')}] {cid}: "
+                     f"{c.get('detail', 'no detail recorded')}")
+
+# One source of truth: a renamed mapping status, a blank PlantVillage row, a
+# hand-created freeze JSON, or even a ready pre-decision report cannot turn this
+# into ACCEPTED.  The deterministic technical record must validate too.
+scientific = "ACCEPTED" if technical_freeze_valid else "BLOCKED"
 
 print(f"  MECHANICAL / DATA CHECKS ....... {data_status}")
 print(f"  CROSS-DATASET GATE ............. {cross_status}")
 print(f"  INTERNAL DUPLICATE REVIEW ...... {dup_status}")
-print(f"  MAPPING REVIEW ................. {map_status}")
-print(f"  DATASET V1 FREEZE .............. {v1_status}")
+print(f"  SCIENTIFIC REVIEW .............. {map_status}")
+print(f"  DATASET V1 FREEZE READINESS .... {v1_status}")
 print(f"  SCIENTIFIC PHASE-1 STATUS ...... {scientific}")
 if facts:
     print("  applied:")
@@ -229,16 +223,24 @@ if notes:
     print("  reasons:")
     for n in notes:
         print("   -", n)
-open("/tmp/ica_verdict.txt", "w").write(scientific)
+raise SystemExit(0 if scientific == "ACCEPTED" else (3 if hard_status_failure else 2))
 PYEOF
 
-V=$(cat /tmp/ica_verdict.txt 2>/dev/null || echo BLOCKED)
+STATUS_RC=$?
+if [ "$STATUS_RC" -eq 0 ]; then
+  V=ACCEPTED
+elif [ "$STATUS_RC" -eq 2 ]; then
+  V=BLOCKED
+else
+  V=HARD_FAILURE
+fi
 echo
 echo "================ SCIENTIFIC PHASE-1 STATUS: $V ================"
 echo "(The HARD checks above are mechanical only. They do NOT constitute"
 echo " scientific acceptance; see the per-dimension status. Exit: 0=ACCEPTED,"
-echo " 2=BLOCKED, 1=a hard check failed.)"
+echo " 2=BLOCKED, 1=a mechanical hard check failed, 3=status control failure.)"
 case "$V" in
   ACCEPTED) exit 0 ;;
-  *) exit 2 ;;
+  BLOCKED) exit 2 ;;
+  *) exit 3 ;;
 esac

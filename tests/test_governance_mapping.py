@@ -63,6 +63,17 @@ def test_a_fully_valid_table_is_ready():
     assert not (r.missing or r.unexpected or r.duplicated or r.nonterminal or r.invalid)
 
 
+def test_unreadable_scope_policy_blocks_an_otherwise_valid_mapping():
+    """A broken external authority must never be treated as an empty scope."""
+    r = _evaluate(_all_valid(), control_plane_errors=(
+        "could not load evaluation-scope policy: invalid YAML",
+    ))
+    assert not r.satisfied
+    assert r.invalid == (
+        "control-plane: could not load evaluation-scope policy: invalid YAML",
+    )
+
+
 def test_terminal_statuses_are_an_allow_list_not_a_deny_list():
     assert TERMINAL_STATUSES == ("approved", "excluded")
 

@@ -26,6 +26,7 @@ from .approvals import (
     ApprovalVerdict,
     AUDIT_SIGNOFF_SPEC,
     FREEZE_APPROVAL_SPEC,
+    SECOND_REVIEW_SCHEMA_VERSION,
     SECOND_REVIEW_SPEC,
     is_placeholder,
     validate_approval_file,
@@ -36,10 +37,22 @@ from .mapping import (
     TERMINAL_STATUSES,
     evaluate_mapping_readiness,
 )
+from .freeze import (
+    DATASET_FINGERPRINT_SCHEMA,
+    FREEZE_ARTIFACT_PATH,
+    FREEZE_SCHEMA,
+    FreezeVerdict,
+    build_dataset_fingerprint,
+    build_freeze_payload,
+    validate_freeze_file,
+)
 
 __all__ = [
     "APPROVAL_SCHEMA", "ApprovalSpec", "ApprovalVerdict", "AUDIT_SIGNOFF_SPEC",
-    "FREEZE_APPROVAL_SPEC", "SECOND_REVIEW_SPEC", "is_placeholder",
+    "FREEZE_APPROVAL_SPEC", "SECOND_REVIEW_SCHEMA_VERSION", "SECOND_REVIEW_SPEC",
+    "is_placeholder",
     "validate_approval_file", "MAPPING_READINESS_SCHEMA", "MappingReadiness",
-    "TERMINAL_STATUSES", "evaluate_mapping_readiness",
+    "TERMINAL_STATUSES", "evaluate_mapping_readiness", "FREEZE_ARTIFACT_PATH",
+    "FREEZE_SCHEMA", "DATASET_FINGERPRINT_SCHEMA", "FreezeVerdict",
+    "build_dataset_fingerprint", "build_freeze_payload", "validate_freeze_file",
 ]

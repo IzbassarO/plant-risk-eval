@@ -235,6 +235,7 @@ def evaluate_mapping_readiness(
     artifact_digest: str = "",
     allowed_extra_classes: Iterable[str] = (),
     out_of_action_scope_classes: Iterable[str] = (),
+    control_plane_errors: Iterable[str] = (),
 ) -> MappingReadiness:
     """Decide whether ``dataset``'s mapping rows terminally cover every class.
 
@@ -249,6 +250,11 @@ def evaluate_mapping_readiness(
     removed from action evaluation. They still require a terminal decision, but
     that decision must be ``excluded``: approving one into an action would
     re-admit it through the back door.
+
+    ``control_plane_errors`` carries a failure to load an authority the mapping
+    decision depends on (for example the evaluation-scope policy).  A broken
+    policy must block readiness; treating it as an empty policy would silently
+    widen the action-evaluation scope.
     """
     expected = {str(c) for c in expected_classes}
     allowed_extra = {str(c) for c in allowed_extra_classes}
@@ -260,7 +266,8 @@ def evaluate_mapping_readiness(
     unexpected: set[str] = set()
     duplicated: set[str] = set()
     nonterminal: list[str] = []
-    invalid: list[str] = []
+    invalid: list[str] = [f"control-plane: {str(error)}" for error in control_plane_errors
+                          if str(error).strip()]
 
     for i, row in enumerate(rows, start=2):
         if str(row.get("dataset", "")).strip() != dataset:
