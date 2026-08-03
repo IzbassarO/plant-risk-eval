@@ -160,6 +160,7 @@
   "provenance": {
     "approval_schema": "ica26.governance.approval/1",
     "command": "build_dataset_v1_freeze_readiness.py",
+    "commit_binding": "validated against live HEAD at run time",
     "condition_kinds": [
       "machine",
       "human_scientific",
@@ -168,8 +169,7 @@
     ],
     "freezes_nothing": true,
     "mapping_readiness_schema": "ica26.governance.mapping_readiness/1",
-    "pixel_verification": true,
-    "repository_commit": "f82104e8d341b76e3fe96c0f9e00cceb05a9f588"
+    "pixel_verification": true
   },
   "satisfied": 9,
   "schema_version": "1.0",

@@ -134,7 +134,17 @@ def test_the_assessment_records_the_schemas_it_validated_against(readiness):
     assert prov["mapping_readiness_schema"] == "ica26.governance.mapping_readiness/1"
     assert prov["condition_kinds"] == ["machine", "human_scientific",
                                        "governance_approval", "independent_audit"]
-    assert len(prov["repository_commit"]) == 40
+
+
+def test_the_assessment_does_not_embed_the_current_commit(readiness):
+    """Embedding HEAD would make this artifact stale on every commit, including
+    the one that stores it -- a --check that can never pass teaches a reader to
+    ignore it. Approvals are still bound to live HEAD at validation time."""
+    text = json.dumps(readiness)
+    assert "repository_commit" not in readiness["provenance"]
+    assert "live HEAD at run time" in readiness["provenance"]["commit_binding"]
+    import re
+    assert not re.search(r"\b[0-9a-f]{40}\b", text), "a raw commit SHA is embedded"
 
 
 def test_the_assessment_freezes_nothing(repo_root, readiness):

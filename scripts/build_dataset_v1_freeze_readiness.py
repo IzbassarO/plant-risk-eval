@@ -590,7 +590,13 @@ def main(argv=None) -> int:
                     "condition_kinds": list(CONDITION_KINDS),
                     "approval_schema": APPROVAL_SCHEMA,
                     "mapping_readiness_schema": MAPPING_READINESS_SCHEMA,
-                    "repository_commit": head or "<unknown>",
+                    # HEAD is deliberately NOT recorded here. Approvals are
+                    # validated against the LIVE commit at run time, which is
+                    # what "this approval is stale" has to mean; persisting it
+                    # would make this artifact stale on every commit -- including
+                    # the one that stores it -- and a `--check` that can never
+                    # pass teaches a reader to ignore it.
+                    "commit_binding": "validated against live HEAD at run time",
                     "pixel_verification": not args.skip_pixel_verification},
     )
 
