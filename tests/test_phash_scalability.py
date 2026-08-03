@@ -1,15 +1,12 @@
-"""pHash candidate generation: exact, bounded, deterministic (R2B.1 Finding 4).
+"""pHash candidate generation: exact, bounded, deterministic (R2B.1 Finding 1).
 
-The previous near-duplicate search enumerated **every pair inside every band
-bucket** into one shared candidate set before verifying any of them — a
-Theta(m^2) structure in time *and* memory per bucket, built whether or not the
-bucket held a single real pair. Buckets are exactly where duplicates pile up, so
-the worst case arrived precisely when the data was most degenerate.
+The previous near-duplicate search built a BK-tree by sequential insertion in
+every band bucket.  A valid dense-band fixture could make that construction
+quadratic even though it had no near-duplicate output.
 
-The replacement collapses identical hashes first and searches each bucket with a
-BK-tree, so nothing larger than the output is ever materialised. These tests
-prove the two things that matter about that change: **the answers are
-identical**, and the work is no longer quadratic in bucket size.
+The replacement collapses identical hashes and recursively partitions unresolved
+bits.  It stores only output pairs, exposes deterministic operation telemetry,
+and never constructs a false-candidate bucket or insertion-order-sensitive tree.
 
 The differential oracle is `brute_force_duplicates`, which compares every pair.
 If the index and the oracle ever disagree, the index is wrong.
@@ -21,9 +18,9 @@ import random
 import pytest
 
 from ica26.leakage.phash import (
-    DEFAULT_HASH_SIZE,
     HashParameterError,
     brute_force_duplicates,
+    benchmark,
     build_index,
     find_duplicates,
     hamming_int,
@@ -90,6 +87,17 @@ def test_cross_matches_brute_force_on_random_fixtures(seed):
 
 
 @pytest.mark.parametrize("threshold", range(0, 12))
+def test_cross_matches_brute_force_at_every_required_threshold(threshold):
+    rng = random.Random(2000 + threshold)
+    anchors = [rng.getrandbits(64) for _ in range(5)]
+    a = anchors + [_perturb(rng, anchors[0], distance) for distance in range(0, 12)]
+    b = [rng.choice(anchors) for _ in range(4)]
+    b += [_perturb(rng, anchors[0], distance) for distance in range(0, 13)]
+    _assert_matches_oracle(
+        _index(a, "A"), _index(b, "B"), threshold=threshold)
+
+
+@pytest.mark.parametrize("threshold", range(0, 12))
 def test_every_threshold_matches_brute_force(threshold):
     rng = random.Random(99)
     anchor = rng.getrandbits(64)
@@ -103,7 +111,7 @@ def test_every_threshold_matches_brute_force(threshold):
 # --------------------------------------------------------------------------- #
 # Threshold boundaries
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("distance", [1, 2, 3, 4, 5, 6, 7])
+@pytest.mark.parametrize("distance", range(1, 13))
 def test_a_pair_exactly_at_the_threshold_is_found(distance):
     rng = random.Random(distance)
     anchor = rng.getrandbits(64)
@@ -116,7 +124,7 @@ def test_a_pair_exactly_at_the_threshold_is_found(distance):
     assert int(res["near"].iloc[0]["distance"]) == distance
 
 
-@pytest.mark.parametrize("distance", [1, 2, 3, 4, 5, 6, 7])
+@pytest.mark.parametrize("distance", range(1, 13))
 def test_a_pair_one_beyond_the_threshold_is_not_found(distance):
     rng = random.Random(100 + distance)
     anchor = rng.getrandbits(64)
@@ -171,19 +179,32 @@ def test_cross_duplicates_expand_on_both_sides():
 # --------------------------------------------------------------------------- #
 # Adversarial density: the reported worst case
 # --------------------------------------------------------------------------- #
-def test_a_dense_low_entropy_bucket_does_not_become_all_pairs():
-    """Every hash shares the low 9 bits, so they all land in one band bucket.
+def test_dense_band_10k_is_not_an_all_pairs_distance_scan():
+    """The independent R2B.1 adversary, checked by operations rather than time."""
+    rows = benchmark(
+        sizes=(1000, 10_000), threshold=6,
+        fixture="dense-band-near-empty",
+    )
+    one_k, ten_k = rows.to_dict("records")
+    assert one_k["output_pairs"] == ten_k["output_pairs"] == 0
+    all_pairs_10k = 10_000 * 9_999 // 2
+    assert ten_k["exact_distance_evaluations"] < all_pairs_10k // 100
+    assert ten_k["candidate_checks"] == ten_k["exact_distance_evaluations"]
+    assert ten_k["partition_memberships"] < all_pairs_10k // 50
+    # Ten times the input must not cause the hundred-fold operation growth of
+    # an all-pairs construction/evaluation path on this exact fixture.
+    assert (ten_k["exact_distance_evaluations"]
+            < one_k["exact_distance_evaluations"] * 15)
 
-    The pairs are still far apart, so there is almost no output -- which is
-    exactly the case the old candidate set paid Theta(m^2) for anyway.
-    """
-    rng = random.Random(4242)
-    n = 400
-    keys = [(rng.getrandbits(46) << 9) for _ in range(n)]
-    res = _assert_matches_oracle(_index(keys), threshold=6)
-    all_pairs = n * (n - 1) // 2
-    assert res["summary"]["n_near_verifications"] < all_pairs // 4, (
-        "candidate generation is drifting back toward an all-pairs scan")
+    repeat = benchmark(
+        sizes=(1000, 10_000), threshold=6,
+        fixture="dense-band-near-empty",
+    )
+    operation_columns = [
+        "candidate_checks", "exact_distance_evaluations", "partition_tasks",
+        "partition_memberships", "output_pairs",
+    ]
+    assert rows[operation_columns].equals(repeat[operation_columns])
 
 
 def test_a_dense_bucket_of_genuinely_near_hashes_is_still_exact():
@@ -192,6 +213,18 @@ def test_a_dense_bucket_of_genuinely_near_hashes_is_still_exact():
     anchor = rng.getrandbits(64)
     keys = [_perturb(rng, anchor, rng.randint(0, 2)) for _ in range(40)]
     _assert_matches_oracle(_index(keys), threshold=6)
+
+
+def test_dense_true_output_is_not_pruned():
+    n = 32
+    row = benchmark(
+        sizes=(n,), threshold=6, fixture="dense-true-output").iloc[0]
+    assert int(row["output_pairs"]) == n * (n - 1) // 2
+    assert int(row["exact_pairs"]) == 0
+    assert int(row["near_pairs"]) == n * (n - 1) // 2
+    # Quadratic work is unavoidable here because the authenticated output is
+    # itself quadratic; every output pair still receives its exact distance.
+    assert int(row["exact_distance_evaluations"]) == n * (n - 1) // 2
 
 
 def test_many_small_clusters_stay_exact():
@@ -227,6 +260,17 @@ def test_output_does_not_depend_on_input_order():
     reversed_ = find_duplicates(_index(list(reversed(keys))), threshold=6)["near"]
     assert sorted(forward["distance"].tolist()) == sorted(reversed_["distance"].tolist())
     assert len(forward) == len(reversed_)
+
+
+def test_identity_order_is_stable_when_the_same_rows_are_shuffled():
+    rng = random.Random(55)
+    anchor = rng.getrandbits(64)
+    idx = _index([_perturb(rng, anchor, rng.randint(0, 5)) for _ in range(30)])
+    shuffled = idx.sample(frac=1, random_state=99).reset_index(drop=True)
+    expected = find_duplicates(idx, threshold=6)
+    actual = find_duplicates(shuffled, threshold=6)
+    assert expected["exact"].equals(actual["exact"])
+    assert expected["near"].equals(actual["near"])
 
 
 def test_no_self_pairs_and_no_reversed_duplicates():
@@ -271,7 +315,20 @@ def test_a_hash_wider_than_the_declared_size_is_refused():
     idx = _index([1 << 100], width=32)
     with pytest.raises(HashParameterError) as exc:
         find_duplicates(idx, threshold=6)
-    assert "wider than the declared" in str(exc.value)
+    assert "exactly 16 hex digits" in str(exc.value)
+
+
+@pytest.mark.parametrize("bad", ["1", "0x00000000000001", "g" * 16, " " * 16])
+def test_malformed_or_wrong_width_hashes_are_refused(bad):
+    idx = build_index([{"dataset": "A", "path": "bad", "phash": bad}])
+    with pytest.raises(HashParameterError):
+        find_duplicates(idx, threshold=6)
+
+
+@pytest.mark.parametrize("bad", [-1, 1.5, "6", None])
+def test_non_integral_or_negative_thresholds_are_refused(bad):
+    with pytest.raises(HashParameterError):
+        find_duplicates(_index([1, 2]), threshold=bad)
 
 
 def test_a_wider_hash_size_is_searched_correctly():
@@ -294,6 +351,9 @@ def test_summary_reports_distinct_hashes_and_verification_count():
     s = res["summary"]
     assert s["n_a"] == 4 and s["n_distinct_hashes_a"] == 3
     assert s["n_near_verifications"] >= 0
+    assert s["n_candidate_checks"] == s["n_distance_evaluations"]
+    assert s["n_near_verifications"] == s["n_distance_evaluations"]
+    assert s["n_partition_memberships"] >= 0
     assert s["mode"] == "intra" and s["threshold"] == 6
 
 

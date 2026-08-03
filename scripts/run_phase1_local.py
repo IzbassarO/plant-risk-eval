@@ -844,7 +844,7 @@ def step_index(data_dir: Path) -> dict:
 # --------------------------------------------------------------------------- #
 def step_leakage(data_dir: Path, repo_dir: Path, threshold: int = PHASH_THRESHOLD) -> dict:
     import pandas as pd
-    from ica26.leakage.phash import find_duplicates
+    from ica26.leakage.phash import candidate_search_audit_fields, find_duplicates
 
     idx_dir = data_dir / "indexes"
     pv_idx_p = idx_dir / "phash_index_plantvillage.csv"
@@ -938,6 +938,10 @@ def step_leakage(data_dir: Path, repo_dir: Path, threshold: int = PHASH_THRESHOL
         "evaluation_dataset": "PlantDoc",
         "phash_algorithm": res["summary"]["phash_algorithm"],
         "hash_size_bits": res["summary"]["hash_size_bits"], "threshold": threshold,
+        # Persist the candidate-search contract and its scalability telemetry.
+        # For this cross-dataset result side A is PlantVillage (training), and
+        # side B is PlantDoc (evaluation).
+        **candidate_search_audit_fields(res["summary"]),
         "n_training_indexed": int(len(idx_train)), "n_evaluation_indexed": int(len(idx_eval)),
         "skipped_training": skipped_train, "skipped_evaluation": skipped_eval,
         "n_exact_pairs": n_exact, "n_near_pairs": n_near, "n_pending_review": n_near,

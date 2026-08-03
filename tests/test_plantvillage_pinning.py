@@ -68,11 +68,15 @@ def hub(tmp_path):
     pinned_dir, moving_dir = tmp_path / "pinned", tmp_path / "moving"
     calls: list[dict] = []
 
-    content = {
+    content: dict[str, str | bytes] = {
         "splits/color_train.txt": "color/Alpha___healthy/a___1.jpg\n"
                                   "color/Beta___blight/b___2.jpg\n",
         "splits/color_test.txt": "color/Alpha___healthy/c___3.jpg\n",
         "leaf_grouping/leaf-map.json": json.dumps({"1": ["x"], "2": ["y"], "3": ["z"]}),
+        # It need not be a real archive for these metadata-only tests: the
+        # production code verifies its bytes before extraction, and the
+        # materialization tests below only exercise that binding.
+        "data.zip": b"fake-pinned-plantvillage-archive",
     }
     moving_content = {
         # A plausible-looking edit: one extra record and a dropped leaf group.
@@ -83,10 +87,13 @@ def hub(tmp_path):
         "leaf_grouping/leaf-map.json": json.dumps({"1": ["x"]}),
     }
     for d, mapping in ((pinned_dir, content), (moving_dir, moving_content)):
-        for name, text in mapping.items():
+        for name, payload in mapping.items():
             p = d / name
             p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(text, encoding="utf-8")
+            if isinstance(payload, bytes):
+                p.write_bytes(payload)
+            else:
+                p.write_text(payload, encoding="utf-8")
 
     def download(repo, path, repo_type=None, revision=None, **kw):
         calls.append({"repo": repo, "path": path, "revision": revision})
@@ -112,6 +119,10 @@ def hub(tmp_path):
 def patched_digests(hub, monkeypatch):
     """Point the expected-digest table at the fake hub's pinned content."""
     monkeypatch.setattr(PV, "PINNED_COMPONENT_DIGESTS", dict(hub.digests))
+    monkeypatch.setattr(
+        PV, "PINNED_COMPONENT_BYTE_COUNTS",
+        {name: (hub.pinned_dir / name).stat().st_size for name in hub.digests},
+    )
     return hub
 
 
@@ -130,17 +141,87 @@ def test_all_components_are_fetched_from_one_pinned_revision(patched_digests):
     assert len(df) == 3
 
 
+def _verified_component(name: str, *, digest: str | None = None, **over) -> dict:
+    """A minimal, independently checkable component provenance record."""
+    expected = digest or PV.PINNED_COMPONENT_DIGESTS[name]
+    record = {
+        "component": name,
+        "source_repository": PV.HF_REPO,
+        "immutable_revision": PINNED,
+        "source_path": name,
+        "resolved_locator": PV._source_locator(PV.HF_REPO, PINNED, name),
+        "repo": PV.HF_REPO,
+        "revision": PINNED,
+        "requested_path": name,
+        "resolved_url": PV._source_locator(PV.HF_REPO, PINNED, name),
+        "expected_sha256": expected,
+        "observed_sha256": expected,
+        "byte_count": PV.PINNED_COMPONENT_BYTE_COUNTS[name],
+        "digest_verified": True,
+        "verification_status": "verified",
+    }
+    record.update(over)
+    return record
+
+
+def test_complete_component_provenance_is_accepted():
+    components = [_verified_component(name) for name in PV.PINNED_COMPONENT_DIGESTS]
+    assert PV.validate_component_provenance(components) == []
+
+
+@pytest.mark.parametrize("mutate,expected", [
+    (lambda c: c.pop("data.zip"), "missing required pinned component"),
+    (lambda c: c.__setitem__("data.zip", _verified_component("data.zip", digest="0" * 64)),
+     "does not record its pinned expected SHA-256"),
+    (lambda c: c["data.zip"].__setitem__("observed_sha256", "0" * 64),
+     "observed SHA-256 does not match"),
+    (lambda c: c["data.zip"].__setitem__("digest_verified", False),
+     "not marked digest_verified=true"),
+    (lambda c: c["data.zip"].__setitem__("immutable_revision", "0" * 40),
+     "not pinned"),
+])
+def test_component_provenance_rejects_each_unverifiable_archive_binding(mutate, expected):
+    by_name = {name: _verified_component(name) for name in PV.PINNED_COMPONENT_DIGESTS}
+    mutate(by_name)
+    problems = PV.validate_component_provenance(list(by_name.values()))
+    assert any(expected in problem for problem in problems), problems
+
+
+def test_materialized_images_require_an_archive_provenance_record(patched_digests, tmp_path):
+    with pytest.raises(PV.SourcePinError, match="pixel materialization requires"):
+        PV.build_manifest_from_repo(
+            config="color", images_root=tmp_path / "images", downloader=patched_digests)
+
+
+def test_materialized_images_accept_only_a_verified_pinned_archive(patched_digests, tmp_path):
+    hub = patched_digests
+    _, archive_component = PV.fetch_pinned("data.zip", downloader=hub)
+    _, meta = PV.build_manifest_from_repo(
+        config="color", images_root=tmp_path / "images", downloader=hub,
+        archive_component=archive_component)
+    assert {component["component"] for component in meta["components"]} == {
+        "data.zip", "splits/color_train.txt", "splits/color_test.txt",
+        "leaf_grouping/leaf-map.json",
+    }
+
+
 def test_provenance_records_url_and_both_digests(patched_digests):
     hub = patched_digests
     _, meta = PV.build_manifest_from_repo(config="color", downloader=hub)
     for c in meta["components"]:
         assert c["repo"] == PV.HF_REPO
         assert c["revision"] == PINNED
+        assert c["source_repository"] == PV.HF_REPO
+        assert c["immutable_revision"] == PINNED
+        assert c["source_path"] == c["component"]
+        assert c["resolved_locator"] == PV._source_locator(PV.HF_REPO, PINNED, c["component"])
         assert c["requested_path"] == c["component"]
         assert PINNED in c["resolved_url"] and c["component"] in c["resolved_url"]
+        assert c["byte_count"] > 0
         assert len(c["observed_sha256"]) == 64
         assert c["expected_sha256"] == c["observed_sha256"]
         assert c["digest_verified"] is True
+        assert c["verification_status"] == "verified"
 
 
 def test_moving_metadata_cannot_enter_a_pinned_build(patched_digests):
@@ -179,6 +260,10 @@ def test_an_unfetchable_component_does_not_fall_back(hub):
 def test_mixed_revisions_are_refused(hub, monkeypatch):
     """One component from another commit must fail the build, not be averaged in."""
     monkeypatch.setattr(PV, "PINNED_COMPONENT_DIGESTS", dict(hub.digests))
+    monkeypatch.setattr(
+        PV, "PINNED_COMPONENT_BYTE_COUNTS",
+        {name: (hub.pinned_dir / name).stat().st_size for name in hub.digests},
+    )
     original = PV.fetch_pinned
     seen = {"n": 0}
 
@@ -187,7 +272,7 @@ def test_mixed_revisions_are_refused(hub, monkeypatch):
         if seen["n"] == 3:                       # the leaf map
             local, prov = original(path, downloader=hub, **{k: v for k, v in kw.items()
                                                             if k != "downloader"})
-            prov["revision"] = "0" * 40          # provenance says another commit
+            prov["immutable_revision"] = "0" * 40  # provenance says another commit
             return local, prov
         return original(path, **kw)
 
@@ -240,6 +325,55 @@ def test_the_committed_snapshot_records_the_pinned_revision(repo_root):
     snap = json.loads(
         (repo_root / "data/manifests/plantvillage_source_snapshot.json").read_text())
     assert snap["revision"] == PINNED
+    assert snap["revision_is_pinned"] is True
+    assert snap["hf_repo"] == PV.HF_REPO
+    assert snap["schema_version"] == PV.PROVENANCE_SCHEMA_VERSION
+    assert snap["immutable_revision"] == PINNED
+    assert snap["all_components_pinned"] is True
+    assert snap["all_component_digests_verified"] is True
+    assert snap["pixels_materialized"] is True
+    assert snap["generated_from_pinned_sources"] is True
+    assert set(component["component"] for component in snap["source_components"]) == set(
+        PV.PINNED_COMPONENT_DIGESTS)
+    assert PV.validate_component_provenance(snap["source_components"]) == []
+    assert PV.validate_persisted_provenance(
+        snap, manifest_path=repo_root / "data/manifests/plantvillage_manifest.csv") == []
+
+
+def _persisted_provenance(manifest_digest: str) -> dict:
+    components = [_verified_component(name) for name in PV.PINNED_COMPONENT_DIGESTS]
+    return {
+        "schema_version": PV.PROVENANCE_SCHEMA_VERSION,
+        "dataset": "PlantVillage",
+        "immutable_revision": PINNED,
+        "source_components": components,
+        "all_components_pinned": True,
+        "all_component_digests_verified": True,
+        "pixels_materialized": True,
+        "manifest_digest": manifest_digest,
+        "generated_from_pinned_sources": True,
+    }
+
+
+@pytest.mark.parametrize("mutate, expected", [
+    (lambda p: p.pop("source_components"), "omits required field"),
+    (lambda p: p["source_components"].pop(), "missing required pinned component"),
+    (lambda p: p.__setitem__("immutable_revision", "main"), "immutable_revision"),
+    (lambda p: p.__setitem__("all_components_pinned", False), "all_components_pinned"),
+    (lambda p: p.__setitem__("all_component_digests_verified", False),
+     "all_component_digests_verified"),
+    (lambda p: p.__setitem__("pixels_materialized", False), "pixels_materialized"),
+    (lambda p: p.__setitem__("manifest_digest", "0" * 64), "manifest_digest is stale"),
+    (lambda p: p.__setitem__("generated_from_pinned_sources", False),
+     "generated_from_pinned_sources"),
+])
+def test_persisted_provenance_is_fail_closed_per_required_field(tmp_path, mutate, expected):
+    manifest = tmp_path / "plantvillage_manifest.csv"
+    manifest.write_text("manifest bytes\n", encoding="utf-8")
+    provenance = _persisted_provenance(PV._sha256_of(manifest))
+    mutate(provenance)
+    problems = PV.validate_persisted_provenance(provenance, manifest_path=manifest)
+    assert any(expected in problem for problem in problems), problems
 
 
 def test_the_scripts_pin_agrees_with_the_module_pin(repo_root):

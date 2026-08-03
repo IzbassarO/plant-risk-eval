@@ -64,6 +64,184 @@ PINNED_COMPONENT_DIGESTS: dict[str, str] = {
         "fba30c6a7965e49be94b47a62f8aff6cfb1c35c27f475f22092b56db41745e84",
 }
 
+#: Machine-readable persisted-provenance contract.  ``components`` used by
+#: earlier snapshots described a useful fetch log, but did not itself establish
+#: that a materialized manifest came from every pinned component.  A Dataset V1
+#: artifact now records the complete source chain under this versioned schema.
+PROVENANCE_SCHEMA_VERSION = "ica26.plantvillage.acquisition-provenance/1"
+
+#: Byte counts recorded from the immutable source revision.  They are an
+#: additional provenance cross-check, not a replacement for SHA-256.  The
+#: archive count was measured from the retained, digest-verified local archive;
+#: the small metadata files were independently fetched from their immutable
+#: resolve URLs when this record was migrated.
+PINNED_COMPONENT_BYTE_COUNTS: dict[str, int] = {
+    "data.zip": 2_184_723_441,
+    "splits/color_train.txt": 4_151_500,
+    "splits/color_test.txt": 1_018_650,
+    "leaf_grouping/leaf-map.json": 2_429_879,
+}
+
+PERSISTED_PROVENANCE_FIELDS = (
+    "schema_version",
+    "dataset",
+    "immutable_revision",
+    "source_components",
+    "all_components_pinned",
+    "all_component_digests_verified",
+    "pixels_materialized",
+    "manifest_digest",
+    "generated_from_pinned_sources",
+)
+
+
+def _is_sha256(value: object) -> bool:
+    value = str(value or "").strip().lower()
+    return len(value) == 64 and all(ch in "0123456789abcdef" for ch in value)
+
+
+def _source_locator(repo: str, revision: str, path: str) -> str:
+    return f"https://huggingface.co/datasets/{repo}/resolve/{revision}/{path}"
+
+
+def _component_is_pinned(component: object, *, name: str, revision: str) -> bool:
+    if not isinstance(component, dict):
+        return False
+    return (
+        component.get("component") == name
+        and component.get("source_repository") == HF_REPO
+        and component.get("immutable_revision") == revision
+        and component.get("source_path") == name
+    )
+
+
+def validate_component_provenance(
+    components: object,
+    *,
+    revision: str = PLANTVILLAGE_REVISION,
+    required_components: Optional[set[str]] = None,
+) -> list[str]:
+    """Validate the recorded immutable-source chain for a materialized build.
+
+    A configured revision is not provenance.  For a future auditor to establish
+    what actually entered a manifest, every remotely read component must name
+    the frozen repository/revision and reproduce the digest fixed in this module.
+    The return value is deliberately a list of concrete defects rather than a
+    boolean so callers can report a fail-closed reason without guessing.
+
+    ``required_components`` is useful for structural (metadata-only) callers;
+    a pixel-materialized Dataset V1 build uses the complete pinned component
+    set: archive, train split, test split, and leaf map.
+    """
+    required = set(required_components or PINNED_COMPONENT_DIGESTS)
+    problems: list[str] = []
+    if not isinstance(components, list):
+        return ["source component provenance is not a list"]
+
+    by_name: dict[str, dict] = {}
+    for i, component in enumerate(components):
+        if not isinstance(component, dict):
+            problems.append(f"component entry {i} is not an object")
+            continue
+        name = str(component.get("component") or "").strip()
+        if not name:
+            problems.append(f"component entry {i} has no component name")
+            continue
+        if name in by_name:
+            problems.append(f"component '{name}' is recorded more than once")
+            continue
+        by_name[name] = component
+
+    missing = sorted(required - set(by_name))
+    if missing:
+        problems.append(f"missing required pinned component(s): {missing}")
+    unexpected = sorted(set(by_name) - set(PINNED_COMPONENT_DIGESTS))
+    if unexpected:
+        problems.append(f"unrecognised pinned component(s): {unexpected}")
+
+    for name in sorted(required & set(by_name)):
+        component = by_name[name]
+        expected = PINNED_COMPONENT_DIGESTS.get(name)
+        if expected is None:
+            problems.append(f"component '{name}' has no pinned expected SHA-256")
+            continue
+        if component.get("source_repository") != HF_REPO:
+            problems.append(
+                f"component '{name}' names source_repository "
+                f"{component.get('source_repository')!r}, not {HF_REPO!r}")
+        if component.get("immutable_revision") != revision:
+            problems.append(
+                f"component '{name}' names immutable_revision "
+                f"{component.get('immutable_revision')!r}, "
+                f"not pinned {revision!r}")
+        if component.get("source_path") != name:
+            problems.append(f"component '{name}' has no matching repository-relative source_path")
+        locator = str(component.get("resolved_locator") or "")
+        if locator != _source_locator(HF_REPO, revision, name):
+            problems.append(f"component '{name}' has no immutable resolved_locator")
+        if component.get("expected_sha256") != expected:
+            problems.append(f"component '{name}' does not record its pinned expected SHA-256")
+        if component.get("observed_sha256") != expected:
+            problems.append(f"component '{name}' observed SHA-256 does not match the pinned bytes")
+        if component.get("digest_verified") is not True:
+            problems.append(f"component '{name}' is not marked digest_verified=true")
+        if component.get("verification_status") != "verified":
+            problems.append(f"component '{name}' does not record verification_status='verified'")
+        expected_bytes = PINNED_COMPONENT_BYTE_COUNTS.get(name)
+        if component.get("byte_count") != expected_bytes:
+            problems.append(
+                f"component '{name}' byte_count {component.get('byte_count')!r} "
+                f"does not match pinned byte count {expected_bytes!r}")
+    return problems
+
+
+def validate_persisted_provenance(
+    provenance: object,
+    *,
+    manifest_path: Optional[str | Path] = None,
+) -> list[str]:
+    """Validate a persisted Dataset V1 PlantVillage provenance artifact.
+
+    This validates the machine-readable artifact itself, not merely a runtime
+    configuration flag.  A true ``pixels_materialized`` boolean alone is never
+    sufficient: the exact manifest bytes must reconcile to a complete,
+    digest-verified immutable source chain.
+    """
+    if not isinstance(provenance, dict):
+        return ["persisted PlantVillage provenance is not a JSON object"]
+
+    problems: list[str] = []
+    missing = [key for key in PERSISTED_PROVENANCE_FIELDS if key not in provenance]
+    if missing:
+        problems.append(f"persisted provenance omits required field(s): {missing}")
+    if provenance.get("schema_version") != PROVENANCE_SCHEMA_VERSION:
+        problems.append("persisted provenance has an unrecognised schema_version")
+    if provenance.get("dataset") != "PlantVillage":
+        problems.append("persisted provenance does not identify dataset='PlantVillage'")
+    if provenance.get("immutable_revision") != PLANTVILLAGE_REVISION:
+        problems.append("persisted provenance immutable_revision is not the PlantVillage pin")
+    if provenance.get("all_components_pinned") is not True:
+        problems.append("persisted provenance all_components_pinned is not true")
+    if provenance.get("all_component_digests_verified") is not True:
+        problems.append("persisted provenance all_component_digests_verified is not true")
+    if provenance.get("pixels_materialized") is not True:
+        problems.append("persisted provenance pixels_materialized is not true")
+    if provenance.get("generated_from_pinned_sources") is not True:
+        problems.append("persisted provenance generated_from_pinned_sources is not true")
+
+    manifest_digest = provenance.get("manifest_digest")
+    if not _is_sha256(manifest_digest):
+        problems.append("persisted provenance manifest_digest is absent or malformed")
+    elif manifest_path is not None:
+        path = Path(manifest_path)
+        if not path.is_file():
+            problems.append("PlantVillage manifest required by provenance is absent")
+        elif M.sha256_of_file(path) != str(manifest_digest).lower():
+            problems.append("persisted provenance manifest_digest is stale")
+
+    problems.extend(validate_component_provenance(provenance.get("source_components")))
+    return problems
+
 
 class DatasetsNotInstalled(RuntimeError):
     pass
@@ -141,15 +319,25 @@ def fetch_pinned(
             f"{expected}. The response did not come from the pinned revision, or the "
             "pinned content changed; either way the build stops.")
 
+    verified = bool(expected) and observed == expected
+    locator = _source_locator(repo, rev, path)
     return local_path, {
+        # Versioned persisted-provenance keys.
         "component": path,
+        "source_repository": repo,
+        "immutable_revision": rev,
+        "source_path": path,
+        "resolved_locator": locator,
+        "expected_sha256": expected or "",
+        "observed_sha256": observed,
+        "byte_count": int(local_path.stat().st_size),
+        "digest_verified": verified,
+        "verification_status": "verified" if verified else "unverified",
+        # Compatibility aliases retained for existing non-freeze reports.
         "repo": repo,
         "revision": rev,
         "requested_path": path,
-        "resolved_url": f"https://huggingface.co/datasets/{repo}/resolve/{rev}/{path}",
-        "expected_sha256": expected or "",
-        "observed_sha256": observed,
-        "digest_verified": bool(expected) and observed == expected,
+        "resolved_url": locator,
     }
 
 
@@ -201,15 +389,35 @@ hf_revision = hf_head_revision
 def build_source_snapshot(config: str, revision: Optional[str], execution_mode: str,
                           disk_bytes: int = 0, seconds: float = 0.0,
                           components: Optional[list] = None,
-                          observed_head: Optional[str] = None) -> dict:
+                          observed_head: Optional[str] = None,
+                          pixels_materialized: bool = False,
+                          manifest_digest: Optional[str] = None) -> dict:
     """Provenance for one acquisition.
 
     ``revision`` is the revision actually READ FROM, and it is pinned.
     ``observed_head`` is where the repo's branch happened to point at the time;
     it is recorded so drift is visible, and is never what was acquired.
     """
+    source_components = sorted((components or []), key=lambda c: str(c.get("component", ""))) \
+        if isinstance(components, list) else []
+    component_problems = validate_component_provenance(
+        source_components, revision=revision or PLANTVILLAGE_REVISION)
+    fully_pinned = bool(source_components) and not component_problems
     snap = {
+        # Persisted, freeze-relevant provenance.  These fields are consumed by
+        # ``validate_persisted_provenance``; do not infer them from a human-
+        # readable note or a materialized-pixels boolean.
+        "schema_version": PROVENANCE_SCHEMA_VERSION,
         "dataset": "PlantVillage",
+        "immutable_revision": revision or "unknown",
+        "source_components": source_components,
+        "all_components_pinned": fully_pinned,
+        "all_component_digests_verified": fully_pinned,
+        "pixels_materialized": bool(pixels_materialized),
+        "manifest_digest": manifest_digest or "",
+        "generated_from_pinned_sources": bool(pixels_materialized) and fully_pinned
+                                         and _is_sha256(manifest_digest),
+        # Compatibility fields retained for ordinary acquisition diagnostics.
         "hf_repo": HF_REPO,
         "config": config,
         "revision": revision or "unknown",
@@ -226,7 +434,7 @@ def build_source_snapshot(config: str, revision: Optional[str], execution_mode: 
                         "branch.",
     }
     if components is not None:
-        snap["components"] = components
+        snap["components"] = source_components
     if observed_head is not None:
         snap["observed_repo_head"] = observed_head
         snap["head_matches_pinned_revision"] = (observed_head == revision)
@@ -317,6 +525,7 @@ def build_manifest_from_repo(
     acquired_at_utc: Optional[str] = None,
     revision: str = PLANTVILLAGE_REVISION,
     downloader=None,
+    archive_component: Optional[dict] = None,
 ) -> tuple[pd.DataFrame, dict]:
     """Build a manifest from the AUTHORITATIVE repo files (splits/*.txt +
     leaf-map.json), since `datasets` 4.0+ no longer runs the repo's loading
@@ -328,6 +537,12 @@ def build_manifest_from_repo(
     These files decide which records exist, which split each lands in, and which
     are leaf-grouped -- reading them from a moving branch would let the dataset's
     membership change under a pinned build without anything noticing.
+
+    When pixel fields are materialized, ``archive_component`` is mandatory.  It
+    is the digest-verified provenance record returned by :func:`fetch_pinned`
+    for ``data.zip``.  Accepting an arbitrary image directory while recording a
+    pinned metadata revision would make the source chain look reproducible when
+    it was not, so that state is refused rather than described optimistically.
     """
     import json
 
@@ -345,6 +560,18 @@ def build_manifest_from_repo(
     leafkeys = {str(k).strip().lower() for k in lmap}
     stamp = acquired_at_utc or M.utc_now_iso()
     images_root = Path(images_root) if images_root else None
+    if images_root is not None:
+        if not isinstance(archive_component, dict):
+            raise SourcePinError(
+                "pixel materialization requires the digest-verified 'data.zip' "
+                "provenance record; refusing an unbound images_root")
+        archive_problems = validate_component_provenance(
+            [archive_component], revision=rev, required_components={"data.zip"})
+        if archive_problems:
+            raise SourcePinError(
+                "pixel archive provenance is not a verified frozen component: "
+                + "; ".join(archive_problems))
+        components.append(dict(archive_component))
 
     rows = []
     for split, paths in [("train", tr), ("test", te)]:
@@ -370,11 +597,21 @@ def build_manifest_from_repo(
     df = pd.DataFrame(rows, columns=cols).sort_values(["split", "class_label", "relpath"]).reset_index(drop=True)
 
     # A build must not mix pinned components with anything else.
-    revisions = {c["revision"] for c in components}
+    revisions = {c.get("immutable_revision") for c in components}
     if revisions != {rev}:
         raise SourcePinError(
             f"components were fetched from mixed revisions {sorted(revisions)}; a "
             f"pinned build requires exactly one ({rev})")
+
+    required = set(PINNED_COMPONENT_DIGESTS) if images_root is not None else {
+        f"splits/{config}_train.txt", f"splits/{config}_test.txt", LEAF_MAP_PATH,
+    }
+    provenance_problems = validate_component_provenance(
+        components, revision=rev, required_components=required)
+    if provenance_problems:
+        raise SourcePinError(
+            "component provenance is not a complete verified pinned source chain: "
+            + "; ".join(provenance_problems))
 
     return df, {"leaf_map_entries": len(lmap), "revision": rev,
                 "components": sorted(components, key=lambda c: c["component"])}
@@ -387,7 +624,7 @@ def repo_summary(df: pd.DataFrame, config: str, leaf_map_entries: int, snapshot:
     n_with = int(df["has_leaf_id"].sum()) if n else 0
     n_without = n - n_with
     pixels = bool(df["sha256"].astype(str).str.len().gt(0).any()) if n else False
-    return {
+    summary = {
         "dataset": "PlantVillage", "config": config, "hf_repo": HF_REPO,
         "n_images": n, "n_classes_total": int(df["class_label"].nunique()) if n else 0,
         "n_healthy_classes": int(sum("healthy" in c.lower() for c in df["class_label"].unique())) if n else 0,
@@ -405,6 +642,12 @@ def repo_summary(df: pd.DataFrame, config: str, leaf_map_entries: int, snapshot:
         "license": PLANTVILLAGE_SOURCE.license,
         "source_snapshot": snapshot,
     }
+    # Persist the freeze-relevant source chain at the summary's top level too.
+    # The standalone snapshot and summary must make the same claim, allowing an
+    # auditor to detect a summary that was copied from a different acquisition.
+    for field in PERSISTED_PROVENANCE_FIELDS:
+        summary[field] = snapshot.get(field)
+    return summary
 
 
 def acquire_from_repo(
@@ -414,18 +657,25 @@ def acquire_from_repo(
     summary_json: str | Path = "data/manifests/plantvillage_summary.json",
     snapshot_json: str | Path = "data/manifests/plantvillage_source_snapshot.json",
     revision: str = PLANTVILLAGE_REVISION,
+    archive_component: Optional[dict] = None,
+    acquired_at_utc: Optional[str] = None,
 ) -> dict:
     import time
     t0 = time.perf_counter()
     df, meta = build_manifest_from_repo(config=config, images_root=images_root,
-                                        revision=revision)
+                                        revision=revision,
+                                        archive_component=archive_component,
+                                        acquired_at_utc=acquired_at_utc)
     secs = time.perf_counter() - t0
     M.write_manifest(df, manifest_csv)
     pixels = bool(df["sha256"].astype(str).str.len().gt(0).any()) if len(df) else False
     mode = "repo-files+pixels" if pixels else "repo-files-structural"
-    snapshot = build_source_snapshot(config, meta["revision"], mode, seconds=secs,
-                                     components=meta.get("components"),
-                                     observed_head=hf_head_revision())
+    components = meta.get("components") or []
+    manifest_digest = M.sha256_of_file(manifest_csv)
+    snapshot = build_source_snapshot(
+        config, meta["revision"], mode, seconds=secs, components=components,
+        observed_head=hf_head_revision(), pixels_materialized=pixels,
+        manifest_digest=manifest_digest)
     summary = repo_summary(df, config, meta["leaf_map_entries"], snapshot)
     summary["execution"] = {"mode": mode, "n_images": int(len(df)), "seconds": round(secs, 1)}
     M.write_summary(summary, summary_json)
@@ -481,9 +731,14 @@ def acquire(
     summary = summarize(df, config)
     disk = int(pd.to_numeric(df["n_bytes"], errors="coerce").fillna(0).sum()) if len(df) else 0
     mode = "streaming-sample" if streaming else "full"
+    pixels = bool(df["sha256"].astype(str).str.len().eq(64).any()) if len(df) else False
     snapshot = build_source_snapshot(config, rev, mode, disk_bytes=disk, seconds=secs,
-                                     observed_head=hf_head_revision())
+                                     observed_head=hf_head_revision(),
+                                     pixels_materialized=pixels,
+                                     manifest_digest=M.sha256_of_file(manifest_csv))
     summary["source_snapshot"] = snapshot
+    for field in PERSISTED_PROVENANCE_FIELDS:
+        summary[field] = snapshot.get(field)
     summary["execution"] = {"mode": mode, "limit": limit, "n_images": int(len(df)),
                             "seconds": round(secs, 1)}
     M.write_summary(summary, summary_json)
