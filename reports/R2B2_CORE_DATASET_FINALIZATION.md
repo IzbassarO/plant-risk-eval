@@ -433,14 +433,17 @@ remains the authority for the technical freeze workflow.
 | `python scripts/verify_core_and_acquired_leakage.py --out … --persist` | 0 | both populations, 0 unresolved |
 | `python scripts/build_plantdoc_duplicate_packet.py --no-contact-sheets` | 0 | 5 tracked artifacts |
 | `python scripts/build_plantdoc_duplicate_packet.py --check` | 0 | check OK with no PNGs present |
+| `python scripts/build_plantvillage_reconstruction.py` | 0 | 54,305 records re-derived |
+| `python scripts/build_plantvillage_reconstruction.py --check` | 0 | matches a fresh reconstruction |
 | `python scripts/build_dataset_v1_freeze_readiness.py` | 1 | not ready (6 human/audit blockers) |
-| `python scripts/build_dataset_v1_freeze_readiness.py --check` | 0 | matches current inputs |
+| `python scripts/build_dataset_v1_freeze_readiness.py --check` | **1** | current, but not ready — exit 1 is "not ready", exit 3 would be stale |
 | `python scripts/build_core_and_risk_readiness.py` | 0 | Core ready_for_independent_audit |
 | `python scripts/build_core_and_risk_readiness.py --check` | 0 | matches current inputs |
 | `python -m pytest` | 0 | **1,106 passed** |
 | `bash -n scripts/run_phase1_checks.sh` | 0 | shell syntax OK |
 | `PYTHON=… bash scripts/run_phase1_checks.sh` | **2** | 11/11 HARD checks pass; scientifically BLOCKED |
-| fresh clone → venv → `pytest` | 0 | see below |
+| fresh clone → venv → `pip install -e ".[dev]"` → `pytest` | 0 | 1,105 passed, 1 skipped |
+| fresh clone → `run_phase1_checks.sh` | **2** | 11/11 HARD pass; reaches governance status |
 
 `run_phase1_checks.sh` exit **2** is "scientifically BLOCKED", not a hard failure
 (which would be exit 1). All eleven mechanical HARD checks pass and the run
@@ -448,14 +451,38 @@ reaches the governance status stage, which is the required outcome.
 
 ### Test totals
 
-| | Collected | Passed | Failed |
+| Environment | Passed | Skipped | Failed |
 | --- | ---: | ---: | ---: |
-| Baseline at `d4cbb89` (isolated checkout) | 957 | 955 | **2** |
-| After R2B.2 | **1,106** | **1,106** | **0** |
+| Baseline at `d4cbb89` (isolated checkout) | 955 | 0 | **2** |
+| After R2B.2 (worktree, with optional `hf` extra) | **1,106** | 0 | **0** |
+| After R2B.2 (**fresh clone, core deps only**) | **1,105** | 1 | **0** |
 
 The two baseline failures were exactly the fresh-clone packet defects
 (`test_packet_manifest_hashes_are_correct`,
 `test_packet_generation_is_deterministic`).
+
+### Fresh-clone reproduction
+
+`git clone` of this branch into a clean directory, a new virtualenv, and
+`pip install -e ".[dev]"` — the **declared core dependencies only**, with
+`huggingface_hub` absent. Raw pixels were placed per `DATA_ACCESS.md`; they are
+untracked by policy and are not part of the dependency set.
+
+| Check | Result |
+| --- | --- |
+| `pytest` | **1,105 passed, 1 skipped, 0 failed** |
+| The single skip | the live pinned-source reconstruction test, which requires the optional `hf` extra and skips by design |
+| Contact-sheet PNGs present | **none** — and the packet still validates |
+| `run_phase1_checks.sh` | all 11 HARD checks pass; reaches governance status; **exit 2** (scientifically BLOCKED, not a hard failure) |
+| Workstation-only files required | none |
+
+The first fresh-clone attempt failed two tests, which caught a real design flaw:
+the Core readiness condition re-ran PlantVillage reconstruction in-process, so a
+clone without the optional extra produced a different readiness artifact from the
+same commit and `--check` could never pass. Reconstruction is now persisted as
+digest-bound evidence and validated like every other artifact. The failure is
+recorded here rather than quietly fixed, because it is the reason the design
+changed.
 
 ---
 
