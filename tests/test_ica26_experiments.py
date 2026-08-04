@@ -385,6 +385,88 @@ def test_class_index_is_sorted_and_deterministic():
 
 
 # --------------------------------------------------------------------------- #
+# Transient read resilience
+#
+# A sustained multi-worker read of a macOS ~/Documents subtree returned EACCES
+# once, for a present and readable file, and killed a training run at epoch 6.
+# The retry must absorb that -- and must not absorb anything real.
+# --------------------------------------------------------------------------- #
+def _one_row_dataset(tmp_path, monkeypatch=None):
+    from PIL import Image as PILImage
+
+    root = tmp_path / "root"
+    (root / "train" / "a").mkdir(parents=True)
+    PILImage.new("RGB", (8, 8), (10, 20, 30)).save(root / "train" / "a" / "x.png")
+    frame = pd.DataFrame([{
+        "relpath": "train/a/x.png", "split": "train",
+        "class_label": "a", "sha256": "0" * 64,
+    }])
+    return dmod.ManifestImageDataset(frame, root, {"a": 0}), root
+
+
+def test_a_transient_permission_error_is_retried_and_succeeds(tmp_path, monkeypatch):
+    ds, _ = _one_row_dataset(tmp_path)
+    real_open = dmod.Image.open
+    calls = {"n": 0}
+
+    def flaky(path, *a, **kw):
+        calls["n"] += 1
+        if calls["n"] < 3:                       # fail twice, then succeed
+            raise PermissionError(13, "Permission denied")
+        return real_open(path, *a, **kw)
+
+    monkeypatch.setattr(dmod.Image, "open", flaky)
+    monkeypatch.setattr(dmod, "PIXEL_READ_BACKOFF_SECONDS", 0.0)
+    img, label = ds[0]
+    assert label == 0
+    assert calls["n"] == 3
+
+
+def test_a_persistent_permission_error_still_fails(tmp_path, monkeypatch):
+    ds, _ = _one_row_dataset(tmp_path)
+
+    def always_denied(path, *a, **kw):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(dmod.Image, "open", always_denied)
+    monkeypatch.setattr(dmod, "PIXEL_READ_BACKOFF_SECONDS", 0.0)
+    with pytest.raises(dmod.MissingPixelsError, match="after 5 attempts"):
+        ds[0]
+
+
+def test_a_missing_file_fails_immediately_without_retrying(tmp_path, monkeypatch):
+    ds, root = _one_row_dataset(tmp_path)
+    (root / "train" / "a" / "x.png").unlink()
+    calls = {"n": 0}
+    real_open = dmod.Image.open
+
+    def counting(path, *a, **kw):
+        calls["n"] += 1
+        return real_open(path, *a, **kw)
+
+    monkeypatch.setattr(dmod.Image, "open", counting)
+    with pytest.raises(dmod.MissingPixelsError, match="no file at"):
+        ds[0]
+    assert calls["n"] == 1, "a genuinely absent file must not be retried"
+
+
+def test_a_corrupt_image_fails_immediately_without_retrying(tmp_path, monkeypatch):
+    ds, root = _one_row_dataset(tmp_path)
+    (root / "train" / "a" / "x.png").write_bytes(b"not an image at all")
+    calls = {"n": 0}
+    real_open = dmod.Image.open
+
+    def counting(path, *a, **kw):
+        calls["n"] += 1
+        return real_open(path, *a, **kw)
+
+    monkeypatch.setattr(dmod.Image, "open", counting)
+    with pytest.raises(dmod.MissingPixelsError, match="not a decodable image"):
+        ds[0]
+    assert calls["n"] == 1, "a corrupt image must not be retried"
+
+
+# --------------------------------------------------------------------------- #
 # Metrics
 # --------------------------------------------------------------------------- #
 def test_zero_support_class_is_reported_not_averaged_in():

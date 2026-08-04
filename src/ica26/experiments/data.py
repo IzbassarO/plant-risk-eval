@@ -13,13 +13,14 @@ from __future__ import annotations
 
 import hashlib
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Sequence
 
 import numpy as np
 import pandas as pd
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from torch.utils.data import Dataset
 
 PLANTVILLAGE_ROOT = "data/raw/plantvillage/extracted"
@@ -30,6 +31,10 @@ PLANTDOC_CORE_MANIFEST = "data/manifests/plantdoc_core_effective_manifest.csv"
 
 # A class with fewer groups than this contributes nothing to validation.
 MIN_GROUPS_FOR_VALIDATION = 3
+
+# Bounded retry for transient OS-level read failures. See ManifestImageDataset._read.
+PIXEL_READ_ATTEMPTS = 5
+PIXEL_READ_BACKOFF_SECONDS = 0.25
 
 
 class MissingPixelsError(RuntimeError):
@@ -196,13 +201,47 @@ class ManifestImageDataset(Dataset):
     def __len__(self) -> int:
         return len(self.frame)
 
+    def _read(self, path: str, index: int) -> Image.Image:
+        """Decode one image, retrying only errors that can plausibly be transient.
+
+        A sustained multi-worker read of a macOS ``~/Documents`` subtree
+        occasionally returns EACCES for a file that is present, owned by the
+        user, and readable a moment later; one such failure killed a training run
+        at epoch 6 after roughly 218,000 successful opens. Retrying briefly
+        absorbs that without hiding anything real:
+
+        - a genuinely absent file raises immediately, no retry;
+        - a corrupt or unidentifiable image raises immediately, no retry;
+        - a transient OS error that never clears still raises, with the attempt
+          count and the underlying error in the message.
+
+        Image content is pinned by the manifest digests bound in the experiment
+        lock, so a retry cannot substitute different pixels for the right ones.
+        """
+        last: Exception | None = None
+        for attempt in range(1, PIXEL_READ_ATTEMPTS + 1):
+            try:
+                with Image.open(path) as im:
+                    return im.convert("RGB")
+            except FileNotFoundError as exc:
+                raise MissingPixelsError(
+                    f"manifest row {index} has no file at {path}"
+                ) from exc
+            except UnidentifiedImageError as exc:
+                raise MissingPixelsError(
+                    f"manifest row {index} is not a decodable image: {path}"
+                ) from exc
+            except OSError as exc:
+                last = exc
+                if attempt < PIXEL_READ_ATTEMPTS:
+                    time.sleep(PIXEL_READ_BACKOFF_SECONDS * attempt)
+        raise MissingPixelsError(
+            f"manifest row {index} could not be read after {PIXEL_READ_ATTEMPTS} "
+            f"attempts: {path} ({type(last).__name__}: {last})"
+        ) from last
+
     def __getitem__(self, i: int):
-        path = self.paths[i]
-        try:
-            with Image.open(path) as im:
-                img = im.convert("RGB")
-        except FileNotFoundError as exc:
-            raise MissingPixelsError(f"manifest row {i} has no file at {path}") from exc
+        img = self._read(self.paths[i], i)
         if self.transform is not None:
             img = self.transform(img)
         return img, self.targets[i]
