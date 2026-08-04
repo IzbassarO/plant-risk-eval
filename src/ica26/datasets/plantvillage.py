@@ -861,6 +861,16 @@ def validate_manifest_reconstruction(
                 f"{len(wrong)} PlantVillage image(s) do not match their recorded "
                 f"identity, e.g. {wrong[:max_examples]}")
 
+    # Digest completeness is a property of the manifest alone, so it is checked
+    # whether or not the pixels are on this machine. Gating it behind
+    # ``images_root`` meant a fresh clone -- which never has the raw tree --
+    # accepted a manifest asserting 54,305 images while binding none of them.
+    if not all_pixels_materialized(persisted):
+        incomplete = int((persisted["sha256"].astype(str).str.len() != 64).sum())
+        problems.append(
+            f"{incomplete} persisted record(s) carry no full-length pixel "
+            "digest; the manifest asserts images it does not bind")
+
     report = {
         "schema": MANIFEST_RECONSTRUCTION_SCHEMA,
         "reconstructed": True,

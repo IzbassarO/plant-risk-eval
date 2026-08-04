@@ -65,8 +65,12 @@ echo; echo "-- [HARD 8/11] PlantDoc manifest consistency (fs<->manifest) --"
 if [ -f data/manifests/plantdoc_manifest.csv ]; then
   "$PY" - <<'PYEOF' || fail "PlantDoc filesystem/manifest mismatch"
 import sys
+import pandas as pd
 from ica26.datasets import plantdoc
-df = plantdoc.build_manifest("data/raw/plantdoc")
+# The committed manifest is the reference side. Building it from the same tree
+# it is then compared against made this check compare the filesystem to itself,
+# so it passed vacuously -- including against an empty data/raw/plantdoc.
+df = pd.read_csv("data/manifests/plantdoc_manifest.csv")
 chk = plantdoc.verify_against_filesystem(df, "data/raw/plantdoc")
 print("  rows_missing_files:", len(chk["manifest_rows_missing_files"]),
       "| files_missing_from_manifest:", len(chk["files_missing_from_manifest"]))

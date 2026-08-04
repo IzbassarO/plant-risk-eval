@@ -300,6 +300,34 @@ def test_all_pixels_materialized_is_false_for_an_empty_manifest():
     assert PV.all_pixels_materialized(None) is False
 
 
+@pytest.mark.parametrize("bad", ["a" * 63, "", "   "])
+def test_an_incomplete_digest_is_refused_without_the_pixels(
+    manifest_frame, pinned_hub, tmp_path, bad,
+):
+    """Digest completeness is a property of the manifest, not of this machine.
+
+    The check used to sit behind ``images_root``, so a fresh clone -- which
+    never has the raw tree -- accepted a manifest asserting 54,305 images while
+    binding none of them. ``problems`` was empty and ``equal`` was True.
+    """
+    tampered = manifest_frame.copy()
+    tampered.loc[0, "sha256"] = bad
+    problems, report = _validate(_write(tampered, tmp_path), pinned_hub)
+    assert report["all_pixels_materialized"] is False
+    assert report["equal"] is False
+    assert any("no full-length pixel digest" in p for p in problems)
+
+
+def test_a_complete_manifest_still_validates_without_the_pixels(
+    manifest_frame, pinned_hub, tmp_path,
+):
+    """The guard must not fire on the honest case a fresh clone actually has."""
+    problems, report = _validate(_write(manifest_frame, tmp_path), pinned_hub)
+    assert problems == []
+    assert report["all_pixels_materialized"] is True
+    assert report["pixel_verification"]["checked"] is False
+
+
 # --------------------------------------------------------------------------- #
 # The real committed manifest
 # --------------------------------------------------------------------------- #
