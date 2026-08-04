@@ -218,7 +218,7 @@ def test_the_manifest_covers_every_tracked_text_artifact(repo_root):
     }
 
 
-def test_packet_generation_is_deterministic(repo_root, tmp_path):
+def test_packet_generation_is_deterministic(repo_root, tmp_path, plantdoc_pixels):
     """Re-render the text artifacts; they must reproduce byte-for-byte."""
     r = subprocess.run(
         [sys.executable, str(repo_root / "scripts/build_plantdoc_duplicate_packet.py"),
@@ -253,7 +253,7 @@ def test_check_does_not_depend_on_locally_rendered_png_files(repo_root, tmp_path
                                               "contact_sheet_02.png"]
 
 
-def test_check_mode_writes_nothing(repo_root):
+def test_check_mode_writes_nothing(repo_root, plantdoc_pixels):
     """`--check` must not mutate the primary checkout."""
     import hashlib
 
@@ -302,7 +302,7 @@ def test_gate_has_no_wall_clock_field(gate):
     assert "generated_at" not in gate
 
 
-def test_gate_rebuild_is_byte_identical(repo_root):
+def test_gate_rebuild_is_byte_identical(repo_root, plantdoc_pixels):
     r = subprocess.run(
         [sys.executable,
          str(repo_root / "scripts/build_plantdoc_internal_duplicate_gate.py"), "--check"],

@@ -87,7 +87,7 @@ def test_core_covers_the_dataset_dimensions_it_claims_to(core):
         assert required in ids, required
 
 
-def test_core_readiness_does_not_read_any_risk_artifact(repo_root, tmp_path):
+def test_core_readiness_does_not_read_any_risk_artifact(repo_root, tmp_path, plantdoc_pixels):
     """The load-bearing claim, tested by deletion rather than by inspection.
 
     Moving the risk artifacts out of the way must not change a single Core
@@ -195,7 +195,7 @@ def test_plantvillage_reconstruction_is_a_core_condition(core):
 # --------------------------------------------------------------------------- #
 # Determinism and the human-readable renderings
 # --------------------------------------------------------------------------- #
-def test_the_assessments_rebuild_byte_identically(repo_root):
+def test_the_assessments_rebuild_byte_identically(repo_root, plantdoc_pixels):
     result = subprocess.run(
         [sys.executable, str(repo_root / SCRIPT), "--check"],
         cwd=str(repo_root), capture_output=True, text=True)

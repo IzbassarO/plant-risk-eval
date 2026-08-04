@@ -17,6 +17,58 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+# --------------------------------------------------------------------------- #
+# PlantDoc pixel prerequisite
+#
+# `data/raw/` is gitignored, so a fresh clone legitimately has no PlantDoc
+# acquisition. A handful of tests re-derive duplicate groups, which decodes every
+# member's pixels; without the acquisition those tests report a *content*
+# mismatch, which reads like a data-integrity failure but is really a missing
+# prerequisite.
+#
+# The gate below asks one narrow question: was PlantDoc acquired at all? It is
+# deliberately NOT a completeness check. If any image is present the tests run
+# and a partial, corrupt, or mismatched tree fails exactly as before -- an
+# integrity failure must never be laundered into a skip.
+# --------------------------------------------------------------------------- #
+PLANTDOC_RAW_RELPATH = "data/raw/plantdoc"
+_PLANTDOC_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
+
+
+def plantdoc_acquisition_present(repo_root: Path) -> tuple[bool, str]:
+    """(present, reason_if_absent) for the pinned PlantDoc acquisition.
+
+    Present means "the acquisition exists on disk", not "the acquisition is
+    complete". One image is enough to make every dependent test run for real.
+    """
+    root = Path(repo_root) / PLANTDOC_RAW_RELPATH
+    hint = (
+        f"pinned PlantDoc acquisition absent at {PLANTDOC_RAW_RELPATH}/ "
+        "(data/raw/ is gitignored; see DATA_ACCESS.md, or run "
+        "`python scripts/run_phase1_local.py --steps plantdoc`). "
+        "This test needs the real image pixels, not the manifest alone."
+    )
+    if not root.is_dir():
+        return False, hint
+    for split in ("train", "test"):
+        base = root / split
+        if not base.is_dir():
+            continue
+        for p in base.rglob("*"):
+            if p.is_file() and p.suffix.lower() in _PLANTDOC_IMAGE_SUFFIXES:
+                return True, ""
+    return False, hint
+
+
+@pytest.fixture(scope="session")
+def plantdoc_pixels(repo_root) -> Path:
+    """Skip the requesting test unless PlantDoc image pixels are on disk."""
+    present, reason = plantdoc_acquisition_present(repo_root)
+    if not present:
+        pytest.skip(reason)
+    return repo_root / PLANTDOC_RAW_RELPATH
+
+
 @pytest.fixture
 def gradient_image():
     """A deterministic, structured RGB image (good phash target)."""

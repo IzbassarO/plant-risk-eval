@@ -74,7 +74,7 @@ def decision_rows(repo_root):
 
 
 @pytest.fixture(scope="module")
-def adjudication(repo_root):
+def adjudication(repo_root, plantdoc_pixels):
     """The live R2B outcomes, re-derived exactly as the apply script derives them."""
     sys.path.insert(0, str(repo_root / "scripts"))
     import importlib.util
@@ -355,7 +355,7 @@ def test_reapplying_the_decision_is_a_no_op(repo_root, decision_rows, adjudicati
     assert twice == once
 
 
-def test_the_core_manifest_matches_a_fresh_rebuild(repo_root):
+def test_the_core_manifest_matches_a_fresh_rebuild(repo_root, plantdoc_pixels):
     r = subprocess.run(
         [sys.executable, str(repo_root / SCRIPT), "--check"],
         cwd=str(repo_root), capture_output=True, text=True)

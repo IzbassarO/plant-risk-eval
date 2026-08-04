@@ -169,7 +169,7 @@ def test_it_has_no_wall_clock_field(readiness):
     assert "timestamp" not in readiness
 
 
-def test_rebuild_is_byte_identical_and_reports_not_ready(repo_root):
+def test_rebuild_is_byte_identical_and_reports_not_ready(repo_root, plantdoc_pixels):
     before = {p: (repo_root / p).read_bytes() for p in (READINESS_JSON, READINESS_MD)}
     r = subprocess.run([sys.executable, str(repo_root / SCRIPT), "--check"],
                        cwd=str(repo_root), capture_output=True, text=True)
