@@ -417,6 +417,7 @@ def test_a_transient_permission_error_is_retried_and_succeeds(tmp_path, monkeypa
 
     monkeypatch.setattr(dmod.Image, "open", flaky)
     monkeypatch.setattr(dmod, "PIXEL_READ_BACKOFF_SECONDS", 0.0)
+    monkeypatch.setattr(dmod, "PIXEL_READ_BACKOFF_CAP_SECONDS", 0.0)
     img, label = ds[0]
     assert label == 0
     assert calls["n"] == 3
@@ -430,7 +431,8 @@ def test_a_persistent_permission_error_still_fails(tmp_path, monkeypatch):
 
     monkeypatch.setattr(dmod.Image, "open", always_denied)
     monkeypatch.setattr(dmod, "PIXEL_READ_BACKOFF_SECONDS", 0.0)
-    with pytest.raises(dmod.MissingPixelsError, match="after 5 attempts"):
+    monkeypatch.setattr(dmod, "PIXEL_READ_BACKOFF_CAP_SECONDS", 0.0)
+    with pytest.raises(dmod.MissingPixelsError, match="after 8 attempts"):
         ds[0]
 
 

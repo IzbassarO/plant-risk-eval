@@ -33,8 +33,16 @@ PLANTDOC_CORE_MANIFEST = "data/manifests/plantdoc_core_effective_manifest.csv"
 MIN_GROUPS_FOR_VALIDATION = 3
 
 # Bounded retry for transient OS-level read failures. See ManifestImageDataset._read.
-PIXEL_READ_ATTEMPTS = 5
-PIXEL_READ_BACKOFF_SECONDS = 0.25
+#
+# Backoff is exponential and capped, giving a denial roughly 60s to clear across
+# 8 attempts (0.5, 1, 2, 4, 8, 16, 30). An earlier 5-attempt / 2.5s window was
+# measured to be too short: a Spotlight indexing burst denied one file for longer
+# than that and killed a run at epoch 7. Sixty seconds is negligible against a
+# multi-hour run, and a file still unreadable after a minute is a real problem
+# worth failing on.
+PIXEL_READ_ATTEMPTS = 8
+PIXEL_READ_BACKOFF_SECONDS = 0.5
+PIXEL_READ_BACKOFF_CAP_SECONDS = 30.0
 
 
 class MissingPixelsError(RuntimeError):
@@ -234,7 +242,10 @@ class ManifestImageDataset(Dataset):
             except OSError as exc:
                 last = exc
                 if attempt < PIXEL_READ_ATTEMPTS:
-                    time.sleep(PIXEL_READ_BACKOFF_SECONDS * attempt)
+                    time.sleep(min(
+                        PIXEL_READ_BACKOFF_SECONDS * (2 ** (attempt - 1)),
+                        PIXEL_READ_BACKOFF_CAP_SECONDS,
+                    ))
         raise MissingPixelsError(
             f"manifest row {index} could not be read after {PIXEL_READ_ATTEMPTS} "
             f"attempts: {path} ({type(last).__name__}: {last})"
