@@ -46,9 +46,34 @@ PV_ROOT = Path("data/raw/plantvillage/extracted")
 PD_MANIFEST = Path("data/manifests/plantdoc_manifest.csv")
 PD_CORE_MANIFEST = Path("data/manifests/plantdoc_core_effective_manifest.csv")
 PD_ROOT = Path("data/raw/plantdoc")
+NEAR_REVIEW = Path("data/exclusions/cross_dataset_near_duplicate_review.csv")
+PERSISTED_REPORT = Path("reports/leakage_two_population_report.json")
 THRESHOLD = 6
 
+#: Versioned identity of this two-population record.
+CORE_LEAKAGE_SCHEMA = "ica26.leakage.two_population_report/1"
+
 INDEX_COLS = ["dataset", "split", "class_label", "path", "phash"]
+
+
+def _reviewed_pair_identities() -> set[str]:
+    """The pair identities a human has already adjudicated.
+
+    Read from the recorded near-duplicate review table, which this script never
+    writes. Keeping it read-only is the point: a Core leakage result may only be
+    *checked* against the existing decisions, never allowed to create one.
+    """
+    import csv
+
+    path = REPO / NEAR_REVIEW
+    if not path.is_file():
+        return set()
+    with path.open(newline="", encoding="utf-8") as fh:
+        return {
+            f'{row["training_relative_path"]}||{row["evaluation_relative_path"]}'
+            f'||{row["phash_distance"]}'
+            for row in csv.DictReader(fh)
+        }
 
 
 def _index_or_load(name: str, manifest: Path, root: Path, dataset: str,
@@ -80,13 +105,15 @@ def _population(label: str, idx_train: pd.DataFrame, idx_eval: pd.DataFrame,
     elapsed = time.perf_counter() - t0
     s = res["summary"]
     audit = candidate_search_audit_fields(s)
+    # No wall-clock field reaches the record: this artifact is committed and
+    # compared byte-for-byte, so it has to reproduce exactly. Elapsed time is
+    # printed for the operator and deliberately discarded here.
     record = {
         "population": label,
         "n_training_indexed": int(len(idx_train)),
         "n_evaluation_indexed": int(len(idx_eval)),
         "n_exact_pairs": int(s["n_exact_pairs"]),
         "n_near_pairs": int(s["n_near_pairs"]),
-        "elapsed_seconds": round(elapsed, 3),
         "near_pair_identities": _pair_identities(res["near"]),
         **audit,
     }
@@ -105,6 +132,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="verify-core-and-acquired-leakage")
     ap.add_argument("--out", required=True)
     ap.add_argument("--reuse-index", default=None)
+    ap.add_argument("--persist", action="store_true",
+                    help="also write the committed reports/ artifact")
     args = ap.parse_args(argv)
 
     out = Path(args.out)
@@ -141,7 +170,15 @@ def main(argv=None) -> int:
                      - set(core["near_pair_identities"]))
     added = sorted(set(core["near_pair_identities"])
                    - set(acquired["near_pair_identities"]))
+
+    # Every Core near pair must already carry one of the recorded human
+    # decisions. A Core pair with no decision behind it would be an unresolved
+    # leakage pair, and Core readiness must block on it.
+    reviewed = _reviewed_pair_identities()
+    unresolved = sorted(set(core["near_pair_identities"]) - reviewed)
+
     report = {
+        "schema": CORE_LEAKAGE_SCHEMA,
         "threshold": THRESHOLD,
         "acquired": acquired,
         "core": core,
@@ -149,12 +186,20 @@ def main(argv=None) -> int:
         "near_pairs_only_in_core": added,
         "core_evaluation_records": int(len(idx_core)),
         "acquired_evaluation_records": int(len(idx_pd)),
+        "core_unresolved_near_pairs": unresolved,
+        "core_near_pairs_all_reviewed": not unresolved,
+        "reviewed_pair_count": len(reviewed),
+        "conservatively_excluded_evaluation_records": (
+            int(len(idx_pd)) - int(len(idx_core))),
     }
-    (out / "leakage_two_population_report.json").write_text(
-        json.dumps(report, indent=2, sort_keys=True) + "\n")
+    text = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    (out / "leakage_two_population_report.json").write_text(text)
+    if args.persist:
+        (REPO / PERSISTED_REPORT).write_text(text)
+        print(f"[leakage] wrote {PERSISTED_REPORT}")
     print(f"[leakage] wrote {out / 'leakage_two_population_report.json'}")
     print(f"[leakage] near pairs only in acquired: {len(dropped)}; "
-          f"only in core: {len(added)}")
+          f"only in core: {len(added)}; core unresolved: {len(unresolved)}")
     return 0
 
 

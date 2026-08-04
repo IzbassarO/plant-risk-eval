@@ -1,10 +1,6 @@
 {
-  "blocked": 6,
+  "blocked": 2,
   "blockers": [
-    "disease_action_mapping_reviewed",
-    "plantvillage_action_mapping_coverage",
-    "harm_matrix_approved",
-    "relabel_second_scientific_review",
     "open_audit_findings_closed",
     "freeze_approval_recorded"
   ],
@@ -91,42 +87,6 @@
       "title": "No machine-specific or personal identifier in paper artifacts"
     },
     {
-      "detail": "coverage 11/28; 17 non-terminal: [\"Apple Scab Leaf: status 'needs_review' is not terminal (terminal: ['approved', 'excluded'])\", \"Apple rust leaf: status 'needs_review' is not terminal (terminal: ['approved', 'excluded'])\", \"Bell_pepper leaf spot: status 'needs_review' is not terminal (terminal: ['approved', 'excluded'])\"] (+14 more)",
-      "evidence": "data/mapping/action_mapping_review.csv",
-      "evidence_digest": "4efb48a4a5aac5c61bf80ce42ad7821d6772c7994313ba9c1bb38cde08588b06",
-      "id": "disease_action_mapping_reviewed",
-      "kind": "human_scientific",
-      "status": "blocked",
-      "title": "Every PlantDoc class carries a terminal, evidence-gated mapping decision"
-    },
-    {
-      "detail": "coverage 0/38; 38 missing: ['Apple___Apple_scab', 'Apple___Black_rot', 'Apple___Cedar_apple_rust'] (+35 more)",
-      "evidence": "data/mapping/action_mapping_review.csv",
-      "evidence_digest": "4efb48a4a5aac5c61bf80ce42ad7821d6772c7994313ba9c1bb38cde08588b06",
-      "id": "plantvillage_action_mapping_coverage",
-      "kind": "human_scientific",
-      "status": "blocked",
-      "title": "Every PlantVillage class carries a terminal, evidence-gated mapping decision"
-    },
-    {
-      "detail": "matrix 'harm_v0_template' review_status='pending', is_example=False",
-      "evidence": "configs/harm_matrix_template.yaml",
-      "evidence_digest": "61ad4d816ddd377877a6f2ce216c4d42a14ef1fe78cd4f2fcbb84b1607712503",
-      "id": "harm_matrix_approved",
-      "kind": "human_scientific",
-      "status": "blocked",
-      "title": "A human-approved harm matrix exists"
-    },
-    {
-      "detail": "no plantdoc_label_second_review artifact at human_review/plantdoc_label_second_review/second_review.json; the decision has not been taken; packet pending at reports/plantdoc_label_second_review",
-      "evidence": "human_review/plantdoc_label_second_review/second_review.json",
-      "evidence_digest": "<absent>",
-      "id": "relabel_second_scientific_review",
-      "kind": "human_scientific",
-      "status": "blocked",
-      "title": "The canonical relabels ['G07', 'G08', 'G10'] carry an independent second review"
-    },
-    {
       "detail": "no dataset_v1_audit_signoff artifact at reports/DATASET_V1_AUDIT_SIGNOFF.json; the decision has not been taken",
       "evidence": "reports/DATASET_V1_AUDIT_SIGNOFF.json",
       "evidence_digest": "<absent>",
@@ -143,45 +103,87 @@
       "kind": "governance_approval",
       "status": "blocked",
       "title": "A human has recorded a valid, bound Dataset V1 freeze approval"
+    },
+    {
+      "detail": "54305 record(s) re-derived from the pinned sources (43596 train / 10709 test); 0 missing, 0 extra, 0 duplicated, 0 value mismatch(es), order matches, every image verified",
+      "evidence": "data/manifests/plantvillage_manifest.csv",
+      "evidence_digest": "b9acc43637ef2e930bd9e5e8a09b1d5025c720d65f9dd3fc9aabdfbd7e399591",
+      "id": "plantvillage_manifest_reconstructed",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "The PlantVillage manifest is exactly reconstructed from pinned sources"
+    },
+    {
+      "detail": "3 authenticated exclusion(s) for ['G07', 'G08', 'G10']; each bound to the R2B outcome it removes",
+      "evidence": "data/exclusions/core_dataset_v1_conservative_exclusions.csv",
+      "evidence_digest": "0e647abbf656b30ed2adf79b517fb14fc02cbee541c54328522b6f54b6b580ee",
+      "id": "conservative_exclusions_recorded",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "A recorded operator decision defines the Core exclusions"
+    },
+    {
+      "detail": "fresh 2561 == persisted 2561, identity digest 070f8f7a6471e9e5..., byte-identical",
+      "evidence": "data/manifests/plantdoc_core_effective_manifest.csv",
+      "evidence_digest": "92de5a4f5b2e254ca2dd5370951bdba1a2fdac4046310399dc2201eaaf0eaa11",
+      "id": "core_dataset_current",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "The Core dataset matches a fresh rebuild from the decisions"
+    },
+    {
+      "detail": "2561 record(s), splits {'test': 225, 'train': 2336}, 28 class(es), 0 exact duplicates, 2554 non-reviewed record(s) unchanged",
+      "evidence": "data/manifests/plantdoc_core_effective_manifest.csv",
+      "evidence_digest": "92de5a4f5b2e254ca2dd5370951bdba1a2fdac4046310399dc2201eaaf0eaa11",
+      "id": "core_dataset_integrity",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "The Core dataset is internally sound"
+    },
+    {
+      "detail": "independently computed over PlantVillage 54305 x Core PlantDoc 2561: 0 exact, 16 near, all resolved, 0 unresolved (acquired corpus separately: 0 exact, 16 near)",
+      "evidence": "reports/leakage_two_population_report.json",
+      "evidence_digest": "0acf68ce00af23e39a23e64f78e5e6adb60308155fe11d7862cc54f9a7ebc1b0",
+      "id": "core_cross_dataset_leakage",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "Core-corpus cross-dataset leakage is cleared"
     }
   ],
-  "dataset": "Dataset V1",
+  "dataset": "Core Dataset V1",
+  "depends_on_risk_layer": false,
   "frozen": false,
-  "input_digests": {
-    "action_mapping_review": "4efb48a4a5aac5c61bf80ce42ad7821d6772c7994313ba9c1bb38cde08588b06",
-    "audit_signoff": "<absent>",
-    "duplicate_resolution": "88976a8846ec1ae37cb318e30d02d57bd9a78bea8fde49e4367bf60f9a90cc6c",
-    "effective_manifest": "36ee9ece519d11dd0f38aed53d6177fe19728349025665ebd843b2ab9c4cb3fc",
-    "evaluation_scope": "7f8b2a9ce72bf8709a3fa413f81ee6788a751f5e78606b002251bd6ad6c79272",
-    "freeze_approval": "<absent>",
-    "harm_matrix": "61ad4d816ddd377877a6f2ce216c4d42a14ef1fe78cd4f2fcbb84b1607712503",
-    "human_review_evidence": "bff37d8c76b3ebcccb7f028afe57286c30896a6583afcfb80f1cabfb87f4453f",
-    "internal_duplicate_gate": "e022c99a40424f1bc12ebcf4339be7a14e038028b88ff4a7b05dc51c2e53f6c8",
-    "leakage_gate": "d5c720192dbe109c22e60ff07f4c23714b83df7302d48bcadb94c78bbcdb1b3c",
-    "leakage_search_summary": "47ae7c5cf2ae2b0bb51f2f3bc56b42d5fd370a197543b615f42c9903fa1d14de",
-    "plantdoc_manifest": "548b815197c51bc26ea6adb2080b93cd670426623ca13d6eee8a43d49fb4ba55",
-    "plantdoc_summary": "7d660aafdedbd8ef554ab531250b84651522edc7a15d8a15b12771a0efeb6a52",
-    "plantvillage_manifest": "b9acc43637ef2e930bd9e5e8a09b1d5025c720d65f9dd3fc9aabdfbd7e399591",
-    "plantvillage_source_snapshot": "62105e4f2cf53ae23f19f2111d5077df7c92d0fbb5b59b09c3d1af0af493fd23",
-    "plantvillage_summary": "7429cc2cd8731a759050b1b5012701d74b6baa54e6b571275be06defc8136a41",
-    "second_review": "<absent>",
-    "second_review_packet": "e3ac78aa5f5028a36dc7415a59caa14861ff6662debf51d08f515ca2569ec5f1"
-  },
+  "layer": "Core Dataset V1",
+  "machine_blockers": [],
+  "open_decisions": [
+    "open_audit_findings_closed",
+    "freeze_approval_recorded"
+  ],
   "provenance": {
-    "approval_schema": "ica26.governance.approval/2",
-    "command": "build_dataset_v1_freeze_readiness.py",
-    "commit_binding": "reviewed state and approval-record ancestry validated from Git objects at run time",
-    "condition_kinds": [
-      "machine",
-      "human_scientific",
-      "governance_approval",
-      "independent_audit"
-    ],
+    "authorizes_no_training": true,
+    "command": "build_core_and_risk_readiness.py",
     "freezes_nothing": true,
-    "mapping_readiness_schema": "ica26.governance.mapping_readiness/1",
-    "pixel_verification": true
+    "note": "Core readiness is independent of action mappings, the harm matrix, risk weights, treatment recommendations, and risk-aware evaluation approval."
   },
-  "satisfied": 9,
+  "satisfied": 14,
   "schema_version": "1.0",
-  "status": "not_ready"
+  "status": "ready_for_independent_audit",
+  "training_authorized": false,
+  "training_boundary": {
+    "blocked_until_risk_layer_frozen": [
+      "harm_weighted_model_selection",
+      "action_aware_training",
+      "treatment_recommendation",
+      "risk_weighted_conclusions",
+      "final_risk_aware_evaluation_tables"
+    ],
+    "permitted_after_core_freeze": [
+      "plantvillage_in_domain_classification_baseline",
+      "plantdoc_core_in_domain_classification_baseline",
+      "model_calibration_experiments",
+      "ordinary_classification_metrics",
+      "dataset_loading_and_training_pipeline_validation"
+    ]
+  },
+  "unassigned_conditions": []
 }

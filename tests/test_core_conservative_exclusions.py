@@ -101,7 +101,7 @@ def test_every_decision_row_carries_the_operators_attribution(decision_rows):
         assert row["decision_schema"] == CONSERVATIVE_EXCLUSION_SCHEMA
         assert row["exclusion_decision"] == CONSERVATIVE_EXCLUSION_DECISION
         assert row["exclusion_basis"] == "insufficient_independent_diagnostic_evidence"
-        assert row["reviewer_id"] == "izbassar"
+        assert row["reviewer_id"] == "dataset_owner_1"
         assert row["reviewer_role"] == "dataset_owner_research_lead"
         assert row["decided_at"].endswith("+05:00")
         assert len(row["reviewed_repository_commit"]) == 40
