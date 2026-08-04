@@ -80,19 +80,26 @@ def _assert_candidate_search_contract(summary: dict) -> None:
     assert summary["candidate_search_algorithm"] == CANDIDATE_SEARCH_ALGORITHM
     assert summary["candidate_search_exact_strategy"] == "hash-to-record-members"
     assert summary["candidate_search_near_strategy"] == (
-        "recursive-pigeonhole-partition+bounded-leaf-verification")
+        "chunked-exact-hamming-evaluation")
     assert summary["candidate_search_near_input"] == "distinct-hash-values"
     assert summary["candidate_search_verification_unit"]
+    # The search is a full exact evaluation and must never claim otherwise.
+    assert summary["candidate_search_output_sensitive"] is False
+    assert summary["candidate_search_complexity"]
     assert summary["n_distinct_hashes_a"] == 1  # side A = PlantVillage training
     assert summary["n_distinct_hashes_b"] == 1  # side B = PlantDoc evaluation
     assert isinstance(summary["n_near_verifications"], int)
-    assert summary["n_near_verifications"] >= 0
-    assert summary["n_candidate_checks"] == summary["n_distance_evaluations"]
     assert summary["n_near_verifications"] == summary["n_distance_evaluations"]
-    assert summary["n_partition_tasks"] >= 0
-    assert summary["n_recursive_partitions"] >= 0
-    assert summary["n_partition_memberships"] >= 0
-    assert summary["max_leaf_pair_count"] >= 0
+    # Every possible distinct-hash pair was measured -- that is the completeness
+    # claim, and it is arithmetic rather than an assertion about the algorithm.
+    assert summary["n_distance_evaluations"] == summary["n_possible_pairs"]
+    assert summary["n_output_pairs"] <= summary["n_possible_record_pairs"]
+    assert summary["max_chunk_pair_count"] <= summary["chunk_pair_budget"]
+    assert summary["chunk_rows"] >= 0 and summary["chunk_cols"] >= 0
+    assert summary["n_chunks"] >= 0
+    assert summary["estimated_peak_chunk_bytes"] >= 0
+    # Wall-clock never reaches a digest-bound artifact.
+    assert "search_seconds" not in summary
 
 
 def _read_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
@@ -182,15 +189,19 @@ def test_audit_projection_refuses_an_incomplete_detector_summary():
 def test_audit_projection_refuses_tampered_algorithm_or_operation_counts():
     from ica26.leakage.phash import candidate_search_audit_fields, find_duplicates
 
-    index = build_index([{
-        "dataset": "A", "path": "a", "phash": "0000000000000000",
-    }])
+    index = build_index([
+        {"dataset": "A", "path": "a", "phash": "0000000000000000"},
+        {"dataset": "A", "path": "b", "phash": "00000000000000ff"},
+    ])
     summary = find_duplicates(index, threshold=6)["summary"]
     for field, value in (
         ("candidate_search_algorithm", "unreviewed-search"),
+        ("candidate_search_output_sensitive", True),
         ("n_distance_evaluations", -1),
-        ("n_candidate_checks", 1),
-        ("max_leaf_pair_count", 999_999),
+        # Fewer evaluations than possible pairs means something pruned.
+        ("n_distance_evaluations", 0),
+        ("max_chunk_pair_count", 1 << 40),
+        ("n_output_pairs", 1 << 30),
     ):
         tampered = {**summary, field: value}
         with pytest.raises(ValueError):
@@ -203,7 +214,7 @@ def test_committed_leakage_summary_uses_the_current_auditable_contract(repo_root
     summary = json.loads(
         (repo_root / "reports/leakage_plantvillage_vs_plantdoc_summary.json").read_text())
     audit = candidate_search_audit_fields(summary)
-    assert audit["n_distance_evaluations"] == 655_317
+    assert audit["n_distance_evaluations"] == audit["n_possible_pairs"] == 136_847_443
     assert summary["n_exact_pairs"] == 0
     assert summary["n_near_pairs"] == 16
 

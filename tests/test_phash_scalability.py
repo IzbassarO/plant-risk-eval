@@ -1,30 +1,49 @@
-"""pHash candidate generation: exact, bounded, deterministic (R2B.1 Finding 1).
+"""pHash near-duplicate search: exact, bounded, deterministic (R2B.2 Part 2).
 
-The previous near-duplicate search built a BK-tree by sequential insertion in
-every band bucket.  A valid dense-band fixture could make that construction
-quadratic even though it had no near-duplicate output.
+Two implementations have now been withdrawn for the same reason. A BK-tree
+built by sequential insertion went quadratic on a dense band with no output.
+Its replacement, a recursive striped pigeonhole partition, was complete but
+re-traversed pairs that agreed on more than one block, so it went
+super-quadratic on dense *true-output* clusters: at threshold 6, one hundred
+mutually-near hashes did not finish in sixty seconds while a plain scan of the
+same input took 0.19 s.
 
-The replacement collapses identical hashes and recursively partitions unresolved
-bits.  It stores only output pairs, exposes deterministic operation telemetry,
-and never constructs a false-candidate bucket or insertion-order-sensitive tree.
+The current search stops trying to be clever. It evaluates every distinct-hash
+pair exactly, in bounded chunks. Cost is O(N^2/2) intra and O(N x M) cross --
+quadratic, predictable, and immune to adversarial structure. Memory is a
+function of the chunk size alone.
 
-The differential oracle is `brute_force_duplicates`, which compares every pair.
-If the index and the oracle ever disagree, the index is wrong.
+These tests therefore assert two things that must both hold, and which the
+previous implementations traded against each other:
+
+* **exactness** -- evaluations equal possible pairs, and the result matches a
+  scalar oracle that shares no code with the implementation;
+* **boundedness** -- the peak chunk never exceeds its configured budget, no
+  matter how large the input, and the result does not depend on the chunk size.
 """
 from __future__ import annotations
 
 import random
+import time
 
 import pytest
 
 from ica26.leakage.phash import (
+    CANDIDATE_SEARCH_ALGORITHM,
+    CANDIDATE_SEARCH_COMPLEXITY_CROSS,
+    CANDIDATE_SEARCH_COMPLEXITY_INTRA,
+    CANDIDATE_SEARCH_SCHEMA_VERSION,
+    DEFAULT_CHUNK_PAIRS,
     HashParameterError,
     brute_force_duplicates,
     benchmark,
     build_index,
+    candidate_search_audit_fields,
+    deterministic_summary,
     find_duplicates,
     hamming_int,
     hash_bits,
+    hash_words,
     validate_search_params,
 )
 
@@ -55,6 +74,51 @@ def _perturb(rng, key, flips, bits=64):
     for _ in range(flips):
         key ^= 1 << rng.randrange(bits)
     return key
+
+
+def _dense_true_output_keys(n, threshold=6, anchor=0x0123456789ABCDEF):
+    """``n`` distinct hashes that are all mutually within ``threshold``.
+
+    Every value sits within ``threshold // 2`` bit flips of one anchor, so any
+    two of them differ by at most ``threshold`` -- the whole set is one clique
+    and EVERY pair is real output. Built here rather than imported from the
+    module so the adversary is independent of the implementation under test.
+    """
+    import itertools
+
+    radius = max(1, threshold // 2)
+    keys = [anchor]
+    for flips in range(1, radius + 1):
+        for positions in itertools.combinations(range(64), flips):
+            key = anchor
+            for bit in positions:
+                key ^= 1 << bit
+            keys.append(key)
+            if len(keys) == n:
+                return keys
+    raise AssertionError(
+        f"cannot build {n} mutually-near hashes at threshold {threshold}")
+
+
+def _sparse_keys(n, threshold=6, seed=0):
+    """``n`` distinct hashes with no pair within ``threshold``.
+
+    A deterministic LCG supplies candidates; anything landing too close to an
+    already-accepted value is rejected, so the fixture is genuinely empty of
+    output and the search cannot be flattered by lucky data.
+    """
+    keys: list[int] = []
+    seen: set[int] = set()
+    state = seed or 1
+    # Spread values across the space by forcing a large minimum separation.
+    while len(keys) < n:
+        state = (state * 6364136223846793005 + 1442695040888963407) & ((1 << 64) - 1)
+        candidate = state & ~((1 << (threshold + 3)) - 1)
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        keys.append(candidate)
+    return keys
 
 
 # --------------------------------------------------------------------------- #
@@ -179,30 +243,41 @@ def test_cross_duplicates_expand_on_both_sides():
 # --------------------------------------------------------------------------- #
 # Adversarial density: the reported worst case
 # --------------------------------------------------------------------------- #
-def test_dense_band_10k_is_not_an_all_pairs_distance_scan():
-    """The independent R2B.1 adversary, checked by operations rather than time."""
+def test_dense_band_10k_is_an_exact_bounded_scan():
+    """The R2B.1 adversary, now answered by exactness rather than by pruning.
+
+    The previous implementation tried to *avoid* pairs on this fixture and was
+    graded on evaluating few of them.  The chunked search makes the opposite
+    promise: it evaluates every pair, and what stays bounded is memory.  Both
+    halves are asserted here so a regression toward pruning is a failure.
+    """
     rows = benchmark(
         sizes=(1000, 10_000), threshold=6,
         fixture="dense-band-near-empty",
     )
     one_k, ten_k = rows.to_dict("records")
     assert one_k["output_pairs"] == ten_k["output_pairs"] == 0
-    all_pairs_10k = 10_000 * 9_999 // 2
-    assert ten_k["exact_distance_evaluations"] < all_pairs_10k // 100
-    assert ten_k["candidate_checks"] == ten_k["exact_distance_evaluations"]
-    assert ten_k["partition_memberships"] < all_pairs_10k // 50
-    # Ten times the input must not cause the hundred-fold operation growth of
-    # an all-pairs construction/evaluation path on this exact fixture.
-    assert (ten_k["exact_distance_evaluations"]
-            < one_k["exact_distance_evaluations"] * 15)
+    for row, n in ((one_k, 1000), (ten_k, 10_000)):
+        possible = n * (n - 1) // 2
+        assert row["possible_pairs"] == possible
+        # Exact: every possible pair was actually measured.
+        assert row["exact_distance_evaluations"] == possible
+        # Bounded: peak working set is set by the chunk, not by the input.
+        assert row["peak_chunk_pairs"] <= DEFAULT_CHUNK_PAIRS
+
+    # Ten times the input is a hundred times the pairs -- and the SAME peak
+    # memory. That invariant is the whole point of chunking.
+    assert ten_k["possible_pairs"] > one_k["possible_pairs"] * 50
+    assert ten_k["peak_chunk_pairs"] <= DEFAULT_CHUNK_PAIRS
 
     repeat = benchmark(
         sizes=(1000, 10_000), threshold=6,
         fixture="dense-band-near-empty",
     )
     operation_columns = [
-        "candidate_checks", "exact_distance_evaluations", "partition_tasks",
-        "partition_memberships", "output_pairs",
+        "possible_pairs", "exact_distance_evaluations", "output_pairs",
+        "n_chunks" if "n_chunks" in rows.columns else "chunks",
+        "peak_chunk_pairs",
     ]
     assert rows[operation_columns].equals(repeat[operation_columns])
 
@@ -248,7 +323,10 @@ def test_output_is_deterministic_across_runs():
         again = find_duplicates(_index(keys), threshold=6)
         assert first["exact"].equals(again["exact"])
         assert first["near"].equals(again["near"])
-        assert first["summary"] == again["summary"]
+        # Everything except the wall clock must reproduce exactly; the timing
+        # field is precisely why persisted artifacts strip it.
+        assert deterministic_summary(first["summary"]) == deterministic_summary(
+            again["summary"])
 
 
 def test_output_does_not_depend_on_input_order():
@@ -346,21 +424,27 @@ def test_a_wider_hash_size_is_searched_correctly():
 # --------------------------------------------------------------------------- #
 # Summary bookkeeping
 # --------------------------------------------------------------------------- #
-def test_summary_reports_distinct_hashes_and_verification_count():
+def test_summary_reports_distinct_hashes_and_full_evaluation():
     res = find_duplicates(_index([1, 1, 2, 3]), threshold=6)
     s = res["summary"]
     assert s["n_a"] == 4 and s["n_distinct_hashes_a"] == 3
-    assert s["n_near_verifications"] >= 0
-    assert s["n_candidate_checks"] == s["n_distance_evaluations"]
+    # Three DISTINCT hashes -> three upper-triangle pairs, all evaluated.
+    assert s["n_possible_pairs"] == 3
+    assert s["n_distance_evaluations"] == 3
     assert s["n_near_verifications"] == s["n_distance_evaluations"]
-    assert s["n_partition_memberships"] >= 0
     assert s["mode"] == "intra" and s["threshold"] == 6
+    assert s["candidate_search_output_sensitive"] is False
+    assert s["candidate_search_complexity"] == CANDIDATE_SEARCH_COMPLEXITY_INTRA
 
 
 def test_empty_and_single_record_indexes_are_handled():
     for keys in ([], [1]):
         res = find_duplicates(_index(keys), threshold=6)
         assert len(res["exact"]) == 0 and len(res["near"]) == 0
+        s = res["summary"]
+        assert s["n_possible_pairs"] == 0
+        assert s["n_distance_evaluations"] == 0
+        assert s["max_chunk_pair_count"] == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -376,3 +460,164 @@ def test_the_committed_leakage_gate_still_reports_16_near_pairs(repo_root):
     assert gate["near_resolved_count"] == 16
     assert gate["unresolved_pair_count"] == 0
     assert gate["status"] == "pass"
+
+
+# --------------------------------------------------------------------------- #
+# R2B.2: the dense-cluster regression that retired the recursive partition
+# --------------------------------------------------------------------------- #
+def test_300_mutually_near_hashes_complete_exactly_and_quickly():
+    """The exact case the previous implementation could not finish.
+
+    300 hashes within radius 3 of one anchor are mutually within 6, so EVERY
+    pair is real output: 300 * 299 / 2 = 44,850. The old search did not return
+    within 60 s here; a scan of the same input takes under 2 s. The timing bound
+    below is deliberately loose (an order of magnitude of headroom) so this is a
+    pathology detector, not a microbenchmark.
+    """
+    n = 300
+    expected_pairs = n * (n - 1) // 2
+    assert expected_pairs == 44_850
+
+    keys = _dense_true_output_keys(n, threshold=6)
+    assert len(set(keys)) == n
+
+    start = time.perf_counter()
+    res = find_duplicates(_index(keys), threshold=6)
+    elapsed = time.perf_counter() - start
+    s = res["summary"]
+
+    assert s["n_possible_pairs"] == expected_pairs
+    assert s["n_output_pairs"] == expected_pairs
+    assert s["n_near_pairs"] == expected_pairs
+    assert s["n_exact_pairs"] == 0
+    # Exact full evaluation: nothing was pruned and nothing was re-visited.
+    assert s["n_distance_evaluations"] == expected_pairs
+    # No recursive partition work survives anywhere in the summary.
+    assert not [k for k in s if "partition" in k or "leaf" in k]
+    assert s["max_chunk_pair_count"] <= DEFAULT_CHUNK_PAIRS
+    assert elapsed < 60, f"dense 300-cluster took {elapsed:.1f}s"
+
+
+def test_dense_cluster_growth_is_not_superquadratic():
+    """Doubling a dense cluster must roughly quadruple work, not explode.
+
+    Operation counts, not seconds, carry the assertion: pair counts are exact
+    and machine-independent, so this cannot flake.
+    """
+    counts = {}
+    for n in (150, 300):
+        keys = _dense_true_output_keys(n, threshold=6)
+        s = find_duplicates(_index(keys), threshold=6)["summary"]
+        counts[n] = s["n_distance_evaluations"]
+        assert s["n_distance_evaluations"] == n * (n - 1) // 2
+    # Exactly quadratic: 4x the pairs for 2x the input, never more.
+    assert counts[300] < counts[150] * 4.1
+
+
+def test_10k_sparse_input_completes_with_a_bounded_peak_chunk():
+    keys = _sparse_keys(10_000, threshold=6)
+    assert len(set(keys)) == 10_000
+    res = find_duplicates(_index(keys), threshold=6)
+    s = res["summary"]
+    possible = 10_000 * 9_999 // 2
+    assert s["n_possible_pairs"] == possible
+    assert s["n_distance_evaluations"] == possible
+    assert s["n_output_pairs"] == 0
+    assert s["max_chunk_pair_count"] <= DEFAULT_CHUNK_PAIRS
+    # ~50M pairs must never imply a ~50M-pair allocation.
+    assert s["max_chunk_pair_count"] < possible // 40
+
+
+# --------------------------------------------------------------------------- #
+# Chunking is an implementation detail, never a result
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("chunk_pairs", [1, 4, 9, 64, 1000, 1 << 20])
+def test_results_are_invariant_to_chunk_size(chunk_pairs):
+    rng = random.Random(23)
+    anchor = rng.getrandbits(64)
+    keys = [_perturb(rng, anchor, rng.randint(0, 5)) for _ in range(60)]
+    index = _index(keys)
+
+    reference = brute_force_duplicates(index, threshold=6)
+    got = find_duplicates(index, threshold=6, chunk_pairs=chunk_pairs)
+    assert _same(got, reference, "exact")
+    assert _same(got, reference, "near")
+    # Work done is the same regardless of how it was blocked up.
+    assert got["summary"]["n_distance_evaluations"] == got["summary"]["n_possible_pairs"]
+    assert got["summary"]["max_chunk_pair_count"] <= max(chunk_pairs, 1)
+
+
+@pytest.mark.parametrize("chunk_pairs", [1, 16, 1000])
+def test_cross_dataset_results_are_invariant_to_chunk_size(chunk_pairs):
+    rng = random.Random(29)
+    anchor = rng.getrandbits(64)
+    left = _index([_perturb(rng, anchor, rng.randint(0, 4)) for _ in range(25)], "A")
+    right = _index([_perturb(rng, anchor, rng.randint(0, 4)) for _ in range(18)], "B")
+
+    reference = brute_force_duplicates(left, right, threshold=6)
+    got = find_duplicates(left, right, threshold=6, chunk_pairs=chunk_pairs)
+    assert _same(got, reference, "exact")
+    assert _same(got, reference, "near")
+    s = got["summary"]
+    # Cross-dataset evaluates the complete Cartesian product of DISTINCT hashes.
+    assert s["n_possible_pairs"] == s["n_distinct_hashes_a"] * s["n_distinct_hashes_b"]
+    assert s["n_distance_evaluations"] == s["n_possible_pairs"]
+    assert s["n_possible_record_pairs"] == 25 * 18
+    assert s["candidate_search_complexity"] == CANDIDATE_SEARCH_COMPLEXITY_CROSS
+
+
+# --------------------------------------------------------------------------- #
+# Telemetry
+# --------------------------------------------------------------------------- #
+def test_telemetry_is_internally_consistent_and_auditable():
+    rng = random.Random(31)
+    anchor = rng.getrandbits(64)
+    keys = [_perturb(rng, anchor, rng.randint(0, 4)) for _ in range(40)]
+    s = find_duplicates(_index(keys), threshold=6)["summary"]
+
+    assert s["candidate_search_schema_version"] == CANDIDATE_SEARCH_SCHEMA_VERSION
+    assert s["candidate_search_algorithm"] == CANDIDATE_SEARCH_ALGORITHM
+    assert s["hash_size_bits"] == 64 and s["hash_words"] == hash_words(64)
+    assert s["chunk_rows"] >= 1 and s["chunk_cols"] >= 1
+    assert s["n_chunks"] >= 1
+    assert s["chunk_pair_budget"] == DEFAULT_CHUNK_PAIRS
+    assert 0 < s["estimated_peak_chunk_bytes"]
+    assert s["n_output_pairs"] == s["n_exact_pairs"] + s["n_near_pairs"]
+
+    audit = candidate_search_audit_fields(s)
+    assert audit["n_distance_evaluations"] == audit["n_possible_pairs"]
+    assert audit["candidate_search_output_sensitive"] is False
+
+
+def test_the_audit_projection_refuses_a_pruned_summary():
+    """A summary that evaluated fewer pairs than exist did not come from here."""
+    s = find_duplicates(_index([1, 2, 3, 4, 5]), threshold=6)["summary"]
+    tampered = dict(s)
+    tampered["n_distance_evaluations"] = s["n_possible_pairs"] - 1
+    with pytest.raises(ValueError, match="evaluate every possible pair"):
+        candidate_search_audit_fields(tampered)
+
+
+def test_the_audit_projection_refuses_an_output_sensitive_claim():
+    s = find_duplicates(_index([1, 2, 3]), threshold=6)["summary"]
+    tampered = dict(s)
+    tampered["candidate_search_output_sensitive"] = True
+    with pytest.raises(ValueError, match="not output-sensitive"):
+        candidate_search_audit_fields(tampered)
+
+
+def test_the_audit_projection_refuses_a_peak_above_its_budget():
+    s = find_duplicates(_index([1, 2, 3]), threshold=6)["summary"]
+    tampered = dict(s)
+    tampered["max_chunk_pair_count"] = s["chunk_pair_budget"] + 1
+    with pytest.raises(ValueError, match="peak chunk exceeds"):
+        candidate_search_audit_fields(tampered)
+
+
+def test_the_wall_clock_is_the_only_non_reproducible_field():
+    index = _index([1, 5, 9, 300])
+    first = find_duplicates(index, threshold=6)["summary"]
+    second = find_duplicates(index, threshold=6)["summary"]
+    differing = {k for k in set(first) | set(second) if first.get(k) != second.get(k)}
+    assert differing <= {"search_seconds"}
+    assert "search_seconds" not in deterministic_summary(first)

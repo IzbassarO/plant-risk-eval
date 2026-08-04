@@ -1,23 +1,46 @@
-"""Perceptual-hash leakage detection (imagehash.phash) — scalable index.
+"""Perceptual-hash leakage detection (imagehash.phash) — exact chunked search.
 
 Finds identical and near-duplicate images WITHIN one dataset or ACROSS two
 datasets. Cross-dataset near-duplicates between a training source and an
 evaluation set are the ones that invalidate a generalization claim.
 
-Design (replaces the previous O(N^2) all-pairs scan):
-  * **exact** duplicates via a hash -> members dictionary (O(N));
-  * **near** duplicates via recursively partitioned exact Hamming search;
-  * a brute-force reference (`brute_force_duplicates`) exists for test parity;
-  * configurable threshold; exact and near reported separately;
-  * no self-pairs, no reversed A-B / B-A duplicates; deterministic ordering;
-  * every pair carries dataset, split, class and relative path for both sides;
-  * corrupt/missing files are reported, not silently skipped;
-  * images are hashed one at a time — pixels never all held in memory.
+Why this is a full evaluation and not an index
+----------------------------------------------
+The previous implementation used a recursive striped pigeonhole partition. Its
+completeness argument was sound, but its *work* was not bounded: a pair that
+agrees on more than one block is re-visited through each of them, so on a dense
+cluster of mutually-near hashes the traversal amplifies. Measured here at
+threshold 6 over 64-bit hashes, 100 mutually-near values did not finish in 60
+seconds, while a plain scan of the same input took 0.19 s. An index that is
+slower than the scan it replaces -- precisely when there is real output to find
+-- is a liability, so it is gone from the production path.
+
+This module evaluates **every** pair exactly, in bounded chunks:
+
+  * **exact** duplicates via a hash -> members dictionary (O(N), output-sized);
+  * **near** duplicates by chunked exact Hamming evaluation over DISTINCT hash
+    values -- XOR a block of left values against a block of right values,
+    popcount, keep what falls within the radius;
+  * cost is therefore ``O(N x M)`` cross-dataset and ``O(N^2 / 2)``
+    intra-dataset. That is stated plainly rather than dressed up: it is
+    predictable, it has no recursive amplification, and it cannot degrade on
+    adversarial input. It is NOT subquadratic and does not claim to be;
+  * peak memory is set by the chunk size, NOT by the input size. The full
+    all-pairs matrix is never allocated;
+  * a scalar brute-force reference (:func:`brute_force_duplicates`) is the
+    oracle the chunked path is validated against.
+
+Everything else is unchanged and load-bearing: configurable threshold; exact and
+near reported separately; no self-pairs and no reversed A-B / B-A duplicates;
+deterministic ordering; every pair carries dataset, split, class and relative
+path for both sides; corrupt/missing files are reported, not silently skipped;
+images are hashed one at a time so pixels are never all held in memory.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import operator
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
@@ -32,15 +55,48 @@ DEFAULT_HASH_SIZE = 8  # 64-bit hash
 # how a hash is made, while this versioned value describes how candidate pairs
 # were found.  Bump it when the candidate-search semantics change so an audit
 # can distinguish a changed implementation from a changed input population.
-CANDIDATE_SEARCH_SCHEMA_VERSION = "ica26.leakage.candidate-search/2"
-CANDIDATE_SEARCH_ALGORITHM = "exact-hash-map+recursive-striped-hamming-partition"
+# 2: recursive striped pigeonhole partition. Withdrawn -- complete but
+#    super-quadratic on dense true-output clusters (R2B.2 Finding 2).
+# 3: exact chunked brute-force Hamming evaluation. Every pair is evaluated;
+#    cost is quadratic and predictable, memory is bounded by the chunk.
+CANDIDATE_SEARCH_SCHEMA_VERSION = "ica26.leakage.candidate-search/3"
+CANDIDATE_SEARCH_ALGORITHM = "exact-hash-map+chunked-bruteforce-hamming"
 CANDIDATE_SEARCH_EXACT_STRATEGY = "hash-to-record-members"
-CANDIDATE_SEARCH_NEAR_STRATEGY = "recursive-pigeonhole-partition+bounded-leaf-verification"
+CANDIDATE_SEARCH_NEAR_STRATEGY = "chunked-exact-hamming-evaluation"
 CANDIDATE_SEARCH_NEAR_INPUT = "distinct-hash-values"
 CANDIDATE_SEARCH_VERIFICATION_UNIT = (
-    "distinct-hash pairs reaching a bounded recursive leaf"
+    "every distinct-hash pair, evaluated exactly in bounded chunks"
 )
-DEFAULT_LEAF_PAIR_LIMIT = 512
+#: Complexity, recorded in the artifact so a reader never has to infer it.
+CANDIDATE_SEARCH_COMPLEXITY_INTRA = "O(N^2 / 2) exact distance evaluations"
+CANDIDATE_SEARCH_COMPLEXITY_CROSS = "O(N x M) exact distance evaluations"
+CANDIDATE_SEARCH_IS_OUTPUT_SENSITIVE = False
+
+#: Target pairs per chunk. Peak working memory is a function of THIS, not of the
+#: input size. 2^20 pairs of 64-bit hashes is ~8 MB for the XOR block and, with
+#: the popcount temporaries, tens of MB peak -- small enough to be irrelevant on
+#: any machine that can hold the index, large enough to keep numpy efficient.
+DEFAULT_CHUNK_PAIRS = 1 << 20
+
+#: Live uint64 temporaries inside :func:`_popcount64` plus the XOR block and the
+#: accumulator. Used only to REPORT an estimated peak; it is a documented
+#: approximation, not a measurement.
+_PEAK_BYTES_PER_PAIR_WORD = 8 * 7
+
+#: Wall-clock search duration. Informational, and the only non-reproducible
+#: field a search summary carries.
+SEARCH_SECONDS_FIELD = "search_seconds"
+
+#: Fields stripped before a summary is written anywhere digest-bound. Every
+#: persisted artifact in this repository must reproduce byte-for-byte, so a
+#: timing field may be reported but never stored.
+NON_DETERMINISTIC_SUMMARY_FIELDS = (SEARCH_SECONDS_FIELD,)
+
+
+def deterministic_summary(summary: Mapping[str, Any]) -> dict[str, Any]:
+    """A search summary with every non-reproducible field removed."""
+    return {k: v for k, v in summary.items()
+            if k not in NON_DETERMINISTIC_SUMMARY_FIELDS}
 INDEX_COLUMNS = ["dataset", "split", "class_label", "path", "phash"]
 PAIR_COLUMNS = [
     "dataset_a", "split_a", "class_a", "path_a",
@@ -125,42 +181,45 @@ def validate_search_params(threshold: int, bits: int) -> None:
             "every pair would match and the result would be meaningless")
 
 
-def _partition_bits(positions: Sequence[int], parts: int) -> tuple[tuple[int, ...], ...]:
-    """Deterministically stripe bit positions across ``parts`` non-empty blocks.
+def hash_words(bits: int) -> int:
+    """Number of 64-bit words needed to hold a ``bits``-wide hash."""
+    return (int(bits) + 63) // 64
 
-    Striping is deliberate.  A long shared contiguous bit band is distributed
-    across the blocks instead of becoming one pathological bucket.  The
-    completeness argument depends only on disjoint coverage, not contiguity.
+
+def _keys_to_matrix(keys: Sequence[int], bits: int) -> np.ndarray:
+    """Pack hash values into an ``(n, words)`` uint64 matrix, low word first.
+
+    Working in fixed-width words rather than Python ints is what makes the
+    evaluation vectorisable, and it generalises past 64 bits without changing
+    the algorithm: a wider hash is simply more words to XOR and popcount.
     """
-    if parts < 1 or parts > len(positions):
-        raise HashParameterError(
-            f"cannot partition {len(positions)} bit positions into {parts} blocks")
-    return tuple(tuple(positions[offset::parts]) for offset in range(parts))
+    words = hash_words(bits)
+    matrix = np.zeros((len(keys), words), dtype=np.uint64)
+    mask = (1 << 64) - 1
+    for row, key in enumerate(keys):
+        value = int(key)
+        for word in range(words):
+            matrix[row, word] = np.uint64((value >> (64 * word)) & mask)
+    return matrix
 
 
-def _block_value(key: int, positions: Sequence[int]) -> int:
-    value = 0
-    for output_bit, input_bit in enumerate(positions):
-        value |= ((key >> input_bit) & 1) << output_bit
-    return value
+def _chunk_side(chunk_pairs: int) -> int:
+    """Square chunk edge for a pair budget. At least 1, so progress is assured."""
+    return max(1, int(math.isqrt(max(1, int(chunk_pairs)))))
 
 
-def _band_defs(threshold: int, bits: int = 64) -> list[tuple[int, int]]:
-    """Compatibility helper exposing the top-level contiguous band widths.
+def _block_distances(left: np.ndarray, right: np.ndarray) -> np.ndarray:
+    """Exact Hamming distances between every row of ``left`` and of ``right``.
 
-    Candidate search itself uses :func:`_partition_bits`; callers that used this
-    private helper for diagnostics still receive ``threshold + 1`` complete,
-    non-overlapping bands.
+    Accumulates one 64-bit word at a time so the only arrays proportional to the
+    chunk area are the current XOR block, its popcount, and the running total.
     """
-    validate_search_params(threshold, bits)
-    b = threshold + 1
-    base = bits // b
-    defs, shift = [], 0
-    for i in range(b):
-        width = base + ((bits - base * b) if i == b - 1 else 0)
-        defs.append((shift, (1 << width) - 1))
-        shift += width
-    return defs
+    rows, cols = left.shape[0], right.shape[0]
+    total = np.zeros((rows, cols), dtype=np.int32)
+    for word in range(left.shape[1]):
+        xor = left[:, word][:, None] ^ right[:, word][None, :]
+        total += _popcount64(xor).astype(np.int32)
+    return total
 
 
 # --------------------------------------------------------------------------- #
@@ -273,116 +332,89 @@ def _near_key_pairs(
     threshold: int,
     bits: int,
     intra: bool,
-    leaf_pair_limit: int = DEFAULT_LEAF_PAIR_LIMIT,
-) -> tuple[dict[tuple[int, int], int], dict[str, int]]:
-    """Find near pairs between distinct hashes by exact recursive partitioning.
+    chunk_pairs: int = DEFAULT_CHUNK_PAIRS,
+) -> tuple[dict[tuple[int, int], int], dict[str, object]]:
+    """Find near pairs between distinct hashes by exact chunked evaluation.
 
-    At every non-leaf task, the still-unresolved bit positions are divided into
-    ``threshold + 1`` disjoint striped blocks.  A pair at Hamming distance at
-    most ``threshold`` must be identical on at least one block (pigeonhole), so
-    following every equal-block bucket has complete recall.  That block is
-    removed before recursion because all pairs in the child are known to agree
-    there.  A false-dense bucket is partitioned again; it is never expanded into
-    a quadratic candidate list and there is no insertion-order-sensitive tree.
+    Every pair is evaluated exactly once: the upper triangle for an
+    intra-dataset search, the full Cartesian product for a cross-dataset one.
+    There is no candidate set, no pruning, and therefore no completeness
+    argument to get wrong -- ``n_distance_evaluations`` equals
+    ``n_possible_pairs`` by construction, and the tests assert that identity.
 
-    Recursion stops only when the bucket's pair product is explicitly bounded,
-    or when no more than ``threshold`` unresolved bits remain.  In the latter
-    case every pair in the bucket is a true output, so quadratic work is
-    output-required rather than an indexing artefact.  ``found`` contains only
-    authenticated output key pairs; no all-candidates set is materialised.
+    Work proceeds in square chunks of at most ``chunk_pairs`` pairs. Only the
+    current chunk is ever materialised, so peak memory is a function of the
+    chunk size and the hash width, not of the input size.
 
-    ``stats`` is deterministic operation telemetry.  In particular,
-    ``n_distance_evaluations`` counts every full Hamming popcount and lets tests
-    distinguish this search from an all-pairs implementation without a timing
-    assertion.
+    ``stats`` is deterministic operation telemetry. It is reported alongside the
+    result so a reader can see what was actually computed rather than trusting
+    a claim about it.
     """
-    found: dict[tuple[int, int], int] = {}
-    stats = {
-        "n_candidate_checks": 0,
-        "n_distance_evaluations": 0,
-        "n_partition_tasks": 0,
-        "n_recursive_partitions": 0,
-        "n_partition_memberships": 0,
-        "max_leaf_pair_count": 0,
-    }
-    if threshold < 1 or not uniq_a or not uniq_b:
-        return found, stats
-    try:
-        limit = operator.index(leaf_pair_limit)
-    except TypeError as exc:
-        raise HashParameterError(
-            f"leaf_pair_limit must be an integer, got {leaf_pair_limit!r}") from exc
-    if limit < 1:
-        raise HashParameterError(
-            f"leaf_pair_limit must be >= 1, got {leaf_pair_limit!r}")
-
-    def pair_count(keys_a: Sequence[int], keys_b: Sequence[int], same: bool) -> int:
-        if same:
-            return len(keys_a) * (len(keys_a) - 1) // 2
-        return len(keys_a) * len(keys_b)
-
-    def verify(keys_a: Sequence[int], keys_b: Sequence[int], same: bool) -> None:
-        if same:
-            pairs = ((keys_a[i], keys_a[j])
-                     for i in range(len(keys_a))
-                     for j in range(i + 1, len(keys_a)))
-        else:
-            pairs = ((key_a, key_b) for key_a in keys_a for key_b in keys_b)
-        for key_a, key_b in pairs:
-            pair = ((key_a, key_b) if not same or key_a < key_b
-                    else (key_b, key_a))
-            if pair in found:
-                continue
-            stats["n_candidate_checks"] += 1
-            stats["n_distance_evaluations"] += 1
-            distance = hamming_int(key_a, key_b)
-            if 0 < distance <= threshold:
-                found[pair] = distance
-
-    def group(keys: Sequence[int], block: Sequence[int]) -> dict[int, tuple[int, ...]]:
-        buckets: dict[int, list[int]] = {}
-        for key in keys:
-            buckets.setdefault(_block_value(key, block), []).append(key)
-        return {value: tuple(members) for value, members in buckets.items()}
-
-    def search(
-        keys_a: tuple[int, ...],
-        keys_b: tuple[int, ...],
-        positions: tuple[int, ...],
-        same: bool,
-    ) -> None:
-        count = pair_count(keys_a, keys_b, same)
-        if count == 0:
-            return
-        stats["n_partition_tasks"] += 1
-        if count <= limit or len(positions) <= threshold:
-            stats["max_leaf_pair_count"] = max(
-                stats["max_leaf_pair_count"], count)
-            verify(keys_a, keys_b, same)
-            return
-
-        blocks = _partition_bits(positions, threshold + 1)
-        stats["n_recursive_partitions"] += 1
-        for block in blocks:
-            remaining_set = set(block)
-            remaining = tuple(bit for bit in positions if bit not in remaining_set)
-            groups_a = group(keys_a, block)
-            stats["n_partition_memberships"] += len(keys_a)
-            if same:
-                for value in sorted(groups_a):
-                    members = groups_a[value]
-                    if len(members) > 1:
-                        search(members, members, remaining, True)
-                continue
-
-            groups_b = group(keys_b, block)
-            stats["n_partition_memberships"] += len(keys_b)
-            for value in sorted(groups_a.keys() & groups_b.keys()):
-                search(groups_a[value], groups_b[value], remaining, False)
-
     keys_a = tuple(sorted(uniq_a))
     keys_b = keys_a if intra else tuple(sorted(uniq_b))
-    search(keys_a, keys_b, tuple(range(bits)), intra)
+    n_a, n_b = len(keys_a), len(keys_b)
+    words = hash_words(bits)
+    side = _chunk_side(chunk_pairs)
+    possible = (n_a * (n_a - 1) // 2) if intra else (n_a * n_b)
+
+    stats: dict[str, object] = {
+        "n_possible_pairs": int(possible),
+        "n_distance_evaluations": 0,
+        "n_chunks": 0,
+        "chunk_rows": int(min(side, n_a) if n_a else 0),
+        "chunk_cols": int(min(side, n_b) if n_b else 0),
+        "chunk_pair_budget": int(chunk_pairs),
+        "max_chunk_pair_count": 0,
+        "estimated_peak_chunk_bytes": 0,
+        "hash_words": int(words),
+    }
+
+    found: dict[tuple[int, int], int] = {}
+    # ``possible == 0`` covers empty inputs and the single-distinct-hash intra
+    # case, where the only chunk would be a 1x1 diagonal block with nothing
+    # above its diagonal. Returning here keeps the peak-chunk telemetry honest:
+    # no block was materialised, so none is reported.
+    if threshold < 1 or possible == 0:
+        return found, stats
+
+    matrix_a = _keys_to_matrix(keys_a, bits)
+    matrix_b = matrix_a if intra else _keys_to_matrix(keys_b, bits)
+
+    for i0 in range(0, n_a, side):
+        i1 = min(i0 + side, n_a)
+        # Intra-dataset: the upper triangle only, so a pair is never evaluated
+        # twice and a value is never compared with itself.
+        j_start = i0 if intra else 0
+        for j0 in range(j_start, n_b, side):
+            j1 = min(j0 + side, n_b)
+            block = _block_distances(matrix_a[i0:i1], matrix_b[j0:j1])
+            if intra:
+                # Keep strictly-upper entries; on a diagonal block that is
+                # j > i, off-diagonal blocks are already wholly upper.
+                rows = np.arange(i0, i1)[:, None]
+                cols = np.arange(j0, j1)[None, :]
+                keep = cols > rows
+                evaluated = int(keep.sum())
+                hits = np.nonzero(keep & (block > 0) & (block <= threshold))
+            else:
+                evaluated = int(block.size)
+                hits = np.nonzero((block > 0) & (block <= threshold))
+
+            stats["n_chunks"] = int(stats["n_chunks"]) + 1
+            stats["n_distance_evaluations"] = (
+                int(stats["n_distance_evaluations"]) + evaluated)
+            stats["max_chunk_pair_count"] = max(
+                int(stats["max_chunk_pair_count"]), int(block.size))
+
+            for local_i, local_j in zip(*hits):
+                key_x = keys_a[i0 + int(local_i)]
+                key_y = keys_b[j0 + int(local_j)]
+                pair = ((key_x, key_y) if not intra or key_x < key_y
+                        else (key_y, key_x))
+                found[pair] = int(block[local_i, local_j])
+
+    stats["estimated_peak_chunk_bytes"] = int(
+        stats["max_chunk_pair_count"]) * _PEAK_BYTES_PER_PAIR_WORD
     return found, stats
 
 
@@ -398,28 +430,6 @@ def candidate_search_audit_fields(search_summary: Mapping[str, Any]) -> dict[str
     entry points from gradually persisting different subsets of the scalability
     evidence.
     """
-    required = (
-        "candidate_search_schema_version",
-        "candidate_search_algorithm",
-        "candidate_search_exact_strategy",
-        "candidate_search_near_strategy",
-        "candidate_search_near_input",
-        "candidate_search_verification_unit",
-        "n_distinct_hashes_a",
-        "n_distinct_hashes_b",
-        "n_candidate_checks",
-        "n_distance_evaluations",
-        "n_partition_tasks",
-        "n_recursive_partitions",
-        "n_partition_memberships",
-        "max_leaf_pair_count",
-        "n_near_verifications",
-    )
-    missing = [key for key in required if key not in search_summary]
-    if missing:
-        raise ValueError(
-            "duplicate-search summary is missing audit field(s): "
-            + ", ".join(missing))
     expected_text = {
         "candidate_search_schema_version": CANDIDATE_SEARCH_SCHEMA_VERSION,
         "candidate_search_algorithm": CANDIDATE_SEARCH_ALGORITHM,
@@ -427,14 +437,51 @@ def candidate_search_audit_fields(search_summary: Mapping[str, Any]) -> dict[str
         "candidate_search_near_strategy": CANDIDATE_SEARCH_NEAR_STRATEGY,
         "candidate_search_near_input": CANDIDATE_SEARCH_NEAR_INPUT,
         "candidate_search_verification_unit": CANDIDATE_SEARCH_VERIFICATION_UNIT,
+        "candidate_search_complexity": CANDIDATE_SEARCH_COMPLEXITY_INTRA,
+        "candidate_search_complexity_cross": CANDIDATE_SEARCH_COMPLEXITY_CROSS,
     }
+    numeric_fields = (
+        "hash_size_bits",
+        "hash_words",
+        "threshold",
+        "n_distinct_hashes_a",
+        "n_distinct_hashes_b",
+        "n_possible_pairs",
+        "n_possible_record_pairs",
+        "n_distance_evaluations",
+        "n_output_pairs",
+        "n_chunks",
+        "chunk_rows",
+        "chunk_cols",
+        "chunk_pair_budget",
+        "max_chunk_pair_count",
+        "estimated_peak_chunk_bytes",
+    )
+    required = tuple(expected_text) + numeric_fields + (
+        "candidate_search_output_sensitive",)
+    missing = [key for key in required if key not in search_summary]
+    if missing:
+        raise ValueError(
+            "duplicate-search summary is missing audit field(s): "
+            + ", ".join(missing))
     for field, expected in expected_text.items():
+        if field == "candidate_search_complexity":
+            # Intra and cross searches legitimately report different complexity.
+            if search_summary[field] not in (CANDIDATE_SEARCH_COMPLEXITY_INTRA,
+                                             CANDIDATE_SEARCH_COMPLEXITY_CROSS):
+                raise ValueError(
+                    "duplicate-search summary has unsupported "
+                    f"candidate_search_complexity: {search_summary[field]!r}")
+            continue
         if search_summary[field] != expected:
             raise ValueError(
                 f"duplicate-search summary has unsupported {field}: "
                 f"expected {expected!r}, got {search_summary[field]!r}")
+    if search_summary["candidate_search_output_sensitive"] is not False:
+        raise ValueError(
+            "exact chunked search is not output-sensitive; a summary claiming "
+            "otherwise did not come from this detector")
 
-    numeric_fields = required[len(expected_text):]
     numbers: dict[str, int] = {}
     for field in numeric_fields:
         raw = search_summary[field]
@@ -450,16 +497,30 @@ def candidate_search_audit_fields(search_summary: Mapping[str, Any]) -> dict[str
             raise ValueError(
                 f"duplicate-search summary field {field} must be non-negative")
         numbers[field] = value
-    if numbers["n_candidate_checks"] != numbers["n_distance_evaluations"]:
+
+    # The defining property of an exact full evaluation: every possible pair was
+    # actually measured. If these ever disagree, something pruned, and the
+    # completeness claim in the report is void.
+    if numbers["n_distance_evaluations"] != numbers["n_possible_pairs"]:
         raise ValueError(
-            "candidate-check and exact-distance-evaluation telemetry disagree")
-    if numbers["n_near_verifications"] != numbers["n_distance_evaluations"]:
+            "exact chunked search must evaluate every possible pair: "
+            f"{numbers['n_distance_evaluations']} evaluations for "
+            f"{numbers['n_possible_pairs']} possible pairs")
+    if numbers["max_chunk_pair_count"] > numbers["chunk_pair_budget"]:
         raise ValueError(
-            "legacy near-verification telemetry disagrees with exact evaluations")
-    if numbers["max_leaf_pair_count"] > DEFAULT_LEAF_PAIR_LIMIT:
-        raise ValueError(
-            "reported leaf pair count exceeds the detector's configured bound")
-    return {**expected_text, **numbers}
+            "reported peak chunk exceeds the detector's configured pair budget")
+    # Compared at the RECORD level, which is the unit output pairs are counted
+    # in. Comparing against the distinct-hash space would be a unit error and
+    # would fire on any input containing a repeated hash.
+    if numbers["n_output_pairs"] > numbers["n_possible_record_pairs"]:
+        raise ValueError("more output pairs than possible record pairs")
+    return {**{k: search_summary[k] for k in expected_text},
+            "candidate_search_output_sensitive": False,
+            **numbers,
+            # Legacy field name, retained so an older reader of a persisted
+            # summary still finds the count it expects. Under an exact search it
+            # is simply the evaluation count under its previous spelling.
+            "n_near_verifications": numbers["n_distance_evaluations"]}
 
 
 def find_duplicates(
@@ -467,13 +528,17 @@ def find_duplicates(
     index_b: Optional[pd.DataFrame] = None,
     threshold: int = 5,
     hash_size: int = DEFAULT_HASH_SIZE,
+    chunk_pairs: int = DEFAULT_CHUNK_PAIRS,
 ) -> dict:
     """Exact (distance 0) and near (0 < d <= threshold) duplicate pairs.
 
     ``index_b=None`` -> intra-dataset (i<j, no self/reversed pairs). Otherwise
     cross-dataset. Exact matches come from a hash dictionary; near matches from
-    recursively partitioned exact Hamming search over DISTINCT hash values (see
-    :func:`_near_key_pairs`).
+    exact chunked Hamming evaluation over DISTINCT hash values (see
+    :func:`_near_key_pairs`). Every possible distinct-hash pair is evaluated.
+
+    ``chunk_pairs`` bounds peak working memory and nothing else: the result is
+    invariant to it, which the tests assert directly.
 
     Raises :class:`HashParameterError` for a threshold that the hash width cannot
     support exactly, rather than silently returning a degraded result.
@@ -515,9 +580,14 @@ def find_duplicates(
                 for j in js:
                     exact_pairs.append((i, j))
 
-    # ---- near: recursively partitioned exact search over distinct values ----
+    # ---- near: exact chunked evaluation over distinct values ----
+    import time
+
+    _t0 = time.perf_counter()
     key_pairs, search_stats = _near_key_pairs(
-        uniq_a, uniq_b, threshold=threshold, bits=bits, intra=intra)
+        uniq_a, uniq_b, threshold=threshold, bits=bits, intra=intra,
+        chunk_pairs=chunk_pairs)
+    _elapsed = time.perf_counter() - _t0
 
     near_pairs: list[tuple[int, int, int]] = []
     for (key_x, key_y), d in key_pairs.items():
@@ -557,17 +627,36 @@ def find_duplicates(
         "candidate_search_near_strategy": CANDIDATE_SEARCH_NEAR_STRATEGY,
         "candidate_search_near_input": CANDIDATE_SEARCH_NEAR_INPUT,
         "candidate_search_verification_unit": CANDIDATE_SEARCH_VERIFICATION_UNIT,
+        "candidate_search_complexity": (CANDIDATE_SEARCH_COMPLEXITY_INTRA if intra
+                                        else CANDIDATE_SEARCH_COMPLEXITY_CROSS),
+        "candidate_search_complexity_cross": CANDIDATE_SEARCH_COMPLEXITY_CROSS,
+        "candidate_search_output_sensitive": CANDIDATE_SEARCH_IS_OUTPUT_SENSITIVE,
         "n_a": int(len(a)),
         "n_b": int(len(b)),
         "datasets_a": sorted(a["dataset"].unique().tolist()) if len(a) else [],
         "datasets_b": sorted(b["dataset"].unique().tolist()) if len(b) else [],
         "n_exact_pairs": int(len(exact)),
         "n_near_pairs": int(len(near)),
+        "n_output_pairs": int(len(exact)) + int(len(near)),
         "n_distinct_hashes_a": int(len(uniq_a)),
         "n_distinct_hashes_b": int(len(uniq_b)),
+        # Two different units, both reported because conflating them is how a
+        # telemetry claim goes quietly wrong.  ``n_possible_pairs`` (below, from
+        # the search) counts DISTINCT-HASH pairs -- the actual search space, and
+        # what the evaluation count must equal.  This one counts RECORD pairs,
+        # which is larger whenever two records share a hash.
+        "n_possible_record_pairs": (int(len(a)) * (int(len(a)) - 1) // 2 if intra
+                                    else int(len(a)) * int(len(b))),
+        # Wall-clock, reported because the audit asked for it, and deliberately
+        # the ONLY non-deterministic field here.  It is stripped by
+        # :data:`NON_DETERMINISTIC_SUMMARY_FIELDS` before anything is persisted,
+        # because every digest-bound artifact in this repository has to
+        # reproduce byte-for-byte.  Operation counters, not seconds, are the
+        # regression criterion.
+        SEARCH_SECONDS_FIELD: round(_elapsed, 6),
         **search_stats,
         # Backward-compatible telemetry name.  Its meaning is now explicit:
-        # every value is a full, exact Hamming popcount at a bounded leaf.
+        # every value is a full, exact Hamming popcount inside a bounded chunk.
         "n_near_verifications": int(search_stats["n_distance_evaluations"]),
     }
     return {"exact": exact, "near": near, "summary": summary}
@@ -578,7 +667,12 @@ def brute_force_duplicates(
     index_b: Optional[pd.DataFrame] = None,
     threshold: int = 5,
 ) -> dict:
-    """O(N*M) reference implementation, used only to validate the indexed path."""
+    """Scalar O(N*M) oracle in plain Python, used to validate the chunked path.
+
+    Deliberately shares no code with :func:`find_duplicates`: it uses Python
+    ints and ``int.bit_count`` rather than numpy words and chunking, so parity
+    between the two is real evidence and not a tautology.
+    """
     a = index_a.reset_index(drop=True)
     intra = index_b is None
     b = a if intra else index_b.reset_index(drop=True)
@@ -673,11 +767,14 @@ def benchmark(
     threshold: int = 6,
     seed: int = 0,
     fixture: str = "dense-band-near-empty",
+    chunk_pairs: int = DEFAULT_CHUNK_PAIRS,
 ) -> pd.DataFrame:
     """Run a reproducible scalability benchmark with operation telemetry.
 
-    Elapsed time is informational.  Candidate checks and exact distance
-    evaluations are the non-fragile regression evidence.
+    Elapsed time is informational.  The deterministic operation counters and the
+    peak chunk size are the non-fragile regression evidence: for an exact
+    chunked search, evaluations always equal possible pairs, and the peak chunk
+    never exceeds the configured budget however large the input grows.
     """
     import time
 
@@ -688,20 +785,23 @@ def benchmark(
         idx = build_index([{"dataset": "synthetic", "path": str(i), "phash": format(int(k), "016x")}
                            for i, k in enumerate(keys)])
         t0 = time.perf_counter()
-        res = find_duplicates(idx, threshold=threshold)
+        res = find_duplicates(idx, threshold=threshold, chunk_pairs=chunk_pairs)
         dt = time.perf_counter() - t0
+        s = res["summary"]
         rows.append({
             "fixture": fixture,
             "n": n,
-            "candidate_checks": res["summary"]["n_candidate_checks"],
-            "exact_distance_evaluations": res["summary"]["n_distance_evaluations"],
-            "partition_tasks": res["summary"]["n_partition_tasks"],
-            "partition_memberships": res["summary"]["n_partition_memberships"],
-            "output_pairs": (
-                res["summary"]["n_exact_pairs"] + res["summary"]["n_near_pairs"]),
+            "possible_pairs": s["n_possible_pairs"],
+            "exact_distance_evaluations": s["n_distance_evaluations"],
+            "output_pairs": s["n_output_pairs"],
+            "chunks": s["n_chunks"],
+            "chunk_rows": s["chunk_rows"],
+            "chunk_cols": s["chunk_cols"],
+            "peak_chunk_pairs": s["max_chunk_pair_count"],
+            "peak_chunk_bytes": s["estimated_peak_chunk_bytes"],
             "seconds": round(dt, 3),
-            "exact_pairs": res["summary"]["n_exact_pairs"],
-            "near_pairs": res["summary"]["n_near_pairs"],
+            "exact_pairs": s["n_exact_pairs"],
+            "near_pairs": s["n_near_pairs"],
         })
     return pd.DataFrame(rows)
 
@@ -761,7 +861,7 @@ def main(argv=None) -> int:
     Path(args.out_pairs).parent.mkdir(parents=True, exist_ok=True)
     all_pairs.to_csv(args.out_pairs, index=False)
 
-    summary = result["summary"]
+    summary = deterministic_summary(result["summary"])
     summary["skipped_a"] = skip_a
     summary["skipped_b"] = skip_b or []
     summary["checked_pair"] = [args.manifest_a, args.manifest_b] if args.manifest_b else [args.manifest_a]
