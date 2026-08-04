@@ -241,13 +241,20 @@ def table_calibration(results: dict) -> None:
             res = results.get(rid)
             if not res:
                 continue
-            for eval_name, disp in (("in_domain_test", "in-domain"),
-                                    ("in_domain_test_temperature_scaled", "in-domain (T-scaled)"),
-                                    ("cross_domain_plantdoc_core", "cross-domain")):
+            for eval_name, disp in (
+                ("in_domain_test", "in-domain"),
+                ("in_domain_test_temperature_scaled", "in-domain (T-scaled)"),
+                ("cross_domain_plantdoc_core", "cross-domain"),
+                ("cross_domain_plantdoc_core_temperature_scaled", "cross-domain (T-scaled)"),
+            ):
                 block = res["evaluations"].get(eval_name)
                 if not block or "probabilistic" not in block:
                     continue
                 p = block["probabilistic"]
+                # Read the temperature the block actually used. Inferring it from
+                # the row label previously reported T=1.0 for cross-domain rows
+                # that had in fact been temperature-scaled.
+                applied = block.get("temperature")
                 rows.append({
                     "Model": MODEL_DISPLAY[model],
                     "Dataset": dataset,
@@ -257,7 +264,7 @@ def table_calibration(results: dict) -> None:
                     "ECE": p["expected_calibration_error"],
                     "MCE": p["maximum_calibration_error"],
                     "AURC": block.get("selective_prediction", {}).get("area_under_risk_coverage"),
-                    "T": res.get("calibration", {}).get("temperature") if "T-scaled" in disp else 1.0,
+                    "T": applied if applied else 1.0,
                 })
     df = pd.DataFrame(rows)
     if not df.empty:

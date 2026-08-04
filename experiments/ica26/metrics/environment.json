@@ -1,0 +1,31 @@
+{
+  "experiment_lock_digest": "83449f60136918554904cb9c596122f8b89cb51ff5bb5c52c541394a5698082d",
+  "git_commit": "261fd3af0a8e1271239cd66e34e6062b1da34e73",
+  "hardware": {
+    "backend": "mps",
+    "cuda_device_name": null,
+    "device": "mps",
+    "machine": "arm64",
+    "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "torch_version": "2.13.0",
+    "torchvision_version": "0.28.0"
+  },
+  "runs_expected": [
+    "pv_resnet50_s42",
+    "pv_efficientnet_b0_s42",
+    "pv_mobilenet_v3_small_s42",
+    "pdc_resnet50_s42",
+    "pdc_efficientnet_b0_s42",
+    "pdc_mobilenet_v3_small_s42"
+  ],
+  "runs_missing": [],
+  "runs_present": [
+    "pdc_efficientnet_b0_s42",
+    "pdc_mobilenet_v3_small_s42",
+    "pdc_resnet50_s42",
+    "pv_efficientnet_b0_s42",
+    "pv_mobilenet_v3_small_s42",
+    "pv_resnet50_s42"
+  ],
+  "schema": "ica26.experiment_environment/1"
+}

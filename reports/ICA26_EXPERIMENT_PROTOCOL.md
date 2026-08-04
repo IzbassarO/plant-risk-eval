@@ -337,6 +337,56 @@ no separate cross-domain model is trained.
    These results rest on a scientific experiment lock, not on a completed
    governance process.
 
+## 13a. Hypothesis outcomes (recorded after the matrix completed)
+
+The hypotheses in §2 were written before any result existed and are left
+unedited above. This section records what actually happened, seed 42, one run
+each. Every number is read from `experiments/ica26/metrics/*.json`.
+
+**H1 — supported.** All three backbones exceed 0.99 accuracy on the PlantVillage
+test split: EfficientNet-B0 0.9968, MobileNetV3-Small 0.9950, ResNet-50 0.9925.
+
+**H2 — supported.** Cross-domain macro-F1 collapses relative to in-domain:
+0.9899 → 0.2414 (ResNet-50), 0.9956 → 0.2359 (EfficientNet-B0), 0.9927 → 0.1982
+(MobileNetV3-Small). Relative drops are 75.6%, 76.3%, and 80.0%. The label-space
+change alone cannot account for this: a 21-way task with the observed class
+supports would give a majority-class baseline far above 0.24.
+
+**H3 — supported, and more sharply than expected.** The in-domain PlantVillage
+ranking is EfficientNet-B0 > MobileNetV3-Small > ResNet-50, spread across
+0.0043 accuracy. The cross-domain ranking is ResNet-50 > EfficientNet-B0 >
+MobileNetV3-Small. ResNet-50 places **last** in domain and **first** out of
+domain. Cross-domain ordering instead matches the PlantDoc-trained in-domain
+ordering exactly (ResNet-50 0.6933 > EfficientNet-B0 0.6800 >
+MobileNetV3-Small 0.5556). A saturated in-domain benchmark carried essentially
+no information about which backbone transfers.
+
+**H4 — first clause supported, second clause falsified.** Miscalibration does
+worsen out of domain: ECE rises from 0.090/0.098/0.096 in domain to
+0.304/0.239/0.160 cross-domain (ResNet-50 / EfficientNet-B0 /
+MobileNetV3-Small, unscaled).
+
+But temperature scaling fitted in domain does **not** reduce the residual
+out-of-domain miscalibration — it makes it substantially worse:
+
+| Model | Cross-domain ECE, unscaled | After in-domain T | Fitted T |
+|---|---:|---:|---:|
+| ResNet-50 | 0.3038 | 0.4305 | 0.7086 |
+| EfficientNet-B0 | 0.2390 | 0.3778 | 0.7030 |
+| MobileNetV3-Small | 0.1600 | 0.3011 | 0.6988 |
+
+The mechanism is legible. Label smoothing of 0.1 leaves the models
+*under*-confident in domain, so the fitted temperature is below 1 (≈0.70) and
+**sharpens** the distribution — which is exactly right in domain, cutting ECE
+from ≈0.09 to ≈0.009. Out of domain the model is already over-confident relative
+to its much lower accuracy, and sharpening amplifies that error.
+
+The practical consequence for deployment is the opposite of the usual advice: a
+temperature fitted on in-domain validation data should not be transported across
+a domain shift, and doing so is worse than leaving the model uncalibrated. Both
+variants are reported in Table 6 so the comparison is visible rather than
+implied.
+
 ## 14. Exact reproduction commands
 
 ```bash

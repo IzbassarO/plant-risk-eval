@@ -1,0 +1,16 @@
+\begin{table}[htbp]
+\caption{Model efficiency. Latency and throughput measured after warm-up on the accelerator reported in the run metadata.}
+\label{tab:efficiency}
+\begin{tabular}{llrrrrrrr}
+\toprule
+Model & Dataset & Params (M) & Epochs & Train time (min) & s / epoch & Latency b1 (ms) & Throughput (img/s) & Peak mem (MB) \\
+\midrule
+ResNet-50 & PlantVillage & 23.59 & 11 & 120.80 & 658.80 & 8.43 & 219.85 & 9461.80 \\
+EfficientNet-B0 & PlantVillage & 4.06 & 14 & 132.10 & 566.20 & 9.31 & 275.00 & 9237.60 \\
+MobileNetV3-Small & PlantVillage & 1.56 & 15 & 33.50 & 134.00 & 6.65 & 1275.82 & 2144.70 \\
+ResNet-50 & PlantDoc Core & 23.57 & 10 & 12.10 & 72.70 & 8.44 & 216.14 & 12531.80 \\
+EfficientNet-B0 & PlantDoc Core & 4.04 & 9 & 8.40 & 56.20 & 9.58 & 274.86 & 11437.60 \\
+MobileNetV3-Small & PlantDoc Core & 1.55 & 11 & 2.30 & 12.50 & 6.80 & 1270.61 & 2144.70 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -441,12 +441,14 @@ def train_one_run(
     # ---- cross-domain -------------------------------------------------------
     if cfg.cross_domain_eval:
         mapping = load_mapping(repo_root)
-        cd = evaluate_cross_domain(
+        cd, cd_scaled = evaluate_cross_domain(
             model, mapping, prepared.class_to_idx, eval_tf, device, cfg,
             repo_root=repo_root, temperature=(temperature_info or {}).get("temperature"),
             run_dir=run_dir,
         )
         results["evaluations"]["cross_domain_plantdoc_core"] = cd
+        if cd_scaled is not None:
+            results["evaluations"]["cross_domain_plantdoc_core_temperature_scaled"] = cd_scaled
 
     _write_json(run_dir / "result.json", results)
     _write_json(metrics_dir / f"{cfg.experiment_id}.json", results)
@@ -469,7 +471,7 @@ def evaluate_cross_domain(
     model, mapping: CrossDomainMapping, source_class_to_idx: dict, eval_tf,
     device: str, cfg: ExperimentConfig, repo_root: str | Path, temperature: Optional[float],
     run_dir: Path,
-) -> dict:
+) -> tuple[dict, Optional[dict]]:
     """Evaluate a PlantVillage-trained model on the shared-class PlantDoc subset.
 
     Only the frozen shared classes take part. Source logits are restricted to the
@@ -492,21 +494,23 @@ def evaluate_cross_domain(
     loader = make_loader(ds, cfg.eval_batch_size, False, cfg.num_workers, device)
     logits, labels = collect_logits(model, loader, device, cfg.amp)
 
-    # Group source-class probability mass onto canonical classes.
-    probs_src = calib.apply_temperature(logits, temperature) if temperature else calib.softmax(logits)
-    grouped = np.zeros((probs_src.shape[0], len(canon_classes)), dtype=np.float64)
-    for canonical, source_labels in mapping.canonical_to_plantvillage.items():
-        cols = [source_class_to_idx[s] for s in source_labels if s in source_class_to_idx]
-        if cols:
-            grouped[:, canon_to_idx[canonical]] = probs_src[:, cols].sum(axis=1)
-    mass = grouped.sum(axis=1, keepdims=True)
-    retained_mass = float(mass.mean())
-    grouped = grouped / np.maximum(mass, 1e-12)
+    def _grouped(t: Optional[float]) -> tuple[np.ndarray, float]:
+        """Group source-class probability mass onto canonical classes."""
+        probs_src = calib.apply_temperature(logits, t) if t else calib.softmax(logits)
+        g = np.zeros((probs_src.shape[0], len(canon_classes)), dtype=np.float64)
+        for canonical, source_labels in mapping.canonical_to_plantvillage.items():
+            cols = [source_class_to_idx[s] for s in source_labels if s in source_class_to_idx]
+            if cols:
+                g[:, canon_to_idx[canonical]] = probs_src[:, cols].sum(axis=1)
+        mass = g.sum(axis=1, keepdims=True)
+        return g / np.maximum(mass, 1e-12), float(mass.mean())
+
+    grouped, retained_mass = _grouped(None)
 
     out = mmod.evaluate_classification(labels, grouped.argmax(1), canon_classes)
     out["probabilistic"] = mmod.probabilistic_metrics(labels, grouped)
     out["selective_prediction"] = mmod.confidence_abstention_curve(labels, grouped)
-    out["temperature"] = temperature
+    out["temperature"] = None
     out["protocol"] = {
         "description": (
             "Restricted-label-space evaluation over the frozen shared classes. "
@@ -532,7 +536,23 @@ def evaluate_cross_domain(
         run_dir / "predictions_cross_domain.npz",
         probs_canonical=grouped.astype(np.float32), labels=labels,
     )
-    return out
+
+    # The same predictions under the in-domain-fitted temperature. Temperature
+    # does not move the argmax, so accuracy and F1 are identical; only the
+    # confidence metrics differ. Reporting both is what makes it possible to say
+    # whether an in-domain calibration fix survives the domain shift.
+    scaled = None
+    if temperature:
+        grouped_t, _ = _grouped(temperature)
+        scaled = mmod.evaluate_classification(labels, grouped_t.argmax(1), canon_classes)
+        scaled["probabilistic"] = mmod.probabilistic_metrics(labels, grouped_t)
+        scaled["selective_prediction"] = mmod.confidence_abstention_curve(labels, grouped_t)
+        scaled["temperature"] = temperature
+        scaled["protocol"] = dict(out["protocol"])
+        scaled["protocol"]["temperature_source"] = (
+            "fitted on the in-domain validation split, applied unchanged out of domain"
+        )
+    return out, scaled
 
 
 def _write_json(path: Path, payload: dict) -> None:

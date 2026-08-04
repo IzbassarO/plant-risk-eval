@@ -1,0 +1,86 @@
+{
+  "experiment_id": "pdc_efficientnet_b0_s42",
+  "history": [
+    {
+      "epoch": 1,
+      "epoch_seconds": 61.29,
+      "lr": 0.00029672,
+      "train_accuracy": 0.13844,
+      "train_loss": 3.400412,
+      "val_accuracy": 0.376068,
+      "val_macro_f1": 0.381984
+    },
+    {
+      "epoch": 2,
+      "epoch_seconds": 42.05,
+      "lr": 0.00028703,
+      "train_accuracy": 0.474786,
+      "train_loss": 2.450764,
+      "val_accuracy": 0.628205,
+      "val_macro_f1": 0.650956
+    },
+    {
+      "epoch": 3,
+      "epoch_seconds": 42.98,
+      "lr": 0.00027135,
+      "train_accuracy": 0.659848,
+      "train_loss": 1.953502,
+      "val_accuracy": 0.675214,
+      "val_macro_f1": 0.693803
+    },
+    {
+      "epoch": 4,
+      "epoch_seconds": 49.92,
+      "lr": 0.00025037,
+      "train_accuracy": 0.75785,
+      "train_loss": 1.713052,
+      "val_accuracy": 0.662393,
+      "val_macro_f1": 0.688458
+    },
+    {
+      "epoch": 5,
+      "epoch_seconds": 57.06,
+      "lr": 0.000225,
+      "train_accuracy": 0.813987,
+      "train_loss": 1.571473,
+      "val_accuracy": 0.700855,
+      "val_macro_f1": 0.711464
+    },
+    {
+      "epoch": 6,
+      "epoch_seconds": 62.06,
+      "lr": 0.00019635,
+      "train_accuracy": 0.862512,
+      "train_loss": 1.465089,
+      "val_accuracy": 0.722222,
+      "val_macro_f1": 0.743657
+    },
+    {
+      "epoch": 7,
+      "epoch_seconds": 67.96,
+      "lr": 0.00016568,
+      "train_accuracy": 0.88392,
+      "train_loss": 1.40163,
+      "val_accuracy": 0.679487,
+      "val_macro_f1": 0.710129
+    },
+    {
+      "epoch": 8,
+      "epoch_seconds": 63.89,
+      "lr": 0.00013432,
+      "train_accuracy": 0.917222,
+      "train_loss": 1.350979,
+      "val_accuracy": 0.713675,
+      "val_macro_f1": 0.730735
+    },
+    {
+      "epoch": 9,
+      "epoch_seconds": 57.82,
+      "lr": 0.00010365,
+      "train_accuracy": 0.921028,
+      "train_loss": 1.321866,
+      "val_accuracy": 0.705128,
+      "val_macro_f1": 0.735296
+    }
+  ]
+}

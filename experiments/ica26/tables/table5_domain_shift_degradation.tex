@@ -1,0 +1,13 @@
+\begin{table}[htbp]
+\caption{Domain-shift degradation. In-domain is the PlantVillage test split over 38 classes; cross-domain is the PlantDoc Core shared-class subset over 21 classes. The two label spaces differ, so the drop combines domain shift with the change of task difficulty and should be read as a paired trend across models rather than as an isolated quantity.}
+\label{tab:degradation}
+\begin{tabular}{lrrrrrrrr}
+\toprule
+Model & Accuracy (in-domain) & Accuracy (cross-domain) & Accuracy abs. drop & Accuracy rel. drop \% & Macro-F1 (in-domain) & Macro-F1 (cross-domain) & Macro-F1 abs. drop & Macro-F1 rel. drop \% \\
+\midrule
+ResNet-50 & 0.9925 & 0.2778 & 0.7147 & 72.0103 & 0.9899 & 0.2414 & 0.7485 & 75.6139 \\
+EfficientNet-B0 & 0.9968 & 0.2742 & 0.7226 & 72.4908 & 0.9956 & 0.2359 & 0.7597 & 76.3095 \\
+MobileNetV3-Small & 0.9950 & 0.2419 & 0.7530 & 75.6847 & 0.9927 & 0.1982 & 0.7945 & 80.0337 \\
+\bottomrule
+\end{tabular}
+\end{table}
