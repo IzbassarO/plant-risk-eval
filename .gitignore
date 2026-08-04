@@ -27,8 +27,12 @@ data/interim/*
 reports/near_duplicate_contact_sheets/
 # Same policy for the PlantDoc duplicate packet: the CSV/JSON/Markdown evidence
 # and decision forms ARE tracked, but the ~1.7 MB of rendered collages are
-# regenerable via `python scripts/build_plantdoc_duplicate_packet.py`. Their
-# SHA-256 values stay recorded in packet_manifest.json.
+# regenerable via `python scripts/build_plantdoc_duplicate_packet.py`.
+# packet_manifest.json records their NAMES and renderer configuration, NOT their
+# SHA-256 values. Binding PNG digests in a tracked contract made the packet
+# verifiable on exactly one workstation: the renderer needs the untracked raw
+# pixels and resolves fonts by absolute macOS paths. The tracked text artifacts
+# carry the evidence and are digest-bound; the collages are a derived aid.
 reports/plantdoc_exact_duplicate_review/*.png
 # Legacy CPU smoke-run figures, superseded and not referenced by any report.
 reports/_legacy_smoke_figures/

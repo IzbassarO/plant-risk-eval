@@ -177,6 +177,12 @@ def test_markdown_offers_no_recommendation(repo_root):
 
 
 def test_packet_manifest_hashes_are_correct(repo_root):
+    """Every digest in the manifest must belong to a file a clone actually has.
+
+    The manifest used to bind four contact-sheet PNGs that `.gitignore`
+    excludes, so this test could only pass on the machine that rendered them.
+    It now covers exactly the tracked text artifacts.
+    """
     import hashlib
 
     manifest = json.loads((repo_root / PACKET / "packet_manifest.json").read_text())
@@ -188,6 +194,30 @@ def test_packet_manifest_hashes_are_correct(repo_root):
         assert hashlib.sha256(p.read_bytes()).hexdigest() == digest, name
 
 
+def test_the_manifest_binds_no_untracked_derivative(repo_root):
+    manifest = json.loads((repo_root / PACKET / "packet_manifest.json").read_text())
+    assert not [n for n in manifest["artifacts"] if n.endswith(".png")]
+    derivatives = manifest["rendered_derivatives"]
+    # The sheets are still declared -- name, renderer configuration, and the
+    # command that regenerates them -- so a reader knows what the reviewer saw.
+    assert derivatives["contact_sheets"] == [f"contact_sheet_{i:02d}.png"
+                                             for i in range(1, 5)]
+    assert derivatives["tracked"] is False
+    assert derivatives["required_for_validation"] is False
+    assert derivatives["rendering"]["groups_per_sheet"] == 3
+    assert derivatives["rendering"]["regenerate_with"]
+
+
+def test_the_manifest_covers_every_tracked_text_artifact(repo_root):
+    manifest = json.loads((repo_root / PACKET / "packet_manifest.json").read_text())
+    assert set(manifest["artifacts"]) == {
+        "PLANTDOC_EXACT_DUPLICATE_HUMAN_REVIEW.md",
+        "README.md",
+        "plantdoc_exact_duplicate_groups.csv",
+        "plantdoc_exact_duplicate_members.csv",
+    }
+
+
 def test_packet_generation_is_deterministic(repo_root, tmp_path):
     """Re-render the text artifacts; they must reproduce byte-for-byte."""
     r = subprocess.run(
@@ -195,6 +225,48 @@ def test_packet_generation_is_deterministic(repo_root, tmp_path):
          "--check"], cwd=str(repo_root), capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
     assert "check OK" in r.stdout
+
+
+def test_check_does_not_depend_on_locally_rendered_png_files(repo_root, tmp_path):
+    """The fresh-clone regression, stated directly.
+
+    `--check` used to discover the sheet list by globbing the packet directory,
+    so a clone with no PNGs rendered a Markdown file without the sheet bullets
+    and reported an up-to-date packet as stale. The sheet names now come from
+    the group count, which a clone always has.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "_dup_packet_builder",
+        repo_root / "scripts/build_plantdoc_duplicate_packet.py")
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
+
+    assert builder.contact_sheet_names(12) == [
+        f"contact_sheet_{i:02d}.png" for i in range(1, 5)]
+    # Derived purely from the data: 12 groups at 3 per sheet is 4 sheets,
+    # whatever happens to exist on disk.
+    assert builder.contact_sheet_names(0) == []
+    assert builder.contact_sheet_names(1) == ["contact_sheet_01.png"]
+    assert builder.contact_sheet_names(4) == ["contact_sheet_01.png",
+                                              "contact_sheet_02.png"]
+
+
+def test_check_mode_writes_nothing(repo_root):
+    """`--check` must not mutate the primary checkout."""
+    import hashlib
+
+    packet = repo_root / PACKET
+    before = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in sorted(packet.iterdir()) if p.is_file()}
+    r = subprocess.run(
+        [sys.executable, str(repo_root / "scripts/build_plantdoc_duplicate_packet.py"),
+         "--check"], cwd=str(repo_root), capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    after = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+             for p in sorted(packet.iterdir()) if p.is_file()}
+    assert before == after
 
 
 def test_no_source_record_was_changed(repo_root):
