@@ -617,13 +617,282 @@ def build_manifest_from_repo(
                 "components": sorted(components, key=lambda c: c["component"])}
 
 
+#: Versioned identity of the reconstruction check. Bump rather than editing
+#: which columns count as identity -- that changes what "reconstructed" means.
+MANIFEST_RECONSTRUCTION_SCHEMA = "ica26.plantvillage.manifest_reconstruction/1"
+
+#: Columns a reconstruction independently derives from the pinned sources and
+#: compares field-for-field. These are the manifest's SCIENTIFIC content: which
+#: image, called what, on which side of the split, with what leaf grouping.
+#:
+#: Pixel-derived columns (sha256, width, height, mode, n_bytes, is_corrupt) are
+#: deliberately excluded here and checked separately against the images on disk:
+#: they describe the bytes, not the dataset's structure. ``acquired_at_utc`` is
+#: acquisition metadata -- a re-acquisition is not a different dataset.
+RECONSTRUCTED_IDENTITY_COLUMNS = (
+    "dataset", "split", "class_label", "relpath", "leaf_id", "has_leaf_id",
+)
+
+
+def all_pixels_materialized(df: "pd.DataFrame") -> bool:
+    """True only if EVERY record carries a full-length digest.
+
+    This used to be ``.any()``, which meant one materialized image in a
+    54,305-record manifest reported the whole dataset as materialized. It also
+    used to accept ``len > 0`` in two of its three call sites, so a truncated or
+    garbage digest counted. A Dataset V1 claim has to mean every record.
+    """
+    if df is None or not len(df):
+        return False
+    return bool(df["sha256"].astype(str).str.len().eq(64).all())
+
+
+def reconstruct_manifest_identities(
+    config: str = "color",
+    *,
+    revision: str = PLANTVILLAGE_REVISION,
+    downloader=None,
+) -> tuple[list[dict], dict]:
+    """Derive every PlantVillage record from the pinned sources alone.
+
+    This is the independent half of manifest validation. It reads the frozen
+    split files and leaf map at the pinned revision and rebuilds the full record
+    identity set from scratch, without consulting the persisted manifest at all.
+    The expected record count is therefore a *result* of reconstruction rather
+    than a number written down somewhere and trusted.
+
+    That is what closes the forgery the audit found: a one-row manifest with a
+    self-consistent digest passes every digest check, because a digest only
+    proves a file has not changed since someone hashed it. Only re-deriving the
+    contents proves the file is the right file.
+
+    Returns ``(rows, meta)`` where rows are ordered exactly as the builder orders
+    them, so the comparison is positional as well as set-based.
+    """
+    import json
+
+    rev = assert_immutable_revision(revision)
+    components: list[dict] = []
+
+    def _pinned(path: str) -> Path:
+        local, prov = fetch_pinned(path, revision=rev, downloader=downloader)
+        components.append(prov)
+        return local
+
+    train_path = _pinned(f"splits/{config}_train.txt")
+    test_path = _pinned(f"splits/{config}_test.txt")
+    leaf_path = _pinned(LEAF_MAP_PATH)
+
+    with open(train_path) as fh:
+        train = [line.strip() for line in fh if line.strip()]
+    with open(test_path) as fh:
+        test = [line.strip() for line in fh if line.strip()]
+    with open(leaf_path) as fh:
+        leaf_map = json.load(fh)
+    leafkeys = {str(k).strip().lower() for k in leaf_map}
+
+    rows: list[dict] = []
+    for split, paths in (("train", train), ("test", test)):
+        for rel in paths:
+            parts = rel.split("/")
+            tag = _leaf_tag(rel)
+            rows.append({
+                "dataset": "PlantVillage",
+                "split": split,
+                "class_label": parts[-2] if len(parts) >= 2 else "?",
+                "relpath": rel,
+                "leaf_id": tag,
+                "has_leaf_id": bool(tag) and (tag.lower() in leafkeys),
+            })
+
+    # Same ordering the builder applies, so a positional comparison is
+    # meaningful and a reordered manifest is caught rather than sorted away.
+    rows.sort(key=lambda r: (r["split"], r["class_label"], r["relpath"]))
+
+    problems = validate_component_provenance(
+        components, revision=rev,
+        required_components={f"splits/{config}_train.txt",
+                             f"splits/{config}_test.txt", LEAF_MAP_PATH})
+    if problems:
+        raise SourcePinError(
+            "reconstruction sources are not a complete verified pinned chain: "
+            + "; ".join(problems))
+
+    meta = {
+        "schema": MANIFEST_RECONSTRUCTION_SCHEMA,
+        "config": config,
+        "immutable_revision": rev,
+        "leaf_map_entries": len(leaf_map),
+        "n_train": len(train),
+        "n_test": len(test),
+        "n_records": len(rows),
+        "source_components": sorted(
+            (c["component"] for c in components)),
+    }
+    return rows, meta
+
+
+def validate_manifest_reconstruction(
+    manifest_path: str | Path,
+    *,
+    config: str = "color",
+    revision: str = PLANTVILLAGE_REVISION,
+    images_root: Optional[str | Path] = None,
+    downloader=None,
+    max_examples: int = 5,
+) -> tuple[list[str], dict]:
+    """Compare the persisted manifest against an independent reconstruction.
+
+    Checks, in order of what each one catches:
+
+    * **no missing rows / no additional rows** -- set difference on the record
+      identity ``(split, relpath)``, which catches the fabricated one-row
+      manifest, a deleted row, and an inserted row;
+    * **no duplicated identities** -- the same image may not appear twice;
+    * **exact values for every semantically relevant column** -- a changed
+      class, split, or leaf metadata is a mismatch, not a rounding difference;
+    * **deterministic ordering** -- the persisted row order must equal the
+      reconstruction's canonical order;
+    * **expected image presence** -- when ``images_root`` is given, every
+      required image must exist and its recorded digest must match its bytes.
+
+    Returns ``(problems, report)``. An empty problem list is the only pass.
+    """
+    path = Path(manifest_path)
+    if not path.is_file():
+        return ([f"PlantVillage manifest is absent at {path}"],
+                {"schema": MANIFEST_RECONSTRUCTION_SCHEMA, "reconstructed": False})
+
+    expected_rows, meta = reconstruct_manifest_identities(
+        config, revision=revision, downloader=downloader)
+    persisted = pd.read_csv(path, dtype=str, keep_default_na=False)
+
+    problems: list[str] = []
+    missing_columns = [c for c in RECONSTRUCTED_IDENTITY_COLUMNS
+                       if c not in persisted.columns]
+    if missing_columns:
+        return ([f"persisted manifest is missing column(s): {missing_columns}"],
+                {"schema": MANIFEST_RECONSTRUCTION_SCHEMA, "reconstructed": False,
+                 "expected_records": len(expected_rows)})
+
+    def _identity(row) -> tuple[str, str]:
+        return (str(row["split"]), str(row["relpath"]))
+
+    persisted_rows = persisted.to_dict("records")
+    expected_index = {_identity(r): r for r in expected_rows}
+    persisted_index: dict[tuple[str, str], dict] = {}
+    duplicated: list[tuple[str, str]] = []
+    for row in persisted_rows:
+        key = _identity(row)
+        if key in persisted_index:
+            duplicated.append(key)
+        persisted_index[key] = row
+
+    missing = sorted(set(expected_index) - set(persisted_index))
+    extra = sorted(set(persisted_index) - set(expected_index))
+    if missing:
+        problems.append(
+            f"persisted manifest omits {len(missing)} reconstructed record(s), "
+            f"e.g. {[m[1] for m in missing[:max_examples]]}")
+    if extra:
+        problems.append(
+            f"persisted manifest contains {len(extra)} record(s) the pinned "
+            f"sources do not produce, e.g. {[e[1] for e in extra[:max_examples]]}")
+    if duplicated:
+        problems.append(
+            f"persisted manifest repeats {len(duplicated)} record identity(ies), "
+            f"e.g. {[d[1] for d in duplicated[:max_examples]]}")
+
+    mismatched: list[str] = []
+    for key in sorted(set(expected_index) & set(persisted_index)):
+        want, got = expected_index[key], persisted_index[key]
+        for column in RECONSTRUCTED_IDENTITY_COLUMNS:
+            expected_value = want[column]
+            actual = str(got.get(column, ""))
+            if column == "has_leaf_id":
+                if actual.strip().lower() != str(bool(expected_value)).lower():
+                    mismatched.append(
+                        f"{key[1]}: {column} is '{actual}', reconstruction "
+                        f"derives '{expected_value}'")
+            elif actual != str(expected_value):
+                mismatched.append(
+                    f"{key[1]}: {column} is '{actual}', reconstruction derives "
+                    f"'{expected_value}'")
+    if mismatched:
+        problems.append(
+            f"{len(mismatched)} reconstructed value mismatch(es), e.g. "
+            + "; ".join(mismatched[:max_examples]))
+
+    ordered = (not missing and not extra and not duplicated
+               and [_identity(r) for r in persisted_rows]
+               == [_identity(r) for r in expected_rows])
+    if not missing and not extra and not duplicated and not ordered:
+        problems.append(
+            "persisted manifest row order does not match the deterministic "
+            "reconstruction order")
+
+    pixels_report = {"checked": False, "verified": 0, "problems": 0}
+    if images_root is not None:
+        root = Path(images_root)
+        absent: list[str] = []
+        wrong: list[str] = []
+        for row in persisted_rows:
+            rel = str(row["relpath"])
+            target = root / rel
+            if not target.is_file():
+                absent.append(rel)
+                continue
+            declared = str(row.get("sha256", ""))
+            if len(declared) != 64:
+                wrong.append(f"{rel}: no full-length digest recorded")
+            elif M.sha256_of_file(target) != declared:
+                wrong.append(f"{rel}: bytes do not match the recorded digest")
+        pixels_report = {
+            "checked": True,
+            "verified": len(persisted_rows) - len(absent) - len(wrong),
+            "problems": len(absent) + len(wrong),
+        }
+        if absent:
+            problems.append(
+                f"{len(absent)} required PlantVillage image(s) are absent, e.g. "
+                f"{absent[:max_examples]}")
+        if wrong:
+            problems.append(
+                f"{len(wrong)} PlantVillage image(s) do not match their recorded "
+                f"identity, e.g. {wrong[:max_examples]}")
+
+    report = {
+        "schema": MANIFEST_RECONSTRUCTION_SCHEMA,
+        "reconstructed": True,
+        "config": config,
+        "immutable_revision": meta["immutable_revision"],
+        "source_components": meta["source_components"],
+        "leaf_map_entries": meta["leaf_map_entries"],
+        # Derived, never hardcoded: this is what the pinned sources actually say.
+        "expected_records": meta["n_records"],
+        "expected_train": meta["n_train"],
+        "expected_test": meta["n_test"],
+        "persisted_records": len(persisted_rows),
+        "missing_records": len(missing),
+        "extra_records": len(extra),
+        "duplicated_identities": len(duplicated),
+        "value_mismatches": len(mismatched),
+        "order_matches": bool(ordered),
+        "manifest_sha256": M.sha256_of_file(path),
+        "all_pixels_materialized": all_pixels_materialized(persisted),
+        "pixel_verification": pixels_report,
+        "equal": not problems,
+    }
+    return problems, report
+
+
 def repo_summary(df: pd.DataFrame, config: str, leaf_map_entries: int, snapshot: dict) -> dict:
     n = int(len(df))
     per_split = {str(s): {"n_images": int(len(g)), "n_classes": int(g["class_label"].nunique())}
                  for s, g in df.groupby("split")}
     n_with = int(df["has_leaf_id"].sum()) if n else 0
     n_without = n - n_with
-    pixels = bool(df["sha256"].astype(str).str.len().gt(0).any()) if n else False
+    pixels = all_pixels_materialized(df)
     summary = {
         "dataset": "PlantVillage", "config": config, "hf_repo": HF_REPO,
         "n_images": n, "n_classes_total": int(df["class_label"].nunique()) if n else 0,
@@ -668,7 +937,7 @@ def acquire_from_repo(
                                         acquired_at_utc=acquired_at_utc)
     secs = time.perf_counter() - t0
     M.write_manifest(df, manifest_csv)
-    pixels = bool(df["sha256"].astype(str).str.len().gt(0).any()) if len(df) else False
+    pixels = all_pixels_materialized(df)
     mode = "repo-files+pixels" if pixels else "repo-files-structural"
     components = meta.get("components") or []
     manifest_digest = M.sha256_of_file(manifest_csv)
@@ -731,7 +1000,7 @@ def acquire(
     summary = summarize(df, config)
     disk = int(pd.to_numeric(df["n_bytes"], errors="coerce").fillna(0).sum()) if len(df) else 0
     mode = "streaming-sample" if streaming else "full"
-    pixels = bool(df["sha256"].astype(str).str.len().eq(64).any()) if len(df) else False
+    pixels = all_pixels_materialized(df)
     snapshot = build_source_snapshot(config, rev, mode, disk_bytes=disk, seconds=secs,
                                      observed_head=hf_head_revision(),
                                      pixels_materialized=pixels,
