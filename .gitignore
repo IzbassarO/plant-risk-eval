@@ -91,6 +91,20 @@ lightning_logs/
 logs/
 *.log
 
+# --- ICA 2026 paper experiments ------------------------------------------------
+# `runs/` and `logs/` above are generic patterns that would swallow the whole
+# experiment tree. Git cannot re-include a file whose parent directory is
+# excluded, so the directory itself is re-included first and the heavy artifacts
+# are then excluded individually.
+#
+# Committed: configs, resolved configs, compact training histories, JSON/CSV
+# metrics, figures, LaTeX tables, environment metadata.
+# Not committed: checkpoints (*.pt, already covered above), raw prediction
+# tensor dumps, and run logs.
+!experiments/ica26/runs/
+experiments/ica26/runs/**/*.npz
+experiments/ica26/logs/
+
 # --- model / dataset caches ---------------------------------------------------
 .cache/
 hf_cache/
@@ -147,3 +161,6 @@ htmlcov/
 Thumbs.db
 ehthumbs.db
 desktop.ini
+
+# ICA 2026 smoke-run scratch tree (evidence lives in metrics/smoke_test_report.json)
+experiments/ica26/_smoke/

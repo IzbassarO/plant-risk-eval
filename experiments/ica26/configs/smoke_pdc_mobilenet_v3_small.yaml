@@ -1,0 +1,27 @@
+# ICA 2026 experiment configuration.
+# One common protocol across all six runs; only `dataset`, `model`, and the two
+# documented PlantDoc exceptions vary. See reports/ICA26_EXPERIMENT_PROTOCOL.md.
+experiment_id: smoke_pdc_mobilenet_v3_small
+dataset: plantdoc_core
+model: mobilenet_v3_small
+seed: 42
+image_size: 224
+batch_size: 16
+eval_batch_size: 128
+epochs: 1
+early_stopping_patience: 1
+lr: 3.0e-4
+weight_decay: 1.0e-4
+label_smoothing: 0.1
+val_fraction: 0.1
+scheduler: cosine
+optimizer: adamw
+amp: true
+pretrained: true
+class_weighting: inverse_frequency
+cross_domain_eval: false
+calibrate: true
+notes: "Smoke run: deterministic per-class subset, one epoch. Not a reportable result."
+subset_per_class: 4
+limit_train_batches: 3
+num_workers: 2
