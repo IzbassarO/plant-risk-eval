@@ -1,0 +1,356 @@
+# ICA 2026 Experiment Protocol
+
+**Paper:** *Leakage-Controlled Cross-Domain Evaluation of Deep Learning Models for
+Plant Disease Classification*
+
+**Dataset lock:** `data/manifests/ica26_core_experiment_lock.json`
+(schema `ica26.paper_experiment_dataset_lock/1`, digest
+`83449f60136918554904cb9c596122f8b89cb51ff5bb5c52c541394a5698082d`)
+
+**Scope note.** The Risk Evaluation Layer — action mappings, harm matrix,
+treatment recommendation, action-aware training — is **outside** this paper and
+is not required, referenced, or completed by any experiment here. The repository's
+formal Core Dataset governance freeze remains **pending**; this protocol runs
+against a scientific experiment lock instead, and does not assert otherwise.
+
+---
+
+## 1. Research question
+
+Laboratory-condition plant-disease classifiers report near-perfect accuracy on
+PlantVillage, but PlantVillage images are single leaves on uniform backgrounds
+whereas field photographs are not. Two questions follow:
+
+**RQ1.** How much in-domain accuracy do standard ImageNet-pretrained backbones
+retain when a PlantVillage-trained classifier is evaluated on field-condition
+PlantDoc images restricted to a shared, evidence-based label space?
+
+**RQ2.** Does the ranking of backbones by in-domain performance survive the
+domain shift, or do efficiency-oriented architectures degrade differently from
+larger ones?
+
+**RQ3 (secondary).** Does confidence calibration degrade under domain shift, and
+can a single temperature fitted in-domain restore useful confidence ordering
+out-of-domain?
+
+A precondition runs underneath all three: the measured gap must not be
+contaminated by train/test overlap between the two corpora. This paper's
+contribution is as much the *controlled* comparison as the numbers themselves.
+
+## 2. Hypotheses
+
+- **H1.** All three backbones exceed 0.99 accuracy on the PlantVillage in-domain
+  test split. PlantVillage is close to saturated and this is a sanity check, not
+  a finding.
+- **H2.** Cross-domain macro-F1 on the shared-class PlantDoc subset falls
+  substantially below in-domain macro-F1, and the drop is large enough that it
+  cannot be attributed to the label-space change alone.
+- **H3.** In-domain ranking of the three backbones does not fully predict
+  cross-domain ranking.
+- **H4.** Models are over-confident out-of-domain: expected calibration error is
+  higher cross-domain than in-domain, and temperature scaling fitted in-domain
+  reduces but does not eliminate it.
+
+Hypotheses are recorded here **before** results exist. Whichever way they
+resolve is reported.
+
+## 3. Datasets
+
+| Dataset | Images | Train | Test | Classes |
+|---|---:|---:|---:|---:|
+| PlantVillage (color) | 54,305 | 43,596 | 10,709 | 38 |
+| PlantDoc Core | 2,561 | 2,336 | 225 | 28 |
+
+PlantVillage is pinned to immutable revision
+`9e97599868962bd0079b8db4b7f1efa9185fa1e7`; the manifest is reconstructed
+exactly from the pinned `splits/color_train.txt`, `splits/color_test.txt`, and
+`leaf_grouping/leaf-map.json`, with all 54,305 pixels verified against their
+recorded digests.
+
+PlantDoc is pinned to source revision
+`5467f6012d78d1c446145d5f582da6096f852ae8`. 2,578 records were acquired;
+2,564 survive internal duplicate adjudication; 2,561 form Core.
+
+**PlantDoc Core class support is highly uneven.** Train ranges from 180 images
+(`Corn leaf blight`) to 2 (`Tomato two spotted spider mites leaf`) — a 90:1
+ratio. The arthropod-pest class has **zero** test images, so PlantDoc Core is 28
+train classes and 27 test classes.
+
+## 4. Exclusions
+
+| Stage | Removed | Basis |
+|---|---:|---|
+| Internal duplicate adjudication | 14 | 12 human-adjudicated byte-exact duplicate groups |
+| Conservative exclusion (G07, G08, G10) | 3 | Insufficient independent diagnostic evidence for a relabel whose second scientific review has not been performed |
+
+G07, G08, and G10 were **excluded, not relabelled**. The exclusion records no
+diagnosis and confirms nothing about what those images depict. No source image
+was deleted and no image byte was modified: the source manifest still carries
+all 2,578 acquired records, and every digest in the lock is computed over
+unmodified bytes.
+
+The arthropod-pest classes in both datasets (*Tetranychus urticae*) are recorded
+out of disease scope in `configs/evaluation_scope.yaml` and are excluded from the
+cross-domain label space. The PlantDoc one remains in the PlantDoc in-domain
+training label space, because removing it would alter the locked Core dataset.
+
+## 5. Leakage protocol
+
+Candidate generation: `imagehash.phash`, 64-bit, exact chunked brute-force
+Hamming evaluation over every distinct-hash pair — 136,847,443 distance
+evaluations for the acquired population. The search is exhaustive by
+construction, not index-approximate.
+
+Decision threshold: Hamming ≤ 6.
+
+| Population | Evaluation records | Exact | Near | Unresolved |
+|---|---:|---:|---:|---:|
+| Acquired | 2,578 | 0 | 16 | 0 |
+| Core | 2,561 | 0 | 16 | 0 |
+
+All 16 near pairs were adjudicated by a human as `clearly_different` / `keep`.
+**Perceptual hashing was used for candidate generation only; it was never the
+decision rule.** 15 of the 16 pairs are cross-class collisions on plain green
+foliage.
+
+Zero exact overlap in both populations means no PlantVillage training image is a
+byte- or pixel-duplicate of any PlantDoc evaluation image. The cross-domain
+number is therefore a genuine generalisation measurement.
+
+**Within-PlantVillage leakage.** PlantVillage carries `leaf_id`: several images
+can photograph one physical leaf. The official train/test split is leaf-grouped
+upstream. The validation set this protocol carves out of train is **also**
+leaf-grouped, so no leaf appears on both sides of model selection.
+
+## 6. Shared-class definition
+
+The repository has **no** human-authored PlantVillage class mapping —
+PlantVillage action-mapping coverage is 0/38, tracked as open blocker BLOCK-07.
+This protocol authors none. The shared-class mapping
+(`data/mapping/ica26_cross_domain_class_mapping.csv`) is assembled from exactly
+two pieces of existing evidence:
+
+**Source 1 — `deterministic_normalizer_key_collision` (11 pairs).** The
+repository's own `ica26.mapping.crosswalk.normalize_crop` / `normalize_disease`
+functions, applied *unchanged and identically* to both label spaces, produce
+eleven colliding `(crop, disease)` keys. The same function runs on both sides, so
+no human judgement enters the pairing.
+
+**Source 2 — `human_approved_healthy_policy` (10 pairs).** `policy:healthy-monitor-v1`
+(`reports/HEALTHY_CLASS_ACTION_POLICY.md`) is a recorded human decision that each
+PlantDoc `"<Crop> leaf"` class has `canonical_disease = healthy`; those ten rows
+carry `review_status = approved` in `data/mapping/action_mapping_review.csv`. On
+the PlantVillage side the token `healthy` is literal in the label. Ten crops
+appear on both sides.
+
+**Result: 21 shared canonical classes over 1,951 PlantDoc Core images**
+(1,773 train / 178 test).
+
+Everything else is **excluded with a recorded reason** — 24 rows. This includes
+biologically plausible near-misses that the normaliser does not align, such as
+PlantDoc `Corn Gray leaf spot` against PlantVillage
+`Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot`, and PlantDoc
+`Bell_pepper leaf spot` against PlantVillage `Pepper,_bell___Bacterial_spot`.
+Asserting those pairs would be a new semantic judgement, which this repository's
+governance deliberately routes through human review. The exclusion reasons make
+visible exactly what would change if a PlantVillage mapping were authored.
+
+**Evaluation protocol over the shared space.** Source-model probabilities are
+summed within each canonical class and renormalised over the 21 shared classes
+only. PlantDoc images outside the mapping are excluded from the evaluation set —
+they are **never** counted as ordinary errors. The mean retained probability mass
+before renormalisation is recorded in every result file, so the reader can see
+how much of the model's belief fell outside the shared space.
+
+## 7. Models
+
+| Model | ImageNet weights | Parameters (task head attached) |
+|---|---|---:|
+| ResNet-50 | `ResNet50_Weights.IMAGENET1K_V2` | 23.6 M (38-class head) |
+| EfficientNet-B0 | `EfficientNet_B0_Weights.IMAGENET1K_V1` | 4.1 M |
+| MobileNetV3-Small | `MobileNet_V3_Small_Weights.IMAGENET1K_V1` | 1.6 M |
+
+The final classifier layer is replaced by a fresh linear layer sized to the task.
+Backbone choice is the only architectural variable.
+
+## 8. Hyperparameters
+
+One common protocol across all six runs:
+
+| Setting | Value |
+|---|---|
+| Image size | 224 × 224 |
+| Optimizer | AdamW |
+| Learning rate | 3 × 10⁻⁴ |
+| Weight decay | 1 × 10⁻⁴ |
+| Schedule | Cosine decay, stepped per batch |
+| Mixed precision | Enabled (fp16 autocast) |
+| Max epochs | 15 |
+| Early stopping | Patience 3 on validation macro-F1 |
+| Batch size | 64 (train), 128 (eval) |
+| Label smoothing | 0.1 |
+| Validation split | 10% carved from train |
+| Model selection | Best validation macro-F1; best checkpoint only |
+| Seed | 42 |
+
+**Augmentation** (train only): `RandomResizedCrop(224, scale=(0.7, 1.0))`,
+horizontal flip p=0.5, rotation ±15°, colour jitter
+(brightness 0.2, contrast 0.2, saturation 0.2, **hue 0.02**).
+Hue jitter is deliberately near-zero: chlorosis and necrosis are diagnosed by
+colour, and a hue shift would destroy the signal the task depends on. Evaluation
+uses resize-256 + center-crop-224 with no augmentation.
+
+**Two documented deviations, both dataset-driven rather than architectural:**
+
+1. **PlantVillage validation is grouped by `leaf_id`** (§5). Random splitting
+   would place sibling images of one leaf on both sides.
+2. **PlantDoc Core uses inverse-frequency class weighting** (normalised to mean
+   1, so the effective learning rate is unchanged). Train imbalance is 90:1. A
+   class-balanced sampler would replay the 2-image arthropod-pest class ~90×
+   per epoch and overfit it; weighted loss is the gentler instrument. Classes
+   with fewer than 3 groups contribute nothing to validation rather than losing
+   half their examples to it.
+
+## 9. Metrics
+
+**Classification** (every evaluation): accuracy, macro-F1, weighted-F1, balanced
+accuracy, macro precision, macro recall, per-class precision / recall / F1 with
+support, confusion matrix.
+
+Macro averages are computed over the classes **present in the evaluation split**,
+with the full declared label space reported alongside. PlantDoc Core's
+arthropod-pest class has zero test images; averaging it in as a hard 0.0 would
+describe the split rather than the model. Zero-support classes, and any
+predictions that land on them, are reported explicitly rather than by omission.
+
+**Probabilistic:** negative log-likelihood, Brier score, expected calibration
+error (15 equal-width bins), maximum calibration error, reliability diagram.
+The scalar ECE and the diagram are computed from the same bin table, so they
+cannot disagree.
+
+**Selective prediction:** confidence-abstention curve (accuracy vs coverage) and
+area under the risk-coverage curve.
+
+**Efficiency:** total and trainable parameters, wall-clock training time, epochs
+run, seconds per epoch, single-image inference latency (batch 1, after warm-up),
+batched throughput, peak accelerator memory where the backend exposes it.
+
+**Calibration:** a single temperature fitted by L-BFGS on validation NLL and
+applied unchanged to test and cross-domain logits. It is never refitted on
+evaluation data. Temperature does not change the argmax, so accuracy and F1 are
+identical before and after; only confidence moves.
+
+## 10. Hardware
+
+| Property | Value |
+|---|---|
+| Machine | Apple M1 Pro, 10 CPU cores, 16 GB unified memory |
+| Accelerator | Apple MPS (Metal) — CUDA unavailable on this host |
+| Backend priority | CUDA → **MPS** → CPU |
+| PyTorch | 2.13.0 |
+| torchvision | 0.28.0 |
+| Python | 3.13.7 |
+| OS | macOS 26.5.1 (arm64) |
+
+Runs execute **sequentially**. With 16 GB shared between CPU and GPU, two
+concurrent large-model trainings risk an out-of-memory kill mid-run. Peak memory
+is recorded per run.
+
+## 11. Random seed
+
+Seed 42 for Python `random`, NumPy, and PyTorch, set at the start of every run.
+The validation carve-out is seeded identically and depends only on (frame,
+fraction, seed) — not on row order or platform.
+
+**One seed for the initial matrix.** Three-seed repetitions are not launched
+until the complete one-seed matrix succeeds. Single-seed results carry no
+variance estimate and are reported as such.
+
+## 12. Experiment matrix
+
+Six training runs:
+
+| # | Run ID | Train on | In-domain eval | Cross-domain eval |
+|---|---|---|---|---|
+| 1 | `pv_resnet50_s42` | PlantVillage train | PlantVillage test | PlantDoc Core shared-class |
+| 2 | `pv_efficientnet_b0_s42` | PlantVillage train | PlantVillage test | PlantDoc Core shared-class |
+| 3 | `pv_mobilenet_v3_small_s42` | PlantVillage train | PlantVillage test | PlantDoc Core shared-class |
+| 4 | `pdc_resnet50_s42` | PlantDoc Core train | PlantDoc Core test | — |
+| 5 | `pdc_efficientnet_b0_s42` | PlantDoc Core train | PlantDoc Core test | — |
+| 6 | `pdc_mobilenet_v3_small_s42` | PlantDoc Core train | PlantDoc Core test | — |
+
+The PlantVillage checkpoints supply both in-domain and cross-domain results, so
+no separate cross-domain model is trained.
+
+## 13. Limitations
+
+1. **One seed.** No variance estimate. Differences between backbones smaller than
+   run-to-run noise cannot be claimed from this matrix alone.
+2. **The two label spaces differ.** In-domain PlantVillage is 38-way; cross-domain
+   is 21-way over a restricted space. The measured drop therefore combines
+   domain shift with a change in task difficulty and should be read as a paired
+   trend across models, not as an isolated quantity.
+3. **The shared mapping is conservative by construction.** 21 of a possible
+   ~25–27 semantically shared classes are used. Excluded near-misses are listed
+   with reasons; a human-authored PlantVillage mapping would likely enlarge the
+   shared space and change the cross-domain numbers.
+4. **PlantDoc carries documented label noise.** `PROJECT_BRIEF.md` §7.2 lists
+   images whose filename contradicts the assigned class (herbicide damage
+   labelled as a virus, gray leaf spot filed under leaf blight, a raspberry leaf
+   filed under soybean). This bounds achievable PlantDoc accuracy and is not
+   corrected here — correcting it would alter the locked dataset.
+5. **PlantDoc Core test is small** (225 images, 27 classes, as few as 3 per
+   class). Per-class test metrics have wide confidence intervals.
+6. **The arthropod-pest class has 2 training images and no test images.** It
+   cannot be learned or measured; it is retained only because removing it would
+   alter the locked corpus.
+7. **MPS, not CUDA.** Timings and throughput are Apple-Silicon numbers and do not
+   transfer to NVIDIA hardware. Relative ordering between backbones should
+   transfer; absolute latency will not.
+8. **Cross-domain evaluation includes PlantDoc train images.** All 1,951
+   shared-class Core images are used, since a PlantVillage-trained model has
+   never seen any of them. This is stated explicitly; the split composition is
+   recorded in every result file.
+9. **Governance status.** The formal Core Dataset governance freeze is pending.
+   These results rest on a scientific experiment lock, not on a completed
+   governance process.
+
+## 14. Exact reproduction commands
+
+```bash
+# 0. Environment
+python -m pip install -e .
+python -m pip install torch torchvision scikit-learn matplotlib
+
+# 1. Verify the corpus matches the paper's locked inputs
+python scripts/ica26_build_experiment_lock.py --check
+python scripts/ica26_validate_experiment_lock.py --check-pixels
+
+# 2. Verify the shared-class mapping is a deterministic rebuild
+python scripts/ica26_build_cross_domain_mapping.py --check
+
+# 3. Pre-flight smoke tests (7 gates)
+python scripts/ica26_smoke.py
+
+# 4. Run the full six-experiment matrix, sequentially
+bash scripts/ica26_run_all.sh
+
+#    ...or a single experiment
+python scripts/ica26_train.py --config experiments/ica26/configs/pv_resnet50_s42.yaml
+
+# 5. Regenerate every table and figure from the result files
+python scripts/ica26_build_tables.py
+
+# 6. Full repository verification
+python -m pytest -o addopts= -q
+bash scripts/run_phase1_checks.sh    # exit 2 = governance BLOCKED, by design
+```
+
+Monitoring a running matrix:
+
+```bash
+tail -f experiments/ica26/logs/run_all.log                    # per-run start/finish
+tail -f experiments/ica26/logs/pv_resnet50_s42.log            # per-epoch detail
+cat experiments/ica26/logs/run_all.pid                        # launcher PID
+ls experiments/ica26/metrics/                                 # completed results
+```
