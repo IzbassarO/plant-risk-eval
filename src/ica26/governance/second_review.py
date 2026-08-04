@@ -13,6 +13,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import re
 import subprocess
 from collections import Counter
 from datetime import datetime
@@ -20,7 +21,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from .mapping import PLACEHOLDER_TOKENS
+from .mapping import (
+    PLACEHOLDER_TOKENS,
+    contains_placeholder_token,
+    normalize_identity,
+)
 
 
 SECOND_REVIEW_SCHEMA = "ica26.governance.plantdoc_label_second_review/2"
@@ -68,7 +73,11 @@ GROUP_REQUIRED_FIELDS = frozenset({
     "recommended_action",
     "bound_packet_digest",
 })
-GROUP_OPTIONAL_FIELDS = frozenset({"proposed_canonical_label"})
+#: ``shared_evidence_basis`` is the ONLY way three groups may legitimately rest
+#: on one source. It must be stated explicitly, and it does not excuse
+#: copy-pasted reasoning -- each group still needs its own rationale.
+GROUP_OPTIONAL_FIELDS = frozenset({"proposed_canonical_label",
+                                   "shared_evidence_basis"})
 
 DECISIONS = frozenset({"agree", "disagree", "uncertain"})
 CONFIDENCE_LEVELS = frozenset({"low", "moderate", "high"})
@@ -77,6 +86,12 @@ DISAGREE_ACTIONS = frozenset({"replace_current_label", "exclude_record", "escala
 UNCERTAIN_ACTIONS = frozenset({"exclude_record", "retain_with_flag", "escalate"})
 MIN_GROUP_RATIONALE_CHARS = 40
 MIN_CITATION_CHARS = 12
+#: A qualification is what makes a second opinion worth having. One character
+#: satisfied the old check; this requires enough text to name a discipline or a
+#: role, and at least two words so "x" and "expert" both fail.
+MIN_REVIEWER_QUALIFICATION_CHARS = 12
+MIN_REVIEWER_QUALIFICATION_WORDS = 2
+MIN_SHARED_EVIDENCE_BASIS_CHARS = 40
 SECOND_REVIEW_PLACEHOLDERS = PLACEHOLDER_TOKENS | frozenset({"unstructured"})
 LEGACY_GENERIC_FIELDS = frozenset({"group_verdicts", "diagnostic_citations"})
 
@@ -112,8 +127,114 @@ def _text(value: Any) -> str:
 
 
 def _is_review_placeholder(value: Any) -> bool:
+    """True if the value carries no evidence, however it is spelled.
+
+    Two gaps closed here. The comparison was raw ``casefold`` with no Unicode
+    normalisation, so a full-width or otherwise decorated ``ＴＢＤ`` passed; and
+    it matched the whole string only, so ``TBD.``, ``pending review``, and
+    ``source to be supplied once available`` all passed while meaning exactly
+    what a bare ``TBD`` means.
+    """
     text = _text(value)
-    return not text or text.casefold() in SECOND_REVIEW_PLACEHOLDERS
+    if not text:
+        return True
+    if normalize_identity(text) in SECOND_REVIEW_PLACEHOLDERS:
+        return True
+    return contains_placeholder_token(text) is not None
+
+
+def _placeholder_detail(value: Any) -> str:
+    """Name the offending token, so a rejection is actionable."""
+    token = contains_placeholder_token(value)
+    return f" (contains '{token}')" if token else ""
+
+
+def _mentions_group(text: str, group: str) -> bool:
+    """True if ``text`` names the group it is supposed to be reasoning about."""
+    return re.search(rf"(?<!\w){re.escape(group)}(?!\w)", text, re.IGNORECASE) is not None
+
+
+def _foreign_groups(text: str, group: str) -> list[str]:
+    """Other reviewed groups named in this group's evidence, if any."""
+    return sorted(other for other in EXPECTED_SECOND_REVIEW_GROUPS
+                  if other != group and _mentions_group(text, other))
+
+
+def _citation_key(citation: Any) -> str:
+    """Comparable identity of one structured citation."""
+    if not isinstance(citation, dict):
+        return normalize_identity(citation)
+    return "|".join((normalize_identity(citation.get("citation")),
+                     normalize_identity(citation.get("url"))))
+
+
+def _citation_set(entry: dict) -> frozenset[str]:
+    citations = entry.get("diagnostic_citations")
+    if not isinstance(citations, list):
+        return frozenset()
+    return frozenset(_citation_key(c) for c in citations)
+
+
+def _check_cross_group_evidence(entries: list[dict], errors: list[str]) -> None:
+    """Refuse evidence that is shared across groups without saying so.
+
+    Three groups are three separate diagnostic questions about three different
+    images. Identical reasoning or an identical citation set across them means
+    either one source genuinely covers all three -- which is possible, and must
+    then be *declared* -- or the reviewer wrote it once and pasted it twice.
+    Code cannot tell those apart by reading the prose, so it refuses to guess
+    and requires the reviewer to say which it is.
+
+    ``shared_evidence_basis`` is the declaration. It does not excuse identical
+    reasoning: each group still needs a rationale naming that group, which is
+    enforced per-group above.
+    """
+    by_rationale: dict[str, list[str]] = {}
+    by_citations: dict[frozenset[str], list[str]] = {}
+    declared: dict[str, str] = {}
+
+    for entry in entries:
+        group = _text(entry.get("group_id"))
+        if not group:
+            continue
+        rationale = normalize_identity(entry.get("diagnostic_rationale"))
+        if rationale:
+            by_rationale.setdefault(rationale, []).append(group)
+        citations = _citation_set(entry)
+        if citations:
+            by_citations.setdefault(citations, []).append(group)
+        basis = _text(entry.get("shared_evidence_basis"))
+        if basis:
+            declared[group] = basis
+
+    for rationale, groups in sorted(by_rationale.items(), key=lambda kv: kv[1]):
+        if len(groups) > 1:
+            errors.append(
+                f"groups {sorted(groups)} share an identical diagnostic_rationale; "
+                "each group is a separate diagnostic question and needs its own "
+                "reasoning"
+            )
+
+    for citations, groups in sorted(by_citations.items(), key=lambda kv: kv[1]):
+        if len(groups) <= 1:
+            continue
+        undeclared = [g for g in groups if g not in declared]
+        if undeclared:
+            errors.append(
+                f"groups {sorted(groups)} cite an identical evidence set without "
+                f"declaring shared_evidence_basis on {sorted(undeclared)}; one "
+                "source covering several groups must be stated, not implied"
+            )
+
+    for group, basis in sorted(declared.items()):
+        if (_is_review_placeholder(basis)
+                or len(basis) < MIN_SHARED_EVIDENCE_BASIS_CHARS):
+            errors.append(
+                f"groups[{group}].shared_evidence_basis must explain why one source "
+                f"covers several groups, in at least "
+                f"{MIN_SHARED_EVIDENCE_BASIS_CHARS} characters"
+                + _placeholder_detail(basis)
+            )
 
 
 def _is_sha256(value: Any) -> bool:
@@ -395,7 +516,8 @@ def _validate_citations(
         citation_text = _text(citation.get("citation"))
         if _is_review_placeholder(citation_text) or len(citation_text) < MIN_CITATION_CHARS:
             errors.append(
-                f"{item}.citation is blank, a placeholder, or too short to identify a source"
+                f"{item}.citation is blank, a placeholder, or too short to identify "
+                f"a source" + _placeholder_detail(citation_text)
             )
         url = _text(citation.get("url"))
         parsed = urlparse(url)
@@ -403,7 +525,17 @@ def _validate_citations(
                 or not parsed.netloc):
             errors.append(
                 f"{item}.url must be a non-placeholder http(s) source locator"
+                + _placeholder_detail(url)
             )
+        # A citation filed under G07 that announces itself as evidence for G08
+        # is filed in the wrong place, whichever one is the mistake.
+        for field in ("citation", "url"):
+            borrowed = _foreign_groups(_text(citation.get(field)), group)
+            if borrowed:
+                errors.append(
+                    f"{item}.{field} names {borrowed}; evidence recorded under "
+                    f"{group} must be evidence about {group}"
+                )
 
 
 def validate_second_review_payload(payload: dict, *, repo: str | Path) -> list[str]:
@@ -517,12 +649,27 @@ def validate_second_review_payload(payload: dict, *, repo: str | Path) -> list[s
         reviewer_id = _text(entry.get("reviewer_id"))
         reviewer_role = _text(entry.get("reviewer_role_or_qualification"))
         if _is_review_placeholder(reviewer_id):
-            errors.append(f"{where}.reviewer_id is blank or a placeholder")
+            errors.append(f"{where}.reviewer_id is blank or a placeholder"
+                          + _placeholder_detail(reviewer_id))
         if _is_review_placeholder(reviewer_role):
             errors.append(
                 f"{where}.reviewer_role_or_qualification is blank or a placeholder"
+                + _placeholder_detail(reviewer_role)
             )
-        if authoritative and reviewer_id == authoritative["first_reviewer_id"]:
+        elif (len(reviewer_role) < MIN_REVIEWER_QUALIFICATION_CHARS
+                or len(reviewer_role.split()) < MIN_REVIEWER_QUALIFICATION_WORDS):
+            # A second opinion is only worth having if we know whose it is. The
+            # old check accepted a single character.
+            errors.append(
+                f"{where}.reviewer_role_or_qualification must name a discipline or "
+                f"role: at least {MIN_REVIEWER_QUALIFICATION_CHARS} characters and "
+                f"{MIN_REVIEWER_QUALIFICATION_WORDS} words"
+            )
+        # Identity comparison is Unicode-normalised and case-folded. A raw `==`
+        # meant HUMAN_REVIEWER_1 sailed past a conflict with human_reviewer_1,
+        # which is to say the independence check checked nothing.
+        if authoritative and normalize_identity(reviewer_id) == normalize_identity(
+                authoritative["first_reviewer_id"]):
             errors.append(
                 f"{where}.reviewer_id is the first reviewer; the second review must "
                 "be independent"
@@ -543,7 +690,24 @@ def validate_second_review_payload(payload: dict, *, repo: str | Path) -> list[s
             errors.append(
                 f"{where}.diagnostic_rationale must be non-placeholder and at least "
                 f"{MIN_GROUP_RATIONALE_CHARS} characters"
+                + _placeholder_detail(rationale)
             )
+        else:
+            # The reasoning must be *about this group*. Forty characters of any
+            # prose used to satisfy this, including the same forty characters in
+            # all three groups.
+            if not _mentions_group(rationale, group):
+                errors.append(
+                    f"{where}.diagnostic_rationale does not identify {group}; "
+                    "reasoning must be group-specific, not generic text repeated "
+                    "across the reviewed groups"
+                )
+            borrowed = _foreign_groups(rationale, group)
+            if borrowed:
+                errors.append(
+                    f"{where}.diagnostic_rationale cites evidence belonging to "
+                    f"{borrowed}; a group may not borrow another group's reasoning"
+                )
 
         _validate_citations(
             group,
@@ -589,6 +753,9 @@ def validate_second_review_payload(payload: dict, *, repo: str | Path) -> list[s
                 f"{where}.bound_packet_digest is stale: bound {bound_digest[:12]}..., "
                 f"current {packet_digest[:12]}..."
             )
+
+    _check_cross_group_evidence(
+        [entry for entry in groups if isinstance(entry, dict)], errors)
 
     non_agree = sorted(group for group, decision in decisions.items() if decision != "agree")
     if _text(payload.get("decision")) == "approved" and non_agree:
