@@ -254,7 +254,29 @@ identical before and after; only confidence moves.
 
 Runs execute **sequentially**. With 16 GB shared between CPU and GPU, two
 concurrent large-model trainings risk an out-of-memory kill mid-run. Peak memory
-is recorded per run.
+is recorded per run. Nothing else was run on the machine during training, so the
+recorded times and throughput are not contended.
+
+**Transient read failures on macOS.** Two runs initially died with
+`PermissionError [Errno 13]` on images that are present, owned by the user, mode
+0644, and readable moments later — the first after roughly 218,000 successful
+opens. The cause is environmental: Spotlight (`mds`, `mds_stores`, `mdsync`,
+`spotlightknowledged.updater`) was reindexing the dataset tree while six
+DataLoader workers read it. No file is damaged; the exact images that failed
+re-read cleanly and still match their manifest digests, and file descriptors were
+never exhausted (`ulimit -n` is 1,048,576).
+
+`ManifestImageDataset._read` therefore retries a bounded five times with linear
+backoff, and **only** for errors that can plausibly be transient. A genuinely
+absent file (`FileNotFoundError`) and a corrupt or undecodable one
+(`UnidentifiedImageError`) raise on the first attempt with no retry; a transient
+error that never clears still raises, reporting the attempt count. Because image
+content is pinned by the manifest digests bound in the experiment lock — which is
+revalidated at the start of every run — a retry cannot substitute different
+pixels for the intended ones.
+
+Anyone reproducing this on macOS should expect the same and may prefer to exclude
+the dataset directory from Spotlight indexing.
 
 ## 11. Random seed
 
