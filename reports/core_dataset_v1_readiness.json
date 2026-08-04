@@ -105,9 +105,9 @@
       "title": "A human has recorded a valid, bound Dataset V1 freeze approval"
     },
     {
-      "detail": "54305 record(s) re-derived from the pinned sources (43596 train / 10709 test); 0 missing, 0 extra, 0 duplicated, 0 value mismatch(es), order matches, every image verified",
-      "evidence": "data/manifests/plantvillage_manifest.csv",
-      "evidence_digest": "b9acc43637ef2e930bd9e5e8a09b1d5025c720d65f9dd3fc9aabdfbd7e399591",
+      "detail": "54305 record(s) re-derived from the pinned sources (43596 train / 10709 test); 0 missing, 0 extra, 0 duplicated, 0 value mismatch(es), order matches",
+      "evidence": "reports/plantvillage_manifest_reconstruction.json",
+      "evidence_digest": "0e20c056284464f390687605348a29e31271e52e2c1621d55252646b6d788855",
       "id": "plantvillage_manifest_reconstructed",
       "kind": "machine",
       "status": "satisfied",

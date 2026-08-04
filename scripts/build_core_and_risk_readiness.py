@@ -69,6 +69,7 @@ CORE_MANIFEST = Path("data/manifests/plantdoc_core_effective_manifest.csv")
 CONSERVATIVE_DECISION = Path("data/exclusions/core_dataset_v1_conservative_exclusions.csv")
 TWO_POPULATION_REPORT = Path("reports/leakage_two_population_report.json")
 PLANTVILLAGE_MANIFEST = Path("data/manifests/plantvillage_manifest.csv")
+PLANTVILLAGE_RECONSTRUCTION = Path("reports/plantvillage_manifest_reconstruction.json")
 
 #: Conditions from the combined assessment that are about the DATA.
 CORE_INHERITED = (
@@ -287,29 +288,54 @@ def _core_leakage_condition(builder, repo: Path):
 
 
 def _plantvillage_reconstruction_condition(builder, repo: Path):
-    from ica26.datasets import plantvillage as PV
+    """Validate the persisted reconstruction evidence, not a live re-derivation.
 
-    try:
-        problems, report = PV.validate_manifest_reconstruction(
-            repo / PLANTVILLAGE_MANIFEST, config="color")
-    except Exception as exc:  # noqa: BLE001
+    Re-deriving here would make the assessment depend on whether the optional
+    ``hf`` extra and the Hugging Face cache happen to be present, so the same
+    commit would produce different readiness artifacts in different environments
+    and ``--check`` could never pass on a fresh clone. The reconstruction is
+    recorded as digest-bound evidence by
+    ``scripts/build_plantvillage_reconstruction.py`` and validated here like
+    every other artifact -- including the binding that stops it outliving the
+    manifest it describes.
+    """
+    from ica26.datasets.manifest import sha256_of_file
+
+    record = read_json(repo / PLANTVILLAGE_RECONSTRUCTION)
+    if not isinstance(record, dict):
         return builder._c(
             "plantvillage_manifest_reconstructed",
             "The PlantVillage manifest is exactly reconstructed from pinned sources",
             "machine", False,
-            f"reconstruction could not run: {type(exc).__name__}: {exc}; the "
-            "pinned sources (optional 'hf' extra plus the hub cache) are required",
-            str(PLANTVILLAGE_MANIFEST), repo)
+            f"no reconstruction record at {PLANTVILLAGE_RECONSTRUCTION}; run "
+            "scripts/build_plantvillage_reconstruction.py with the pinned sources",
+            str(PLANTVILLAGE_RECONSTRUCTION), repo)
+
+    manifest = repo / PLANTVILLAGE_MANIFEST
+    current = sha256_of_file(manifest) if manifest.is_file() else "<absent>"
+    stale = record.get("manifest_sha256") != current
+    clean = (record.get("equal") is True
+             and not record.get("problems")
+             and record.get("missing_records") == 0
+             and record.get("extra_records") == 0
+             and record.get("duplicated_identities") == 0
+             and record.get("value_mismatches") == 0
+             and record.get("order_matches") is True
+             and record.get("expected_records") == record.get("persisted_records"))
     return builder._c(
         "plantvillage_manifest_reconstructed",
         "The PlantVillage manifest is exactly reconstructed from pinned sources",
-        "machine", not problems,
-        (f"{report['expected_records']} record(s) re-derived from the pinned "
-         f"sources ({report['expected_train']} train / {report['expected_test']} "
-         f"test); 0 missing, 0 extra, 0 duplicated, 0 value mismatch(es), order "
-         f"matches, every image verified"
-         if not problems else f"{len(problems)} problem(s): {problems[:3]}"),
-        str(PLANTVILLAGE_MANIFEST), repo)
+        "machine", clean and not stale,
+        (f"{record.get('expected_records')} record(s) re-derived from the pinned "
+         f"sources ({record.get('expected_train')} train / "
+         f"{record.get('expected_test')} test); 0 missing, 0 extra, 0 duplicated, "
+         f"0 value mismatch(es), order matches"
+         if clean and not stale else
+         ("reconstruction record is stale: it describes manifest "
+          f"{str(record.get('manifest_sha256'))[:12]}..., current is "
+          f"{current[:12]}..." if stale
+          else f"reconstruction reported problem(s): {record.get('problems')[:3]}")),
+        str(PLANTVILLAGE_RECONSTRUCTION), repo)
 
 
 # --------------------------------------------------------------------------- #
