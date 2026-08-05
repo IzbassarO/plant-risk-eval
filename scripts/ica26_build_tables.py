@@ -66,9 +66,14 @@ def _save(fig, name: str, raster_dpi: int | None = None) -> None:
     kwargs = {"bbox_inches": "tight"}
     if raster_dpi is not None:
         kwargs["dpi"] = raster_dpi
-    fig.savefig(FIGURES / f"{name}.pdf", **kwargs)
+    # Suppress the embedded creation timestamp. Without this every rebuild
+    # rewrites every figure with identical content, which turns `git status`
+    # into noise and makes the figures the one artifact in this repository that
+    # cannot be digest-compared against a fresh build.
+    fig.savefig(FIGURES / f"{name}.pdf", metadata={"CreationDate": None}, **kwargs)
     if name in PREVIEW_PNG:
-        fig.savefig(FIGURES / f"{name}.png", dpi=200, bbox_inches="tight")
+        fig.savefig(FIGURES / f"{name}.png", dpi=200, bbox_inches="tight",
+                    metadata={"Software": None})
     plt.close(fig)
 
 METRICS = REPO / "experiments/ica26/metrics"

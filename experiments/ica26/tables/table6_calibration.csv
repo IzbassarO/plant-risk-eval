@@ -13,7 +13,7 @@ MobileNetV3-Small,PlantVillage,cross-domain,2,2.7766 ± 0.0224,0.9259 ± 0.0029,
 MobileNetV3-Small,PlantVillage,cross-domain (T-scaled),2,3.1017 ± 0.0244,1.0118 ± 0.0072,0.2900 ± 0.0157,0.5480 ± 0.0324,0.6715 ± 0.0157,0.7002 ± 0.0019
 ResNet-50,PlantDoc Core,in-domain,1,1.2001,0.4685,0.1071,0.3183,0.1678,1.0000
 ResNet-50,PlantDoc Core,in-domain (T-scaled),1,1.1822,0.4582,0.0618,0.1824,0.1694,0.8350
-EfficientNet-B0,PlantDoc Core,in-domain,1,1.1928,0.4838,0.1554,0.8823,0.1802,1.0000
-EfficientNet-B0,PlantDoc Core,in-domain (T-scaled),1,1.1299,0.4582,0.0643,0.3284,0.1771,0.7284
+EfficientNet-B0,PlantDoc Core,in-domain,2,1.1906 ± 0.0031,0.4822 ± 0.0023,0.1376 ± 0.0251,0.5626 ± 0.4521,0.1657 ± 0.0205,1.0000 ± 0.0000
+EfficientNet-B0,PlantDoc Core,in-domain (T-scaled),2,1.1289 ± 0.0014,0.4598 ± 0.0022,0.0564 ± 0.0111,0.2519 ± 0.1082,0.1644 ± 0.0179,0.7697 ± 0.0585
 MobileNetV3-Small,PlantDoc Core,in-domain,2,1.5351 ± 0.0130,0.6056 ± 0.0061,0.1417 ± 0.0102,0.2995 ± 0.0279,0.2423 ± 0.0068,1.0000 ± 0.0000
 MobileNetV3-Small,PlantDoc Core,in-domain (T-scaled),2,1.5005 ± 0.0092,0.5946 ± 0.0000,0.1029 ± 0.0216,0.2399 ± 0.0032,0.2446 ± 0.0092,0.8427 ± 0.0673
