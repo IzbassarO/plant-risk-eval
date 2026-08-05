@@ -122,7 +122,7 @@ near-misses that we decline to assert. The mapping is conservative by
 construction and we say what a more generous one would change.
 
 \item \textbf{A controlled multi-seed comparison with paired statistics.} Three
-backbones spanning a $15\times$ parameter range are trained under one protocol
+backbones spanning a \ParamRatio{}$\times$ parameter range are trained under one protocol
 across independent seeds, evaluated in-domain and cross-domain, and compared
 with McNemar's exact test on per-item correctness \cite{mcnemar1947,dietterich1998tests}
 and bias-corrected accelerated bootstrap intervals \cite{efron1987bca}, with
@@ -221,7 +221,7 @@ over \NPdcClasses{} classes, split \NPdcTrain{} train / \NPdcTest{} test. No
 source image was deleted and no image byte was modified.
 
 Class support in PlantDoc Core is severely uneven---the largest training class
-holds ninety times the smallest---and one arthropod-pest class has two training
+holds \PdcImbalance{} times the smallest---and one arthropod-pest class has two training
 images and no test images at all. It cannot be learned or measured, and is
 retained only because removing it would alter the locked corpus. Table
 \ref{tab:dataset-stats} gives the composition; the full provenance and leakage
@@ -235,13 +235,13 @@ If a field evaluation image duplicates a laboratory training image, the
 cross-domain number is contaminated. We therefore search for such pairs
 exhaustively.
 
-Candidate generation uses a 64-bit perceptual hash with exact chunked
+Candidate generation uses a \PhashBits{}-bit perceptual hash with exact chunked
 brute-force Hamming evaluation over \emph{every} distinct-hash pair, which for
-the acquired population is $1.37 \times 10^{8}$ distance evaluations. The search
+the acquired population is \NPhashComparisonsSci{} distance evaluations. The search
 is exhaustive by construction rather than index-approximate: an approximate
 nearest-neighbour index would make the absence of a match an artefact of the
 index's recall, which is exactly the property this audit must not have. Pairs at
-Hamming distance $\leq 6$ are surfaced as candidates.
+Hamming distance $\leq \LeakThreshold{}$ are surfaced as candidates.
 
 \textbf{Perceptual hashing generates candidates; it never decides.} All
 \NLeakNearCore{} surfaced near pairs were adjudicated by a human as clearly
@@ -363,8 +363,8 @@ Two deviations from the common protocol are dataset-driven rather than
 architectural, and both are reported rather than tuned. PlantVillage validation
 is grouped by leaf identity, as described above. PlantDoc Core training uses
 inverse-frequency class weighting normalised to mean one, so the effective
-learning rate is unchanged; with $90{:}1$ imbalance, a class-balanced sampler
-would replay the two-image arthropod-pest class roughly ninety times per epoch
+learning rate is unchanged; with $\PdcImbalance{}{:}1$ imbalance, a class-balanced sampler
+would replay the two-image arthropod-pest class roughly \PdcImbalance{} times per epoch
 and overfit it, and weighted loss is the gentler instrument.
 
 \subsection{Metrics}
@@ -575,7 +575,7 @@ it would alter the locked corpus and make the evaluation unreproducible against
 the published lock.
 
 \item \textbf{The field test split is small.} With \NPdcTest{} images across
-27 evaluable classes, per-class metrics have wide intervals; this is why we
+\NPdcTestClasses{} evaluable classes, per-class metrics have wide intervals; this is why we
 report bootstrap intervals rather than point estimates alone, and why per-class
 claims are avoided.
 

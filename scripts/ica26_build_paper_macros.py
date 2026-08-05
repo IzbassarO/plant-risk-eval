@@ -32,6 +32,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 REPO = Path(__file__).resolve().parent.parent
 METRICS = REPO / "experiments/ica26/metrics"
@@ -226,6 +227,50 @@ def build() -> tuple[str, dict]:
     ]:
         m.add(name, value, "dataset composition")
 
+    # ---- leakage-audit parameters -------------------------------------------- #
+    # Read from the audit's own summary rather than restated in prose, so a
+    # changed threshold or a re-run search cannot leave the paper describing a
+    # search that was not the one performed.
+    leak_summary = REPO / "reports/leakage_plantvillage_vs_plantdoc_summary.json"
+    if leak_summary.exists():
+        ls = json.loads(leak_summary.read_text())
+        n_eval = ls.get("n_distance_evaluations")
+        m.add("NPhashComparisons", integer(n_eval), "leakage audit")
+        # Also as a power of ten, which is what reads well in a sentence.
+        m.add("NPhashComparisonsSci",
+              None if not n_eval else
+              rf"\ensuremath{{{n_eval / 10 ** int(np.log10(n_eval)):.2f} \times "
+              rf"10^{{{int(np.log10(n_eval))}}}}}",
+              "leakage audit")
+        m.add("PhashBits", ls.get("hash_size_bits"), "leakage audit")
+    else:
+        for name in ("NPhashComparisons", "NPhashComparisonsSci", "PhashBits"):
+            m.add(name, None, "leakage audit")
+    m.add("LeakThreshold", lock["leakage"]["core"].get("threshold"), "leakage audit")
+
+    # ---- corpus shape used in prose ------------------------------------------ #
+    # PlantDoc Core train imbalance, derived from the locked manifest rather
+    # than restated: "ninety times" is a claim about the corpus, not a constant.
+    pdc_manifest = REPO / "data/manifests/plantdoc_core_effective_manifest.csv"
+    if pdc_manifest.exists():
+        frame = pd.read_csv(pdc_manifest)
+        counts = frame[frame["split"] == "train"]["class_label"].value_counts()
+        m.add("PdcImbalance", f"{counts.max() / counts.min():.0f}", "corpus shape")
+        m.add("PdcLargestClass", integer(counts.max()), "corpus shape")
+        m.add("PdcSmallestClass", integer(counts.min()), "corpus shape")
+    else:
+        for name in ("PdcImbalance", "PdcLargestClass", "PdcSmallestClass"):
+            m.add(name, None, "corpus shape")
+
+    # Classes the PlantDoc test split can actually exercise: the arthropod-pest
+    # class has zero test images, so 28 declared but 27 evaluable.
+    pdc_any = next((r for rid, r in runs.items()
+                    if rid.startswith("pdc_") and "in_domain_test" in r["evaluations"]), None)
+    m.add("NPdcTestClasses",
+          None if pdc_any is None
+          else pdc_any["evaluations"]["in_domain_test"]["n_supported_classes"],
+          "corpus shape")
+
     # ---- per-cell results --------------------------------------------------- #
     for stag, (prefix, eval_key) in SETTINGS.items():
         for model, mtag in MODEL_TAG.items():
@@ -288,6 +333,7 @@ def build() -> tuple[str, dict]:
               "cross-domain protocol")
 
     # ---- efficiency ---------------------------------------------------------- #
+    param_totals: dict[str, int | None] = {}
     for model, mtag in MODEL_TAG.items():
         params, lat = None, []
         for prefix in ("pv", "pdc"):
@@ -301,6 +347,15 @@ def build() -> tuple[str, dict]:
         m.add(f"Params{mtag}",
               None if params is None else f"{params / 1e6:.1f}", "efficiency")
         m.add(f"Latency{mtag}", agg(lat, 2), "efficiency")
+        param_totals[model] = params
+
+    # Capacity span across the backbones, as a claim derived from the counts
+    # rather than a number recalled into the prose.
+    if param_totals.get("resnet50") and param_totals.get("mobilenet_v3_small"):
+        ratio = param_totals["resnet50"] / param_totals["mobilenet_v3_small"]
+        m.add("ParamRatio", f"{ratio:.0f}", "efficiency")
+    else:
+        m.add("ParamRatio", None, "efficiency")
 
     # ---- significance -------------------------------------------------------- #
     if sig:
