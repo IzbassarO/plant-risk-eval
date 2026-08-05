@@ -1,0 +1,105 @@
+{
+  "experiment_id": "pv_resnet50_s1337",
+  "history": [
+    {
+      "epoch": 1,
+      "epoch_seconds": 779.44,
+      "lr": 0.00029672,
+      "skipped_nonfinite_steps": 0,
+      "train_accuracy": 0.939287,
+      "train_loss": 0.886423,
+      "val_accuracy": 0.985557,
+      "val_macro_f1": 0.980644
+    },
+    {
+      "epoch": 2,
+      "epoch_seconds": 738.64,
+      "lr": 0.00028703,
+      "skipped_nonfinite_steps": 0,
+      "train_accuracy": 0.98588,
+      "train_loss": 0.726678,
+      "val_accuracy": 0.991059,
+      "val_macro_f1": 0.989587
+    },
+    {
+      "epoch": 3,
+      "epoch_seconds": 763.1,
+      "lr": 0.00027135,
+      "skipped_nonfinite_steps": 0,
+      "train_accuracy": 0.990544,
+      "train_loss": 0.709651,
+      "val_accuracy": 0.990142,
+      "val_macro_f1": 0.986225
+    },
+    {
+      "epoch": 4,
+      "epoch_seconds": 743.66,
+      "lr": 0.00025037,
+      "skipped_nonfinite_steps": 0,
+      "train_accuracy": 0.992863,
+      "train_loss": 0.701156,
+      "val_accuracy": 0.993581,
+      "val_macro_f1": 0.991696
+    },
+    {
+      "epoch": 5,
+      "epoch_seconds": 761.72,
+      "lr": 0.000225,
+      "skipped_nonfinite_steps": 0,
+      "train_accuracy": 0.993602,
+      "train_loss": 0.699131,
+      "val_accuracy": 0.989913,
+      "val_macro_f1": 0.98811
+    },
+    {
+      "epoch": 6,
+      "epoch_seconds": 752.43,
+      "lr": 0.00019635,
+      "skipped_nonfinite_steps": 0,
+      "train_accuracy": 0.994622,
+      "train_loss": 0.693893,
+      "val_accuracy": 0.995644,
+      "val_macro_f1": 0.993332
+    },
+    {
+      "epoch": 7,
+      "epoch_seconds": 760.21,
+      "lr": 0.00016568,
+      "skipped_nonfinite_steps": 0,
+      "train_accuracy": 0.995616,
+      "train_loss": 0.691866,
+      "val_accuracy": 0.996332,
+      "val_macro_f1": 0.994637
+    },
+    {
+      "epoch": 8,
+      "epoch_seconds": 763.04,
+      "lr": 0.00013432,
+      "skipped_nonfinite_steps": 0,
+      "train_accuracy": 0.997375,
+      "train_loss": 0.684783,
+      "val_accuracy": 0.992893,
+      "val_macro_f1": 0.991188
+    },
+    {
+      "epoch": 9,
+      "epoch_seconds": 768.58,
+      "lr": 0.00010365,
+      "skipped_nonfinite_steps": 0,
+      "train_accuracy": 0.998088,
+      "train_loss": 0.682121,
+      "val_accuracy": 0.996103,
+      "val_macro_f1": 0.99454
+    },
+    {
+      "epoch": 10,
+      "epoch_seconds": 766.88,
+      "lr": 7.5e-05,
+      "skipped_nonfinite_steps": 0,
+      "train_accuracy": 0.99842,
+      "train_loss": 0.679841,
+      "val_accuracy": 0.997249,
+      "val_macro_f1": 0.994436
+    }
+  ]
+}
