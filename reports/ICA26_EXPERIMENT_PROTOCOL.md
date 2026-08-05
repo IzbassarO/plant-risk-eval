@@ -278,6 +278,50 @@ pixels for the intended ones.
 Anyone reproducing this on macOS should expect the same and may prefer to exclude
 the dataset directory from Spotlight indexing.
 
+**fp16 gradient overflow on MPS.** `torch.amp.GradScaler` is CUDA-only in this
+code path, so on MPS nothing inspected gradients for overflow. One fp16 gradient
+reaching `Inf` enters AdamW, whose update `m / sqrt(v)` evaluates to
+`Inf / Inf = NaN`, and the parameter stays NaN for the remainder of the run.
+
+`pv_efficientnet_b0_s1337` died this way during its first epoch — all-NaN
+weights from `features.0.0` onward, 1,832 NaN elements, zero Inf. Seed 42 never
+overflowed on any of its six runs.
+
+The failure is quiet, which is the important part:
+
+| Signal | Healthy (s42, epoch 1) | Dead (s1337, epoch 1) |
+|---|---:|---:|
+| `train_loss` | 0.9307 | 0.9264 |
+| `train_accuracy` | 0.9328 | 0.9350 |
+| `val_accuracy` | 0.9886 | **0.0115** |
+
+Training statistics come from batch statistics and look normal. A NaN model
+predicts a single constant class, so it does not score zero — it scores near the
+majority-class rate, which reads as a *weak* result rather than a broken one.
+Left alone the run would have early-stopped and written a plausible
+`result.json` into the paper's aggregates.
+
+**The repair guards the optimiser step; it does not change precision.** Before
+each step the total gradient norm is measured, and a non-finite norm skips the
+step, zeroes the gradients, and increments a counter — precisely what
+`GradScaler` does on CUDA. Moving to fp32 or bf16 would change the numerics of
+*every* step and make seeds 1337 and 2026 incomparable to the already-validated
+seed-42 runs; skipping only the steps that would corrupt the model leaves a
+non-overflowing run untouched.
+
+That this is a no-op is verified rather than argued: re-running
+`pdc_mobilenet_v3_small_s42` under the guard reproduced a **byte-identical**
+checkpoint (`sha256 9027e979…`), identical metrics, and 0 of 363 steps skipped.
+
+`skipped_nonfinite_steps` is recorded in every result file and cumulatively in
+the per-epoch history. **A run with a non-zero count is reported in the paper
+rather than silently aggregated**; a run with zero is numerically equivalent to
+the original protocol. A run that skips more than 1% of its steps is refused
+outright, since it did not train under the intended protocol whatever its
+metrics say. Two further gates — a finiteness assertion on all parameters and
+buffers at every epoch boundary, and a finiteness check on reported metrics
+before `result.json` is written — stand between a dead model and a paper number.
+
 ## 11. Random seeds
 
 Seeds are set for Python `random`, NumPy, and PyTorch at the start of every run.
