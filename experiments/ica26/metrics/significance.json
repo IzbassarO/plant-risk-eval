@@ -1,5 +1,5 @@
 {
-  "created_at_utc": "2026-08-05T06:59:16+00:00",
+  "created_at_utc": "2026-08-05T07:37:12+00:00",
   "method": {
     "interval": "BCa bootstrap, 10000 resamples, 95% level, rng seed 20260805",
     "label_space": "Fixed to the classes present in the original evaluation, matching evaluate_classification; held constant across all replicates.",

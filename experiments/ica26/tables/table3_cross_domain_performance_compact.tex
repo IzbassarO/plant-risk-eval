@@ -1,0 +1,15 @@
+\begin{table}[htbp]
+\caption{Cross-domain generalisation on the frozen shared-class PlantDoc Core subset, mean $\pm$ sample standard deviation over three seeds. Metrics cover only the 21 shared classes; unmapped images are excluded rather than counted as errors. `Ret.\ mass' is the mean source-model probability retained inside the shared space before renormalisation.}
+\label{tab:cross-domain-compact}
+\footnotesize
+\centering
+\begin{tabular}{lrlll}
+\toprule
+Model & N & Accuracy & Macro-F1 & Ret. mass \\
+\midrule
+ResNet-50 & 1951 & 0.2778 & 0.2414 & 0.7281 \\
+EfficientNet-B0 & 1951 & 0.2742 & 0.2359 & 0.6520 \\
+MobileNetV3-Small & 1951 & 0.2263 $\pm$ 0.0221 & 0.1873 $\pm$ 0.0154 & 0.5891 $\pm$ 0.0376 \\
+\bottomrule
+\end{tabular}
+\end{table}

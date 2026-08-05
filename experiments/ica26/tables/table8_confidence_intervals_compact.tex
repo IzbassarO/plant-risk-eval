@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+\caption{BCa bootstrap 95\% confidence intervals, seed 42, 10000 resamples. These describe sampling variability of a fixed evaluation set for one trained checkpoint, and are not seed variance --- which is reported separately and answers a different question. Point estimates are in Tables~\ref{tab:in-domain} and~\ref{tab:cross-domain}.}
+\label{tab:confidence-intervals-compact}
+\footnotesize
+\centering
+\begin{tabular}{llll}
+\toprule
+Setting & Model & Accuracy 95\textbackslash \% CI & Macro-F1 95\textbackslash \% CI \\
+\midrule
+PV in-domain & ResNet-50 & [0.9908, 0.9940] & [0.9870, 0.9922] \\
+PV in-domain & EfficientNet-B0 & [0.9956, 0.9978] & [0.9938, 0.9969] \\
+PV in-domain & MobileNetV3-Small & [0.9935, 0.9962] & [0.9901, 0.9948] \\
+PDC in-domain & ResNet-50 & [0.6311, 0.7511] & [0.6526, 0.7721] \\
+PDC in-domain & EfficientNet-B0 & [0.6178, 0.7378] & [0.6457, 0.7598] \\
+PDC in-domain & MobileNetV3-Small & [0.4889, 0.6222] & [0.5352, 0.6675] \\
+PV \$\textbackslash rightarrow\$ PDC & ResNet-50 & [0.2584, 0.2978] & [0.2253, 0.2595] \\
+PV \$\textbackslash rightarrow\$ PDC & EfficientNet-B0 & [0.2553, 0.2942] & [0.2203, 0.2538] \\
+PV \$\textbackslash rightarrow\$ PDC & MobileNetV3-Small & [0.2230, 0.2609] & [0.1831, 0.2158] \\
+\bottomrule
+\end{tabular}
+\end{table}

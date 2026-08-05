@@ -1,0 +1,30 @@
+\begin{table}[htbp]
+\caption{Expected calibration error, mean $\pm$ sample standard deviation over three seeds. `T' is the temperature fitted on the held-out validation split and applied unchanged; it is never refitted on evaluation data. Temperature does not move the argmax, so accuracy is unchanged by it. Negative log-likelihood, Brier score, maximum calibration error, and AURC are in the supplementary table.}
+\label{tab:calibration-compact}
+\footnotesize
+\centering
+\begin{tabular}{lllll}
+\toprule
+Model & Corpus & Setting & ECE & T \\
+\midrule
+ResNet-50 & PV & in-dom. & 0.0903 & 1.0000 \\
+ResNet-50 & PV & in-dom. (T) & 0.0094 & 0.7086 \\
+ResNet-50 & PV & cross-dom. & 0.3038 & 1.0000 \\
+ResNet-50 & PV & cross-dom. (T) & 0.4305 & 0.7086 \\
+EfficientNet-B0 & PV & in-dom. & 0.0985 & 1.0000 \\
+EfficientNet-B0 & PV & in-dom. (T) & 0.0093 & 0.7030 \\
+EfficientNet-B0 & PV & cross-dom. & 0.2390 & 1.0000 \\
+EfficientNet-B0 & PV & cross-dom. (T) & 0.3778 & 0.7030 \\
+MobileNetV3-Small & PV & in-dom. & 0.0987 $\pm$ 0.0036 & 1.0000 $\pm$ 0.0000 \\
+MobileNetV3-Small & PV & in-dom. (T) & 0.0092 $\pm$ 0.0004 & 0.7002 $\pm$ 0.0019 \\
+MobileNetV3-Small & PV & cross-dom. & 0.1478 $\pm$ 0.0172 & 1.0000 $\pm$ 0.0000 \\
+MobileNetV3-Small & PV & cross-dom. (T) & 0.2900 $\pm$ 0.0157 & 0.7002 $\pm$ 0.0019 \\
+ResNet-50 & PDC & in-dom. & 0.1071 & 1.0000 \\
+ResNet-50 & PDC & in-dom. (T) & 0.0618 & 0.8350 \\
+EfficientNet-B0 & PDC & in-dom. & 0.1554 & 1.0000 \\
+EfficientNet-B0 & PDC & in-dom. (T) & 0.0643 & 0.7284 \\
+MobileNetV3-Small & PDC & in-dom. & 0.1417 $\pm$ 0.0102 & 1.0000 $\pm$ 0.0000 \\
+MobileNetV3-Small & PDC & in-dom. (T) & 0.1029 $\pm$ 0.0216 & 0.8427 $\pm$ 0.0673 \\
+\bottomrule
+\end{tabular}
+\end{table}

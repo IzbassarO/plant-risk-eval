@@ -448,13 +448,33 @@ def write_tables(payload: dict) -> None:
                  f"macro-F1, seed {payload['seed']}, {N_BOOTSTRAP} resamples. Intervals "
                  "describe sampling variability of the fixed evaluation set for one trained "
                  "checkpoint; they are not seed variance, which is reported separately.",
-                 "tab:confidence-intervals")
+                 "tab:confidence-intervals",
+                 compact={"Setting": "Setting", "Model": "Model",
+                          "Accuracy 95% CI": "Accuracy 95\\% CI",
+                          "Macro-F1 95% CI": "Macro-F1 95\\% CI"},
+                 compact_caption=(
+                     f"BCa bootstrap {int(CONF * 100)}\\% confidence intervals, seed "
+                     f"{payload['seed']}, {N_BOOTSTRAP} resamples. These describe sampling "
+                     "variability of a fixed evaluation set for one trained checkpoint, and "
+                     "are not seed variance --- which is reported separately and answers a "
+                     "different question. Point estimates are in Tables~\\ref{tab:in-domain} "
+                     "and~\\ref{tab:cross-domain}."))
     _write_table(pd.DataFrame(mc_rows), "table8b_mcnemar",
                  f"Pairwise McNemar exact tests on per-item correctness, seed "
                  f"{payload['seed']}. `A only' and `B only' are the discordant counts the "
                  "test is computed from. Holm-adjusted p-values control the family-wise error "
                  "rate across all pairwise tests reported here.",
-                 "tab:mcnemar")
+                 "tab:mcnemar",
+                 compact={"Setting": "Setting", "Comparison": "Comparison",
+                          "Diff.": "$\\Delta$ acc.", "Discordant": "Disc.",
+                          "p (exact)": "$p$", "p (Holm)": "$p$ (Holm)"},
+                 compact_caption=(
+                     f"Pairwise McNemar exact tests on per-item correctness, seed "
+                     f"{payload['seed']}. Two models scored on one evaluation set are not "
+                     "independent samples, so the paired test is the correct instrument. "
+                     "`Disc.' is the number of items the two models disagree on, which is "
+                     "what the test is computed from. Holm adjustment controls the "
+                     "family-wise error rate across all nine tests."))
 
 
 def _fmt_p(p) -> str:
@@ -465,15 +485,43 @@ def _fmt_p(p) -> str:
     return f"{p:.4f}"
 
 
-def _write_table(df: pd.DataFrame, name: str, caption: str, label: str) -> None:
+# Corpus names repeat down the Setting column and are its widest cell.
+COMPACT_ABBREV = {
+    "PlantVillage -> PlantDoc Core": "PV $\\rightarrow$ PDC",
+    "PlantVillage in-domain": "PV in-domain",
+    "PlantDoc Core in-domain": "PDC in-domain",
+}
+
+
+def _write_table(df: pd.DataFrame, name: str, caption: str, label: str,
+                 compact: dict[str, str] | None = None,
+                 compact_caption: str | None = None) -> None:
+    """Full table as evidence, plus a narrow variant that fits the text block.
+
+    At the LNCS text width of 122 mm these tables overflow badly at full width.
+    Shrinking one to fit would make its text smaller than its own caption, so
+    the paper takes a column subset instead and the full table stays available
+    as supplementary material.
+    """
     if df.empty:
         return
     df.to_csv(TABLES / f"{name}.csv", index=False)
+    _emit(df, name, caption, label)
+    if compact:
+        present = {src: dst for src, dst in compact.items() if src in df.columns}
+        narrow = df[list(present)].rename(columns=present).replace(COMPACT_ABBREV)
+        _emit(narrow, f"{name}_compact", compact_caption or caption,
+              f"{label}-compact", small=True)
+
+
+def _emit(df: pd.DataFrame, name: str, caption: str, label: str, small: bool = False) -> None:
     latex = df.to_latex(index=False, escape=True, caption=caption, label=label, position="htbp")
     for raw, tex in (("±", r"$\pm$"), ("→", r"$\rightarrow$"), ("->", r"$\rightarrow$")):
         latex = latex.replace(raw, tex)
+    if small:
+        latex = latex.replace(r"\begin{tabular}", "\\footnotesize\n\\centering\n\\begin{tabular}")
     (TABLES / f"{name}.tex").write_text(latex)
-    print(f"  wrote {name}.csv / {name}.tex  ({len(df)} rows)")
+    print(f"  wrote {name}.tex  ({len(df)} rows{', compact' if small else ''})")
 
 
 def main() -> int:

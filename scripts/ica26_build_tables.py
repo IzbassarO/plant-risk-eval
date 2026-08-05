@@ -141,9 +141,47 @@ def _agg_pm(values, places: int = 4) -> str:
     return _pm(_agg(values), places)
 
 
-def _write(df: pd.DataFrame, name: str, caption: str, label: str, float_fmt: str = "%.4f") -> None:
+def _write(df: pd.DataFrame, name: str, caption: str, label: str, float_fmt: str = "%.4f",
+           compact: dict[str, str] | None = None, compact_caption: str | None = None) -> None:
+    """Write the full table, and optionally a narrow variant for the paper.
+
+    The full tables carry every metric and are the evidence. They are also far
+    too wide for the LNCS text block: at 122 mm, a ten-column table of
+    ``0.9925 ± 0.0012`` strings runs hundreds of points past the margin. Rather
+    than shrink one to fit --- which makes table text smaller than the caption
+    beneath it --- the paper includes a compact variant with a chosen subset of
+    columns, and the full table remains available as supplementary material.
+
+    ``compact`` maps source column name to the (usually shorter) heading to use.
+    """
     TABLES.mkdir(parents=True, exist_ok=True)
     df.to_csv(TABLES / f"{name}.csv", index=False)
+    _write_latex(df, name, caption, label, float_fmt)
+    if compact:
+        present = {src: dst for src, dst in compact.items() if src in df.columns}
+        narrow = df[list(present)].rename(columns=present).replace(COMPACT_ABBREV)
+        _write_latex(narrow, f"{name}_compact", compact_caption or caption,
+                     f"{label}-compact", float_fmt, small=True)
+
+
+# Corpus names repeat down a column and are the widest cell in several tables.
+# Backbone names are left in full: they are what the reader is comparing, and a
+# table whose row labels need decoding is a false economy.
+COMPACT_ABBREV = {
+    "PlantVillage → PlantDoc Core": "PV $\\rightarrow$ PDC",
+    "PlantVillage in-domain": "PV in-domain",
+    "PlantDoc Core in-domain": "PDC in-domain",
+    "PlantVillage": "PV",
+    "PlantDoc Core": "PDC",
+    "cross-domain (T-scaled)": "cross-dom. (T)",
+    "in-domain (T-scaled)": "in-dom. (T)",
+    "cross-domain": "cross-dom.",
+    "in-domain": "in-dom.",
+}
+
+
+def _write_latex(df: pd.DataFrame, name: str, caption: str, label: str,
+                 float_fmt: str, small: bool = False) -> None:
     latex = df.to_latex(
         index=False, escape=True, float_format=float_fmt,
         caption=caption, label=label, position="htbp",
@@ -157,8 +195,12 @@ def _write(df: pd.DataFrame, name: str, caption: str, label: str, float_fmt: str
     # question mark under the OT1 encoding.
     for raw, tex in (("±", r"$\pm$"), ("→", r"$\rightarrow$"), (" > ", r" $>$ ")):
         latex = latex.replace(raw, tex)
+    if small:
+        # \footnotesize inside the table environment, so it does not leak into
+        # the caption or the surrounding text.
+        latex = latex.replace(r"\begin{tabular}", "\\footnotesize\n\\centering\n\\begin{tabular}")
     (TABLES / f"{name}.tex").write_text(latex)
-    print(f"  wrote {name}.csv / {name}.tex  ({len(df)} rows)")
+    print(f"  wrote {name}.tex  ({len(df)} rows{', compact' if small else ''})")
 
 
 def _write_per_seed(rows: list[dict], name: str) -> None:
@@ -281,7 +323,13 @@ def table_in_domain(results: dict) -> pd.DataFrame:
                "the classes present in the evaluation split; PlantDoc Core's arthropod-pest "
                "class has zero test images and is reported separately rather than averaged in "
                "as zero.",
-               "tab:in-domain")
+               "tab:in-domain",
+               compact={"Model": "Model", "Dataset": "Corpus", "N": "N",
+                        "Accuracy": "Accuracy", "Macro-F1": "Macro-F1"},
+               compact_caption=(
+                   "In-domain test performance, mean $\\pm$ sample standard deviation over "
+                   "three seeds. Weighted-F1, balanced accuracy, and macro precision and "
+                   "recall are in the supplementary table."))
         _write_per_seed(per_seed, "table2_in_domain_performance_per_seed")
     return df
 
@@ -311,7 +359,15 @@ def table_cross_domain(results: dict) -> pd.DataFrame:
                "unmapped PlantDoc images are excluded from the evaluation set rather than "
                "counted as errors. Retained probability mass is the share of the source "
                "model's belief falling inside the shared space before renormalisation.",
-               "tab:cross-domain")
+               "tab:cross-domain",
+               compact={"Model": "Model", "N": "N", "Accuracy": "Accuracy",
+                        "Macro-F1": "Macro-F1", "Retained prob. mass": "Ret. mass"},
+               compact_caption=(
+                   "Cross-domain generalisation on the frozen shared-class PlantDoc Core "
+                   "subset, mean $\\pm$ sample standard deviation over three seeds. Metrics "
+                   "cover only the 21 shared classes; unmapped images are excluded rather "
+                   "than counted as errors. `Ret.\\ mass' is the mean source-model "
+                   "probability retained inside the shared space before renormalisation."))
         _write_per_seed(per_seed, "table3_cross_domain_performance_per_seed")
     return df
 
@@ -364,7 +420,15 @@ def table_efficiency(results: dict) -> None:
                "points, so training time is reported alongside seconds per epoch. Latency and "
                "throughput are measured after warm-up on the accelerator reported in the run "
                "metadata.",
-               "tab:efficiency", float_fmt="%.2f")
+               "tab:efficiency", float_fmt="%.2f",
+               compact={"Model": "Model", "Dataset": "Corpus", "Params (M)": "Params (M)",
+                        "Epochs": "Epochs", "Train time (min)": "Train (min)",
+                        "Latency b1 (ms)": "Latency (ms)"},
+               compact_caption=(
+                   "Model efficiency, mean $\\pm$ sample standard deviation over three seeds. "
+                   "Epoch counts vary between seeds because early stopping fires at different "
+                   "points. Latency is single-image, batch 1, after warm-up. Throughput and "
+                   "peak memory are in the supplementary table."))
         _write_per_seed(per_seed, "table4_efficiency_per_seed")
 
 
@@ -417,7 +481,19 @@ def table_degradation(results: dict) -> None:
                "shared-class subset over 21 classes. The two label spaces differ, so the drop "
                "combines domain shift with the change of task difficulty and should be read as "
                "a paired trend across models rather than as an isolated quantity.",
-               "tab:degradation")
+               "tab:degradation",
+               compact={"Model": "Model",
+                        "Macro-F1 (in-domain)": "F1 in-dom.",
+                        "Macro-F1 (cross-domain)": "F1 cross-dom.",
+                        "Macro-F1 abs. drop": "Abs. drop",
+                        "Macro-F1 rel. drop %": "Rel. drop (\\%)"},
+               compact_caption=(
+                   "Domain-shift degradation in macro-F1, mean $\\pm$ sample standard "
+                   "deviation over three seeds. Drops are computed within each seed and then "
+                   "averaged, preserving the pairing between a checkpoint and its own "
+                   "cross-domain evaluation. The label spaces differ (38-way in domain, "
+                   "21-way cross-domain), so this is a paired trend across models, not an "
+                   "isolated quantity. Accuracy-based drops are in the supplementary table."))
         _write_per_seed(per_seed, "table5_domain_shift_degradation_per_seed")
 
 
@@ -472,7 +548,19 @@ def table_calibration(results: dict) -> None:
                "split only and applied unchanged to test and cross-domain logits; it is never "
                "refitted on evaluation data. AURC is the area under the risk-coverage curve; "
                "lower is better.",
-               "tab:calibration")
+               "tab:calibration",
+               # NLL is dropped from the compact view: with three text columns
+               # already, a fourth numeric one pushes the table past the text
+               # block. ECE and the fitted temperature carry the argument.
+               compact={"Model": "Model", "Dataset": "Corpus", "Setting": "Setting",
+                        "ECE": "ECE", "T": "T"},
+               compact_caption=(
+                   "Expected calibration error, mean $\\pm$ sample standard deviation over "
+                   "three seeds. `T' is the temperature fitted on the held-out validation "
+                   "split and applied unchanged; it is never refitted on evaluation data. "
+                   "Temperature does not move the argmax, so accuracy is unchanged by it. "
+                   "Negative log-likelihood, Brier score, maximum calibration error, and "
+                   "AURC are in the supplementary table."))
         _write_per_seed(per_seed, "table6_calibration_per_seed")
 
 
@@ -579,7 +667,17 @@ def table_ranking_stability(results: dict) -> None:
                "seed SD, with a consistent sign across all seeds, is a difference the seed "
                "alone does not explain; one below it is not claimed. With three seeds these "
                "are descriptive ratios, not significance tests.",
-               "tab:ranking-margins")
+               "tab:ranking-margins",
+               compact={"Setting": "Setting", "Comparison": "Comparison",
+                        "Mean margin": "Margin",
+                        "|Margin| / seed SD": "$|$Margin$|$/SD",
+                        "Sign consistent": "Sign"},
+               compact_caption=(
+                   "Pairwise macro-F1 margins against seed noise. The margin is computed "
+                   "within each seed and then averaged; SD is the root-mean-square of the two "
+                   "models' across-seed standard deviations. A margin well above the seed SD "
+                   "with a consistent sign is a difference the seed alone does not explain. "
+                   "With three seeds these are descriptive ratios, not significance tests."))
 
 
 # --------------------------------------------------------------------------- #

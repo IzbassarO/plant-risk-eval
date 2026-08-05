@@ -152,7 +152,14 @@ def build() -> tuple[str, dict]:
                 if f"{p}_{mo}_s{s}" in runs]
 
     m.add("LockDigest", r"\texttt{" + lock["lock_digest"][:16] + r"}", "provenance")
-    m.add("LockDigestFull", r"\texttt{" + lock["lock_digest"] + r"}", "provenance")
+    # A 64-character hex string in \texttt has no hyphenation points, so set as
+    # one word it overruns the LNCS text block by roughly 160 pt. Break
+    # opportunities every 16 characters let it wrap without inserting any
+    # character into the digest itself.
+    digest = lock["lock_digest"]
+    chunks = [digest[i:i + 16] for i in range(0, len(digest), 16)]
+    m.add("LockDigestFull",
+          r"\texttt{" + r"\allowbreak ".join(chunks) + r"}", "provenance")
     m.add("NSeedsDone", len(seeds_done), "provenance")
     m.add("SeedList", ", ".join(str(s) for s in seeds_done) or PENDING, "provenance")
     m.add("NRunsDone", len(complete), "provenance")
