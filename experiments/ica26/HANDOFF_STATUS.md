@@ -1,34 +1,31 @@
 # ICA 2026 — matrix status
 
-Updated 2026-08-05T08:50Z. Branch `claude/ica26-training-launch`.
+Updated 2026-08-05T10:10Z. Branch `claude/ica26-training-launch`. **10/18 done.**
 
-**Guard confirmed working in flight.** The relaunched `pv_efficientnet_b0_s1337`
-reproduced the failed run's training numbers exactly (epoch 1 loss 0.926426,
-accuracy 0.93498) but now reaches val macro-F1 0.9876 instead of 0.0006, with
-`skipped_nonfinite_steps` incrementing by one per epoch. A *single* overflowing
-gradient per epoch was enough to kill the original run. At epoch 3 it tracks
-seed 42 closely (0.9922 vs 0.9914). This run will finish with a non-zero skip
-count and is therefore reported in the paper rather than pooled silently — the
-`\SkippedStepsNote` macro does that automatically.
+**Guard confirmed: the broken run is recovered.** `pv_efficientnet_b0_s1337`
+completed in 6857 s and lands close to its seed-42 counterpart — in-domain
+macro-F1 0.9944 vs 0.9956, cross-domain 0.2312 vs 0.2359, temperature 0.696 vs
+0.703. It skipped 11 of 6754 steps (0.163%), exactly one per epoch, so a single
+overflowing gradient per epoch was enough to kill the original run. The non-zero
+count is surfaced in the paper automatically by `\SkippedStepsNote`.
 
 ## Runs (18 planned = 6 configs x seeds 42/1337/2026)
 
-**Complete and verified clean (9)** — archived with digests in
+**Complete and verified clean (10)** — archived with digests in
 `reports/ica26_model_preservation.json`, verify with
 `python scripts/ica26_preserve_models.py --verify`:
 
 - seed 42: all six.
 - seed 1337: `pdc_mobilenet_v3_small`, `pv_mobilenet_v3_small`,
-  `pdc_efficientnet_b0`.
+  `pdc_efficientnet_b0`, `pv_efficientnet_b0`.
 
-**Queued (9)**, launcher pid 71505, `caffeinate` pid 71516 attached via `-w`:
+**Queued (8)**, launcher pid 71505, `caffeinate` pid 71516 attached via `-w`:
 
-1. `pv_efficientnet_b0_s1337` (running, restarted 08:12Z after the NaN failure)
-2. `pv_resnet50_s1337`
-3. `pdc_resnet50_s1337`
-4. seed 2026: all six, cheap-first order
+1. `pv_resnet50_s1337` (running since 10:06Z, ~2 h)
+2. `pdc_resnet50_s1337` (~12 min)
+3. seed 2026: all six, cheap-first order (~5.1 h)
 
-Rough estimate to completion: ~9.5 h from 08:12Z.
+Rough estimate to completion: ~17:30Z.
 
 ## What failed and why
 
