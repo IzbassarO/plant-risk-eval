@@ -486,13 +486,14 @@ The generated tables below are current for the runs that have finished.]}
 \subsection{A Saturated Benchmark Carries Little Ranking Information}
 
 The three backbones separate cleanly on the laboratory test split, and the
-separations are statistically real: every pairwise comparison there is
-significant under Holm adjustment. But the spread that separates them is tiny in
-absolute terms, and it does not survive the domain shift. Under the shift, the
-backbone that places \emph{last} in domain is statistically indistinguishable
-from the one that places \emph{first} in domain ($p = \PMcXdRnEb{}$ unadjusted,
-$\PMcHolmXdRnEb{}$ after Holm), while the ordering against MobileNetV3-Small
-reverses outright and is significant in both directions.
+separations are statistically real: on seed \SigSeed{}, every pairwise
+comparison there is significant under Holm adjustment. But the spread that
+separates them is tiny in absolute terms, and it does not survive the domain
+shift. Under the shift, the backbone that places \emph{last} in domain is
+statistically indistinguishable from the one that places \emph{first} in domain
+($p = \PMcXdRnEb{}$ unadjusted, $\PMcHolmXdRnEb{}$ after Holm), while the
+ordering against MobileNetV3-Small reverses outright and is significant in both
+directions.
 
 That reversal is the substantive result, and it is worth stating precisely
 because the loose version of the claim is weaker than the true one.
@@ -500,6 +501,13 @@ MobileNetV3-Small is significantly \emph{better} than ResNet-50 on the
 laboratory test split and significantly \emph{worse} than it under the shift.
 Both legs are significant after family-wise correction. This is not a
 re-ordering within noise; it is a genuine crossing.
+
+Because a paired test computed on one training run is a statement about that
+run, each verdict is recomputed independently per seed and reported as holding
+in all seeds, in none, or in some. We do not pool $p$-values across seeds: three
+runs is far too few to justify a meta-analytic combination, and the question
+that matters is whether a verdict is stable, not what its combined $p$-value
+would be.
 
 The practical reading is uncomfortable for a literature organised around
 in-domain leaderboards. Choosing a backbone by its laboratory accuracy---the

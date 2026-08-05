@@ -1,6 +1,15 @@
 # ICA 2026 — matrix status
 
-Updated 2026-08-05T08:20Z. Branch `claude/ica26-training-launch`.
+Updated 2026-08-05T08:50Z. Branch `claude/ica26-training-launch`.
+
+**Guard confirmed working in flight.** The relaunched `pv_efficientnet_b0_s1337`
+reproduced the failed run's training numbers exactly (epoch 1 loss 0.926426,
+accuracy 0.93498) but now reaches val macro-F1 0.9876 instead of 0.0006, with
+`skipped_nonfinite_steps` incrementing by one per epoch. A *single* overflowing
+gradient per epoch was enough to kill the original run. At epoch 3 it tracks
+seed 42 closely (0.9922 vs 0.9914). This run will finish with a non-zero skip
+count and is therefore reported in the paper rather than pooled silently — the
+`\SkippedStepsNote` macro does that automatically.
 
 ## Runs (18 planned = 6 configs x seeds 42/1337/2026)
 
