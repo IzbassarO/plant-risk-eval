@@ -1,0 +1,21 @@
+\begin{table}[htbp]
+\caption{Stability of each pairwise verdict across independent training seeds. Each seed's McNemar test uses that seed's own checkpoints, Holm-adjusted within the seed. A comparison significant in every seed is a conclusion about the architectures; one significant in a single seed is a statement about that run.}
+\label{tab:significance-across-seeds-compact}
+\footnotesize
+\centering
+\begin{tabular}{lllll}
+\toprule
+Setting & Comparison & Sig. (Holm) & Sign & \$\textbackslash Delta\$ acc. \\
+\midrule
+PV in-domain & ResNet-50 vs EfficientNet-B0 & 1/1 & yes & -0.0043 \\
+PV in-domain & ResNet-50 vs MobileNetV3-Small & 1/1 & yes & -0.0024 \\
+PV in-domain & EfficientNet-B0 vs MobileNetV3-Small & 1/1 & yes & +0.0019 \\
+PDC in-domain & ResNet-50 vs EfficientNet-B0 & 0/1 & yes & +0.0133 \\
+PDC in-domain & ResNet-50 vs MobileNetV3-Small & 1/1 & yes & +0.1378 \\
+PDC in-domain & EfficientNet-B0 vs MobileNetV3-Small & 1/1 & yes & +0.1244 \\
+PV \$\textbackslash rightarrow\$ PDC & ResNet-50 vs EfficientNet-B0 & 0/1 & yes & +0.0036 \\
+PV \$\textbackslash rightarrow\$ PDC & ResNet-50 vs MobileNetV3-Small & 1/1 & yes & +0.0359 \\
+PV \$\textbackslash rightarrow\$ PDC & EfficientNet-B0 vs MobileNetV3-Small & 1/1 & yes & +0.0323 \\
+\bottomrule
+\end{tabular}
+\end{table}

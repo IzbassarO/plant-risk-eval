@@ -262,3 +262,84 @@ def test_holm_caps_at_one():
 
 def test_holm_of_a_single_test_changes_nothing():
     assert sig.holm_bonferroni([0.023]) == pytest.approx([0.023])
+
+
+# --------------------------------------------------------------------------- #
+# cross-seed consistency
+# --------------------------------------------------------------------------- #
+def _payload(setting, pairs):
+    """Minimal shape of one seed's analysis output."""
+    return {"settings": [{"setting": setting, "pairwise_mcnemar": pairs}]}
+
+
+def _pair(a, b, p_holm, diff):
+    return {"model_a": a, "model_b": b, "p_value_holm": p_holm,
+            "accuracy_difference": diff}
+
+
+SETTING = "PlantVillage in-domain"
+
+
+def test_a_verdict_holding_in_every_seed_is_reported_as_such():
+    per_seed = {
+        s: _payload(SETTING, [_pair("ResNet-50", "EfficientNet-B0", 0.001, -0.004)])
+        for s in (42, 1337, 2026)
+    }
+    row = sig.cross_seed_consistency(per_seed)[0]
+    assert row["n_seeds"] == 3
+    assert row["n_significant_holm"] == 3
+    assert row["sign_consistent"] is True
+    assert row["verdict"] == "significant in all seeds"
+
+
+def test_a_verdict_holding_in_one_seed_only_is_flagged_seed_dependent():
+    """The case the whole analysis exists to catch."""
+    per_seed = {
+        42: _payload(SETTING, [_pair("ResNet-50", "EfficientNet-B0", 0.001, 0.02)]),
+        1337: _payload(SETTING, [_pair("ResNet-50", "EfficientNet-B0", 0.60, 0.001)]),
+        2026: _payload(SETTING, [_pair("ResNet-50", "EfficientNet-B0", 0.80, 0.002)]),
+    }
+    row = sig.cross_seed_consistency(per_seed)[0]
+    assert row["n_significant_holm"] == 1
+    assert row["significant_seeds"] == [42]
+    assert row["verdict"] == "significant in 1 of 3 seeds"
+
+
+def test_a_sign_flip_between_seeds_is_reported():
+    """Same magnitude, opposite direction: the mean hides it, the flag does not."""
+    per_seed = {
+        42: _payload(SETTING, [_pair("ResNet-50", "EfficientNet-B0", 0.5, +0.01)]),
+        1337: _payload(SETTING, [_pair("ResNet-50", "EfficientNet-B0", 0.5, -0.01)]),
+    }
+    row = sig.cross_seed_consistency(per_seed)[0]
+    assert row["sign_consistent"] is False
+    assert row["mean_accuracy_difference"] == pytest.approx(0.0)
+
+
+def test_never_significant_is_distinguished_from_seed_dependent():
+    per_seed = {
+        s: _payload(SETTING, [_pair("ResNet-50", "EfficientNet-B0", 0.7, 0.001)])
+        for s in (42, 1337)
+    }
+    row = sig.cross_seed_consistency(per_seed)[0]
+    assert row["n_significant_holm"] == 0
+    assert row["verdict"] == "significant in no seed"
+
+
+def test_per_seed_p_values_are_retained_for_audit():
+    per_seed = {
+        42: _payload(SETTING, [_pair("ResNet-50", "EfficientNet-B0", 0.01, 0.02)]),
+        1337: _payload(SETTING, [_pair("ResNet-50", "EfficientNet-B0", 0.40, 0.01)]),
+    }
+    row = sig.cross_seed_consistency(per_seed)[0]
+    assert row["per_seed_p_holm"] == {"42": 0.01, "1337": 0.40}
+
+
+def test_a_partially_trained_seed_is_excluded_from_the_comparison():
+    """A missing run must not be reported as a negative result."""
+    seeds = sig.available_seeds()
+    for seed in seeds:
+        for prefix in ("pv", "pdc"):
+            for model in sig.MODEL_ORDER:
+                assert (sig.RUNS / f"{prefix}_{model}_s{seed}"
+                        / "predictions_in_domain_test.npz").exists()

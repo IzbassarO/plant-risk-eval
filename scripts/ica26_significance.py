@@ -524,13 +524,146 @@ def _emit(df: pd.DataFrame, name: str, caption: str, label: str, small: bool = F
     print(f"  wrote {name}.tex  ({len(df)} rows{', compact' if small else ''})")
 
 
+SEEDS = [42, 1337, 2026]
+ALL_SEEDS_OUT = METRICS / "significance_all_seeds.json"
+
+
+def available_seeds() -> list[int]:
+    """Seeds whose full six-run matrix has produced dumps.
+
+    A partially finished seed is excluded rather than analysed. Including one
+    would make a comparison read "significant in 1 of 2 seeds" when the second
+    seed had simply not trained that backbone yet -- a missing run reported as
+    a negative result.
+    """
+    out = []
+    for seed in SEEDS:
+        complete = all(
+            (RUNS / f"{prefix}_{model}_s{seed}" / "predictions_in_domain_test.npz").exists()
+            for prefix in ("pv", "pdc") for model in MODEL_ORDER
+        ) and all(
+            (RUNS / f"pv_{model}_s{seed}" / "predictions_cross_domain.npz").exists()
+            for model in MODEL_ORDER
+        )
+        if complete:
+            out.append(seed)
+    return out
+
+
+def cross_seed_consistency(per_seed: dict[int, dict]) -> list[dict]:
+    """Does each pairwise verdict hold in every seed, or only in one?
+
+    A significance result computed on a single training run is a statement about
+    that run. If a reviewer asks whether the conclusion is an artefact of the
+    seed, the only honest answer is to recompute it per seed and report how
+    often it holds -- including when it does not.
+    """
+    rows = []
+    settings = [s[0] for s in SETTINGS]
+    for setting in settings:
+        pairs: dict[str, list[tuple[int, dict]]] = {}
+        for seed, payload in sorted(per_seed.items()):
+            block = next((s for s in payload["settings"] if s["setting"] == setting), None)
+            if not block:
+                continue
+            for pair in block["pairwise_mcnemar"]:
+                key = f"{pair['model_a']} vs {pair['model_b']}"
+                pairs.setdefault(key, []).append((seed, pair))
+        for key, entries in pairs.items():
+            sig = [s for s, p in entries if p.get("p_value_holm", 1.0) < 0.05]
+            diffs = [p["accuracy_difference"] for _, p in entries]
+            n_pos = sum(1 for d in diffs if d > 0)
+            verdict = ("significant in all seeds" if len(sig) == len(entries)
+                       else "significant in no seed" if not sig
+                       else f"significant in {len(sig)} of {len(entries)} seeds")
+            rows.append({
+                "setting": setting,
+                "comparison": key,
+                "n_seeds": len(entries),
+                "seeds": [s for s, _ in entries],
+                "n_significant_holm": len(sig),
+                "significant_seeds": sig,
+                "sign_consistent": max(n_pos, len(diffs) - n_pos) == len(diffs),
+                "mean_accuracy_difference": round(float(np.mean(diffs)), 6),
+                "per_seed_p_holm": {str(s): p.get("p_value_holm") for s, p in entries},
+                "verdict": verdict,
+            })
+    return rows
+
+
+def write_consistency_table(rows: list[dict]) -> None:
+    if not rows:
+        return
+    df = pd.DataFrame([{
+        "Setting": r["setting"],
+        "Comparison": r["comparison"],
+        "Seeds": r["n_seeds"],
+        "Significant (Holm)": f"{r['n_significant_holm']}/{r['n_seeds']}",
+        "Sign consistent": "yes" if r["sign_consistent"] else "no",
+        "Mean acc. diff.": f"{r['mean_accuracy_difference']:+.4f}",
+    } for r in rows])
+    _write_table(df, "table9_significance_across_seeds",
+                 "Stability of each pairwise verdict across independent training seeds. "
+                 "Each seed's McNemar test is computed on that seed's own checkpoints and "
+                 "Holm-adjusted within that seed. A comparison significant in every seed is "
+                 "a conclusion about the architectures; one significant in a single seed is "
+                 "a statement about that run.",
+                 "tab:significance-across-seeds",
+                 compact={"Setting": "Setting", "Comparison": "Comparison",
+                          "Significant (Holm)": "Sig. (Holm)",
+                          "Sign consistent": "Sign", "Mean acc. diff.": "$\\Delta$ acc."},
+                 compact_caption=(
+                     "Stability of each pairwise verdict across independent training seeds. "
+                     "Each seed's McNemar test uses that seed's own checkpoints, Holm-adjusted "
+                     "within the seed. A comparison significant in every seed is a conclusion "
+                     "about the architectures; one significant in a single seed is a statement "
+                     "about that run."))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=42,
                     help="which seed's prediction dumps to analyse (default 42)")
+    ap.add_argument("--all-seeds", action="store_true",
+                    help="analyse every seed with dumps and report cross-seed consistency")
     ap.add_argument("--check", action="store_true",
                     help="recompute and compare against the existing file, write nothing")
     args = ap.parse_args()
+
+    if args.all_seeds:
+        seeds = available_seeds()
+        if not seeds:
+            print("no seed has prediction dumps", file=sys.stderr)
+            return 1
+        per_seed = {}
+        for seed in seeds:
+            print(f"analysing seed {seed}")
+            per_seed[seed] = analyse(seed)
+        rows = cross_seed_consistency(per_seed)
+        payload = {
+            "schema": "ica26.significance_across_seeds/1",
+            "created_at_utc": dt.datetime.now(dt.timezone.utc)
+                                .replace(microsecond=0).isoformat(),
+            "seeds": seeds,
+            "note": (
+                "Each seed is analysed independently and Holm-adjusted within that "
+                "seed. p-values are not pooled across seeds: three runs is far too "
+                "few to justify a meta-analytic combination, and the useful question "
+                "is whether a verdict is stable, not what its combined p-value is."
+            ),
+            "consistency": rows,
+            "per_seed": per_seed,
+        }
+        ALL_SEEDS_OUT.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        write_consistency_table(rows)
+        print(f"  wrote {ALL_SEEDS_OUT.relative_to(REPO)}")
+        stable = sum(1 for r in rows if r["n_significant_holm"] == r["n_seeds"])
+        never = sum(1 for r in rows if r["n_significant_holm"] == 0)
+        print(f"comparisons        : {len(rows)} across {len(seeds)} seed(s)")
+        print(f"significant always : {stable}")
+        print(f"significant never  : {never}")
+        print(f"seed-dependent     : {len(rows) - stable - never}")
+        return 0
 
     print(f"analysing seed {args.seed}")
     payload = analyse(args.seed)

@@ -1,0 +1,607 @@
+{
+  "consistency": [
+    {
+      "comparison": "ResNet-50 vs EfficientNet-B0",
+      "mean_accuracy_difference": -0.004295,
+      "n_seeds": 1,
+      "n_significant_holm": 1,
+      "per_seed_p_holm": {
+        "42": 2.9839681519627503e-06
+      },
+      "seeds": [
+        42
+      ],
+      "setting": "PlantVillage in-domain",
+      "sign_consistent": true,
+      "significant_seeds": [
+        42
+      ],
+      "verdict": "significant in all seeds"
+    },
+    {
+      "comparison": "ResNet-50 vs MobileNetV3-Small",
+      "mean_accuracy_difference": -0.002428,
+      "n_seeds": 1,
+      "n_significant_holm": 1,
+      "per_seed_p_holm": {
+        "42": 0.036293361358348694
+      },
+      "seeds": [
+        42
+      ],
+      "setting": "PlantVillage in-domain",
+      "sign_consistent": true,
+      "significant_seeds": [
+        42
+      ],
+      "verdict": "significant in all seeds"
+    },
+    {
+      "comparison": "EfficientNet-B0 vs MobileNetV3-Small",
+      "mean_accuracy_difference": 0.001868,
+      "n_seeds": 1,
+      "n_significant_holm": 1,
+      "per_seed_p_holm": {
+        "42": 0.036293361358348694
+      },
+      "seeds": [
+        42
+      ],
+      "setting": "PlantVillage in-domain",
+      "sign_consistent": true,
+      "significant_seeds": [
+        42
+      ],
+      "verdict": "significant in all seeds"
+    },
+    {
+      "comparison": "ResNet-50 vs EfficientNet-B0",
+      "mean_accuracy_difference": 0.013333,
+      "n_seeds": 1,
+      "n_significant_holm": 0,
+      "per_seed_p_holm": {
+        "42": 1.0
+      },
+      "seeds": [
+        42
+      ],
+      "setting": "PlantDoc Core in-domain",
+      "sign_consistent": true,
+      "significant_seeds": [],
+      "verdict": "significant in no seed"
+    },
+    {
+      "comparison": "ResNet-50 vs MobileNetV3-Small",
+      "mean_accuracy_difference": 0.137778,
+      "n_seeds": 1,
+      "n_significant_holm": 1,
+      "per_seed_p_holm": {
+        "42": 0.001216852606784603
+      },
+      "seeds": [
+        42
+      ],
+      "setting": "PlantDoc Core in-domain",
+      "sign_consistent": true,
+      "significant_seeds": [
+        42
+      ],
+      "verdict": "significant in all seeds"
+    },
+    {
+      "comparison": "EfficientNet-B0 vs MobileNetV3-Small",
+      "mean_accuracy_difference": 0.124444,
+      "n_seeds": 1,
+      "n_significant_holm": 1,
+      "per_seed_p_holm": {
+        "42": 0.004536642383768353
+      },
+      "seeds": [
+        42
+      ],
+      "setting": "PlantDoc Core in-domain",
+      "sign_consistent": true,
+      "significant_seeds": [
+        42
+      ],
+      "verdict": "significant in all seeds"
+    },
+    {
+      "comparison": "ResNet-50 vs EfficientNet-B0",
+      "mean_accuracy_difference": 0.003588,
+      "n_seeds": 1,
+      "n_significant_holm": 0,
+      "per_seed_p_holm": {
+        "42": 1.0
+      },
+      "seeds": [
+        42
+      ],
+      "setting": "PlantVillage -> PlantDoc Core",
+      "sign_consistent": true,
+      "significant_seeds": [],
+      "verdict": "significant in no seed"
+    },
+    {
+      "comparison": "ResNet-50 vs MobileNetV3-Small",
+      "mean_accuracy_difference": 0.035879,
+      "n_seeds": 1,
+      "n_significant_holm": 1,
+      "per_seed_p_holm": {
+        "42": 0.0013298982367366445
+      },
+      "seeds": [
+        42
+      ],
+      "setting": "PlantVillage -> PlantDoc Core",
+      "sign_consistent": true,
+      "significant_seeds": [
+        42
+      ],
+      "verdict": "significant in all seeds"
+    },
+    {
+      "comparison": "EfficientNet-B0 vs MobileNetV3-Small",
+      "mean_accuracy_difference": 0.032291,
+      "n_seeds": 1,
+      "n_significant_holm": 1,
+      "per_seed_p_holm": {
+        "42": 0.004536642383768353
+      },
+      "seeds": [
+        42
+      ],
+      "setting": "PlantVillage -> PlantDoc Core",
+      "sign_consistent": true,
+      "significant_seeds": [
+        42
+      ],
+      "verdict": "significant in all seeds"
+    }
+  ],
+  "created_at_utc": "2026-08-05T07:50:02+00:00",
+  "note": "Each seed is analysed independently and Holm-adjusted within that seed. p-values are not pooled across seeds: three runs is far too few to justify a meta-analytic combination, and the useful question is whether a verdict is stable, not what its combined p-value is.",
+  "per_seed": {
+    "42": {
+      "created_at_utc": "2026-08-05T07:50:02+00:00",
+      "method": {
+        "interval": "BCa bootstrap, 10000 resamples, 95% level, rng seed 20260805",
+        "label_space": "Fixed to the classes present in the original evaluation, matching evaluate_classification; held constant across all replicates.",
+        "multiplicity": "Holm-Bonferroni across all 9 pairwise tests in this file",
+        "paired_test": "McNemar exact binomial on per-item correctness",
+        "resampling": "Multinomial over the (true, predicted) contingency cells, which is exactly equivalent to resampling items with replacement for statistics that depend on the data only through that table."
+      },
+      "schema": "ica26.significance/1",
+      "seed": 42,
+      "settings": [
+        {
+          "confidence_intervals": [
+            {
+              "accuracy": {
+                "acceleration_a": -0.018424,
+                "bias_correction_z0": -0.032216,
+                "bootstrap_std_error": 0.00083,
+                "ci_lower": 0.990755,
+                "ci_upper": 0.994024,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.99253,
+                "statistic": "accuracy"
+              },
+              "macro_f1": {
+                "acceleration_a": -0.028902,
+                "bias_correction_z0": 0.014539,
+                "bootstrap_std_error": 0.00131,
+                "ci_lower": 0.986981,
+                "ci_upper": 0.992238,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.989946,
+                "statistic": "macro_f1"
+              },
+              "model": "ResNet-50",
+              "model_key": "resnet50"
+            },
+            {
+              "accuracy": {
+                "acceleration_a": -0.028447,
+                "bias_correction_z0": -0.025821,
+                "bootstrap_std_error": 0.000542,
+                "ci_lower": 0.995611,
+                "ci_upper": 0.997759,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.996825,
+                "statistic": "accuracy"
+              },
+              "macro_f1": {
+                "acceleration_a": -0.030568,
+                "bias_correction_z0": -0.033846,
+                "bootstrap_std_error": 0.000795,
+                "ci_lower": 0.993803,
+                "ci_upper": 0.99694,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.995597,
+                "statistic": "macro_f1"
+              },
+              "model": "EfficientNet-B0",
+              "model_key": "efficientnet_b0"
+            },
+            {
+              "accuracy": {
+                "acceleration_a": -0.022509,
+                "bias_correction_z0": -0.021183,
+                "bootstrap_std_error": 0.000682,
+                "ci_lower": 0.993463,
+                "ci_upper": 0.996171,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.994958,
+                "statistic": "accuracy"
+              },
+              "macro_f1": {
+                "acceleration_a": -0.033237,
+                "bias_correction_z0": 0.008523,
+                "bootstrap_std_error": 0.001152,
+                "ci_lower": 0.990142,
+                "ci_upper": 0.994765,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.992749,
+                "statistic": "macro_f1"
+              },
+              "model": "MobileNetV3-Small",
+              "model_key": "mobilenet_v3_small"
+            }
+          ],
+          "evaluation": "in_domain_test",
+          "n_evaluated_classes": 38,
+          "n_prediction_space": 38,
+          "n_samples": 10709,
+          "pairwise_mcnemar": [
+            {
+              "accuracy_a": 0.99253,
+              "accuracy_b": 0.996825,
+              "accuracy_difference": -0.004295,
+              "model_a": "ResNet-50",
+              "model_b": "EfficientNet-B0",
+              "n_a_only_correct": 18,
+              "n_b_only_correct": 64,
+              "n_both_correct": 10611,
+              "n_both_wrong": 16,
+              "n_discordant": 82,
+              "p_value": 3.3155201688475004e-07,
+              "p_value_holm": 2.9839681519627503e-06,
+              "test": "mcnemar_exact_binomial"
+            },
+            {
+              "accuracy_a": 0.99253,
+              "accuracy_b": 0.994958,
+              "accuracy_difference": -0.002428,
+              "model_a": "ResNet-50",
+              "model_b": "MobileNetV3-Small",
+              "n_a_only_correct": 34,
+              "n_b_only_correct": 60,
+              "n_both_correct": 10595,
+              "n_both_wrong": 20,
+              "n_discordant": 94,
+              "p_value": 0.009547810466077417,
+              "p_value_holm": 0.036293361358348694,
+              "test": "mcnemar_exact_binomial"
+            },
+            {
+              "accuracy_a": 0.996825,
+              "accuracy_b": 0.994958,
+              "accuracy_difference": 0.001868,
+              "model_a": "EfficientNet-B0",
+              "model_b": "MobileNetV3-Small",
+              "n_a_only_correct": 37,
+              "n_b_only_correct": 17,
+              "n_both_correct": 10638,
+              "n_both_wrong": 17,
+              "n_discordant": 54,
+              "p_value": 0.009073340339587174,
+              "p_value_holm": 0.036293361358348694,
+              "test": "mcnemar_exact_binomial"
+            }
+          ],
+          "run_prefix": "pv",
+          "setting": "PlantVillage in-domain"
+        },
+        {
+          "confidence_intervals": [
+            {
+              "accuracy": {
+                "acceleration_a": -0.009317,
+                "bias_correction_z0": -0.002005,
+                "bootstrap_std_error": 0.030915,
+                "ci_lower": 0.631111,
+                "ci_upper": 0.751111,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.693333,
+                "statistic": "accuracy"
+              },
+              "macro_f1": {
+                "acceleration_a": -0.002162,
+                "bias_correction_z0": 0.463787,
+                "bootstrap_std_error": 0.031477,
+                "ci_lower": 0.652553,
+                "ci_upper": 0.772083,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.699353,
+                "statistic": "macro_f1"
+              },
+              "model": "ResNet-50",
+              "model_key": "resnet50"
+            },
+            {
+              "accuracy": {
+                "acceleration_a": -0.008575,
+                "bias_correction_z0": -0.00376,
+                "bootstrap_std_error": 0.030977,
+                "ci_lower": 0.617778,
+                "ci_upper": 0.737778,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.68,
+                "statistic": "accuracy"
+              },
+              "macro_f1": {
+                "acceleration_a": -0.00229,
+                "bias_correction_z0": 0.449598,
+                "bootstrap_std_error": 0.030469,
+                "ci_lower": 0.645682,
+                "ci_upper": 0.759752,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.692655,
+                "statistic": "macro_f1"
+              },
+              "model": "EfficientNet-B0",
+              "model_key": "efficientnet_b0"
+            },
+            {
+              "accuracy": {
+                "acceleration_a": -0.002485,
+                "bias_correction_z0": -0.004011,
+                "bootstrap_std_error": 0.033347,
+                "ci_lower": 0.488889,
+                "ci_upper": 0.622222,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.555556,
+                "statistic": "accuracy"
+              },
+              "macro_f1": {
+                "acceleration_a": 2.7e-05,
+                "bias_correction_z0": 0.501243,
+                "bootstrap_std_error": 0.033652,
+                "ci_lower": 0.535159,
+                "ci_upper": 0.667502,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.584058,
+                "statistic": "macro_f1"
+              },
+              "model": "MobileNetV3-Small",
+              "model_key": "mobilenet_v3_small"
+            }
+          ],
+          "evaluation": "in_domain_test",
+          "n_evaluated_classes": 27,
+          "n_prediction_space": 28,
+          "n_samples": 225,
+          "pairwise_mcnemar": [
+            {
+              "accuracy_a": 0.693333,
+              "accuracy_b": 0.68,
+              "accuracy_difference": 0.013333,
+              "model_a": "ResNet-50",
+              "model_b": "EfficientNet-B0",
+              "n_a_only_correct": 20,
+              "n_b_only_correct": 17,
+              "n_both_correct": 136,
+              "n_both_wrong": 52,
+              "n_discordant": 37,
+              "p_value": 0.7428293587290682,
+              "p_value_holm": 1.0,
+              "test": "mcnemar_exact_binomial"
+            },
+            {
+              "accuracy_a": 0.693333,
+              "accuracy_b": 0.555556,
+              "accuracy_difference": 0.137778,
+              "model_a": "ResNet-50",
+              "model_b": "MobileNetV3-Small",
+              "n_a_only_correct": 48,
+              "n_b_only_correct": 17,
+              "n_both_correct": 108,
+              "n_both_wrong": 52,
+              "n_discordant": 65,
+              "p_value": 0.00015210657584807538,
+              "p_value_holm": 0.001216852606784603,
+              "test": "mcnemar_exact_binomial"
+            },
+            {
+              "accuracy_a": 0.68,
+              "accuracy_b": 0.555556,
+              "accuracy_difference": 0.124444,
+              "model_a": "EfficientNet-B0",
+              "model_b": "MobileNetV3-Small",
+              "n_a_only_correct": 47,
+              "n_b_only_correct": 19,
+              "n_both_correct": 106,
+              "n_both_wrong": 53,
+              "n_discordant": 66,
+              "p_value": 0.0007561070639613921,
+              "p_value_holm": 0.004536642383768353,
+              "test": "mcnemar_exact_binomial"
+            }
+          ],
+          "run_prefix": "pdc",
+          "setting": "PlantDoc Core in-domain"
+        },
+        {
+          "confidence_intervals": [
+            {
+              "accuracy": {
+                "acceleration_a": 0.003744,
+                "bias_correction_z0": -0.00188,
+                "bootstrap_std_error": 0.010027,
+                "ci_lower": 0.258432,
+                "ci_upper": 0.297796,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.277806,
+                "statistic": "accuracy"
+              },
+              "macro_f1": {
+                "acceleration_a": 0.005679,
+                "bias_correction_z0": 0.102953,
+                "bootstrap_std_error": 0.008673,
+                "ci_lower": 0.225257,
+                "ci_upper": 0.259501,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.24141,
+                "statistic": "macro_f1"
+              },
+              "model": "ResNet-50",
+              "model_key": "resnet50"
+            },
+            {
+              "accuracy": {
+                "acceleration_a": 0.003819,
+                "bias_correction_z0": 0.006643,
+                "bootstrap_std_error": 0.010006,
+                "ci_lower": 0.255254,
+                "ci_upper": 0.294208,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.274218,
+                "statistic": "accuracy"
+              },
+              "macro_f1": {
+                "acceleration_a": 0.006465,
+                "bias_correction_z0": 0.103961,
+                "bootstrap_std_error": 0.008562,
+                "ci_lower": 0.220319,
+                "ci_upper": 0.253786,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.235862,
+                "statistic": "macro_f1"
+              },
+              "model": "EfficientNet-B0",
+              "model_key": "efficientnet_b0"
+            },
+            {
+              "accuracy": {
+                "acceleration_a": 0.004548,
+                "bias_correction_z0": -0.002757,
+                "bootstrap_std_error": 0.009659,
+                "ci_lower": 0.222963,
+                "ci_upper": 0.260892,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.241927,
+                "statistic": "accuracy"
+              },
+              "macro_f1": {
+                "acceleration_a": 0.009068,
+                "bias_correction_z0": 0.102197,
+                "bootstrap_std_error": 0.008397,
+                "ci_lower": 0.183091,
+                "ci_upper": 0.215821,
+                "confidence_level": 0.95,
+                "method": "bca",
+                "n_bootstrap": 10000,
+                "point_estimate": 0.198215,
+                "statistic": "macro_f1"
+              },
+              "model": "MobileNetV3-Small",
+              "model_key": "mobilenet_v3_small"
+            }
+          ],
+          "evaluation": "cross_domain_plantdoc_core",
+          "n_evaluated_classes": 21,
+          "n_prediction_space": 21,
+          "n_samples": 1951,
+          "pairwise_mcnemar": [
+            {
+              "accuracy_a": 0.277806,
+              "accuracy_b": 0.274218,
+              "accuracy_difference": 0.003588,
+              "model_a": "ResNet-50",
+              "model_b": "EfficientNet-B0",
+              "n_a_only_correct": 179,
+              "n_b_only_correct": 172,
+              "n_both_correct": 363,
+              "n_both_wrong": 1237,
+              "n_discordant": 351,
+              "p_value": 0.7488260020389274,
+              "p_value_holm": 1.0,
+              "test": "mcnemar_exact_binomial"
+            },
+            {
+              "accuracy_a": 0.277806,
+              "accuracy_b": 0.241927,
+              "accuracy_difference": 0.035879,
+              "model_a": "ResNet-50",
+              "model_b": "MobileNetV3-Small",
+              "n_a_only_correct": 207,
+              "n_b_only_correct": 137,
+              "n_both_correct": 335,
+              "n_both_wrong": 1272,
+              "n_discordant": 344,
+              "p_value": 0.00018998546239094922,
+              "p_value_holm": 0.0013298982367366445,
+              "test": "mcnemar_exact_binomial"
+            },
+            {
+              "accuracy_a": 0.274218,
+              "accuracy_b": 0.241927,
+              "accuracy_difference": 0.032291,
+              "model_a": "EfficientNet-B0",
+              "model_b": "MobileNetV3-Small",
+              "n_a_only_correct": 205,
+              "n_b_only_correct": 142,
+              "n_both_correct": 330,
+              "n_both_wrong": 1274,
+              "n_discordant": 347,
+              "p_value": 0.0008484554200147044,
+              "p_value_holm": 0.004536642383768353,
+              "test": "mcnemar_exact_binomial"
+            }
+          ],
+          "run_prefix": "pv",
+          "setting": "PlantVillage -> PlantDoc Core"
+        }
+      ]
+    }
+  },
+  "schema": "ica26.significance_across_seeds/1",
+  "seeds": [
+    42
+  ]
+}
