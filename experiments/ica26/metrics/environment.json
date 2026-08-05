@@ -1,6 +1,12 @@
 {
   "experiment_lock_digest": "83449f60136918554904cb9c596122f8b89cb51ff5bb5c52c541394a5698082d",
-  "git_commit": "261fd3af0a8e1271239cd66e34e6062b1da34e73",
+  "git_commits": [
+    "054834cd450cf35df4497cfd886da09f9b790a68",
+    "261fd3af0a8e1271239cd66e34e6062b1da34e73",
+    "476b3543954c31e4e7ac8b0f6b9a4988a5bb4eae",
+    "784ec9cba4a63f30af01a7d9969a640510e63147",
+    "d3d7e5f1b6d950b21a27baa90089ba206cde179c"
+  ],
   "hardware": {
     "backend": "mps",
     "cuda_device_name": null,
@@ -12,20 +18,54 @@
   },
   "runs_expected": [
     "pv_resnet50_s42",
+    "pv_resnet50_s1337",
+    "pv_resnet50_s2026",
     "pv_efficientnet_b0_s42",
+    "pv_efficientnet_b0_s1337",
+    "pv_efficientnet_b0_s2026",
     "pv_mobilenet_v3_small_s42",
+    "pv_mobilenet_v3_small_s1337",
+    "pv_mobilenet_v3_small_s2026",
     "pdc_resnet50_s42",
+    "pdc_resnet50_s1337",
+    "pdc_resnet50_s2026",
     "pdc_efficientnet_b0_s42",
-    "pdc_mobilenet_v3_small_s42"
+    "pdc_efficientnet_b0_s1337",
+    "pdc_efficientnet_b0_s2026",
+    "pdc_mobilenet_v3_small_s42",
+    "pdc_mobilenet_v3_small_s1337",
+    "pdc_mobilenet_v3_small_s2026"
   ],
-  "runs_missing": [],
+  "runs_missing": [
+    "pdc_efficientnet_b0_s1337",
+    "pdc_efficientnet_b0_s2026",
+    "pdc_mobilenet_v3_small_s2026",
+    "pdc_resnet50_s1337",
+    "pdc_resnet50_s2026",
+    "pv_efficientnet_b0_s1337",
+    "pv_efficientnet_b0_s2026",
+    "pv_mobilenet_v3_small_s1337",
+    "pv_mobilenet_v3_small_s2026",
+    "pv_resnet50_s1337",
+    "pv_resnet50_s2026"
+  ],
   "runs_present": [
     "pdc_efficientnet_b0_s42",
+    "pdc_mobilenet_v3_small_s1337",
     "pdc_mobilenet_v3_small_s42",
     "pdc_resnet50_s42",
     "pv_efficientnet_b0_s42",
     "pv_mobilenet_v3_small_s42",
     "pv_resnet50_s42"
   ],
-  "schema": "ica26.experiment_environment/1"
+  "schema": "ica26.experiment_environment/2",
+  "seeds_expected": [
+    42,
+    1337,
+    2026
+  ],
+  "seeds_present": [
+    42,
+    1337
+  ]
 }

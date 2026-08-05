@@ -1,0 +1,10 @@
+Setting,Comparison,Seeds,Mean margin,Pooled seed SD,|Margin| / seed SD,Sign consistent
+PlantVillage in-domain,ResNet-50 - EfficientNet-B0,1,-0.0057,—,—,1/1
+PlantVillage in-domain,ResNet-50 - MobileNetV3-Small,1,-0.0028,—,—,1/1
+PlantVillage in-domain,EfficientNet-B0 - MobileNetV3-Small,1,0.0028,—,—,1/1
+PlantVillage → PlantDoc Core,ResNet-50 - EfficientNet-B0,1,0.0055,—,—,1/1
+PlantVillage → PlantDoc Core,ResNet-50 - MobileNetV3-Small,1,0.0432,—,—,1/1
+PlantVillage → PlantDoc Core,EfficientNet-B0 - MobileNetV3-Small,1,0.0376,—,—,1/1
+PlantDoc Core in-domain,ResNet-50 - EfficientNet-B0,1,0.0067,—,—,1/1
+PlantDoc Core in-domain,ResNet-50 - MobileNetV3-Small,1,0.1153,—,—,1/1
+PlantDoc Core in-domain,EfficientNet-B0 - MobileNetV3-Small,1,0.1086,—,—,1/1

@@ -1,7 +1,7 @@
-Model,Dataset,Params (M),Epochs,Train time (min),s / epoch,Latency b1 (ms),Throughput (img/s),Peak mem (MB)
-ResNet-50,PlantVillage,23.59,11,120.8,658.8,8.427,219.85,9461.8
-EfficientNet-B0,PlantVillage,4.06,14,132.1,566.2,9.307,275.0,9237.6
-MobileNetV3-Small,PlantVillage,1.56,15,33.5,134.0,6.648,1275.82,2144.7
-ResNet-50,PlantDoc Core,23.57,10,12.1,72.7,8.437,216.14,12531.8
-EfficientNet-B0,PlantDoc Core,4.04,9,8.4,56.2,9.584,274.86,11437.6
-MobileNetV3-Small,PlantDoc Core,1.55,11,2.3,12.5,6.801,1270.61,2144.7
+Model,Dataset,Seeds,Params (M),Epochs,Train time (min),s / epoch,Latency b1 (ms),Throughput (img/s),Peak mem (MB)
+ResNet-50,PlantVillage,1,23.59,11.0,120.8,658.8,8.43,219.8,9461.8
+EfficientNet-B0,PlantVillage,1,4.06,14.0,132.1,566.2,9.31,275.0,9237.6
+MobileNetV3-Small,PlantVillage,1,1.56,15.0,33.5,134.0,6.65,1275.8,2144.7
+ResNet-50,PlantDoc Core,1,23.57,10.0,12.1,72.7,8.44,216.1,12531.8
+EfficientNet-B0,PlantDoc Core,1,4.04,9.0,8.4,56.2,9.58,274.9,11437.6
+MobileNetV3-Small,PlantDoc Core,2,1.55,13.0 ± 2.8,2.7 ± 0.6,12.4 ± 0.1,6.48 ± 0.45,1272.1 ± 2.1,2144.7 ± 0.0

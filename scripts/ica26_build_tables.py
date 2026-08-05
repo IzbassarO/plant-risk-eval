@@ -39,10 +39,17 @@ MODEL_DISPLAY = {
 }
 DATASET_DISPLAY = {"plantvillage": "PlantVillage", "plantdoc_core": "PlantDoc Core"}
 
-RUN_IDS = [
-    "pv_resnet50_s42", "pv_efficientnet_b0_s42", "pv_mobilenet_v3_small_s42",
-    "pdc_resnet50_s42", "pdc_efficientnet_b0_s42", "pdc_mobilenet_v3_small_s42",
+# Seed 42 was the initial single-seed matrix; 1337 and 2026 are the repetitions
+# derived by scripts/ica26_make_seed_configs.py. Reported metrics are aggregated
+# across whichever of these actually produced a result file.
+SEEDS = [42, 1337, 2026]
+CONFIGS = [
+    (prefix, model)
+    for prefix in ("pv", "pdc")
+    for model in MODEL_ORDER
 ]
+RUN_IDS = [f"{prefix}_{model}_s{seed}" for prefix, model in CONFIGS for seed in SEEDS]
+DATASET_OF_PREFIX = {"pv": "PlantVillage", "pdc": "PlantDoc Core"}
 
 
 def load_results() -> dict[str, dict]:
@@ -54,6 +61,42 @@ def load_results() -> dict[str, dict]:
     return out
 
 
+def seed_results(results: dict, prefix: str, model: str) -> list[tuple[int, dict]]:
+    """Every completed seed for one (dataset, backbone) cell, in seed order."""
+    return [(s, results[f"{prefix}_{model}_s{s}"])
+            for s in SEEDS if f"{prefix}_{model}_s{s}" in results]
+
+
+def _agg(values) -> dict:
+    """Mean and sample standard deviation over the seeds that produced a value.
+
+    ``std`` is ``None`` for a single seed rather than 0.0: one run has no
+    variance estimate, and printing 0.0 would claim it does.
+    """
+    vals = [float(v) for v in values if v is not None and not pd.isna(v)]
+    if not vals:
+        return {"mean": None, "std": None, "n": 0}
+    arr = np.asarray(vals, dtype=float)
+    return {
+        "mean": float(arr.mean()),
+        "std": float(arr.std(ddof=1)) if len(arr) > 1 else None,
+        "n": len(arr),
+    }
+
+
+def _pm(agg: dict, places: int = 4) -> str:
+    """Format an aggregate as ``mean ± std``; a lone seed prints just the mean."""
+    if agg["mean"] is None:
+        return "—"
+    if agg["std"] is None:
+        return f"{agg['mean']:.{places}f}"
+    return f"{agg['mean']:.{places}f} ± {agg['std']:.{places}f}"
+
+
+def _agg_pm(values, places: int = 4) -> str:
+    return _pm(_agg(values), places)
+
+
 def _write(df: pd.DataFrame, name: str, caption: str, label: str, float_fmt: str = "%.4f") -> None:
     TABLES.mkdir(parents=True, exist_ok=True)
     df.to_csv(TABLES / f"{name}.csv", index=False)
@@ -61,8 +104,31 @@ def _write(df: pd.DataFrame, name: str, caption: str, label: str, float_fmt: str
         index=False, escape=True, float_format=float_fmt,
         caption=caption, label=label, position="htbp",
     )
+    # pandas escapes LaTeX specials but passes non-ASCII through as raw bytes,
+    # and U+2192 in particular is undefined under pdflatex's utf8 inputenc.
+    # Swapping the few characters this script deliberately introduces for their
+    # math-mode equivalents after escaping keeps the CSV readable and the .tex
+    # portable across pdflatex, xelatex, and lualatex. `>` is escaped too: it is
+    # only ever the ranking separator here, and it renders as an inverted
+    # question mark under the OT1 encoding.
+    for raw, tex in (("±", r"$\pm$"), ("→", r"$\rightarrow$"), (" > ", r" $>$ ")):
+        latex = latex.replace(raw, tex)
     (TABLES / f"{name}.tex").write_text(latex)
     print(f"  wrote {name}.csv / {name}.tex  ({len(df)} rows)")
+
+
+def _write_per_seed(rows: list[dict], name: str) -> None:
+    """Per-seed long-format companion to an aggregated table.
+
+    The aggregated tables are what the paper cites; these files are what make
+    the aggregation auditable, so a reader can recompute every mean and standard
+    deviation without rerunning anything.
+    """
+    if not rows:
+        return
+    TABLES.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(TABLES / f"{name}.csv", index=False)
+    print(f"  wrote {name}.csv  ({len(rows)} rows, per-seed)")
 
 
 # --------------------------------------------------------------------------- #
@@ -113,56 +179,96 @@ def table_dataset_statistics() -> None:
 # --------------------------------------------------------------------------- #
 # 2 & 3. in-domain and cross-domain performance
 # --------------------------------------------------------------------------- #
-def _perf_row(model: str, dataset: str, block: dict) -> dict:
-    return {
+PERF_METRICS = [
+    ("Accuracy", "accuracy"),
+    ("Macro-F1", "macro_f1"),
+    ("Weighted-F1", "weighted_f1"),
+    ("Balanced Acc.", "balanced_accuracy"),
+    ("Macro Prec.", "macro_precision"),
+    ("Macro Rec.", "macro_recall"),
+]
+
+
+def _perf_agg_row(model: str, dataset: str, blocks: list[tuple[int, dict]]) -> dict:
+    """One aggregated table row over the seeds available for this cell."""
+    row = {
         "Model": MODEL_DISPLAY[model],
         "Dataset": dataset,
-        "N": block["n_samples"],
-        "Accuracy": block["accuracy"],
-        "Macro-F1": block["macro_f1"],
-        "Weighted-F1": block["weighted_f1"],
-        "Balanced Acc.": block["balanced_accuracy"],
-        "Macro Prec.": block["macro_precision"],
-        "Macro Rec.": block["macro_recall"],
+        "Seeds": len(blocks),
+        # The evaluation split is fixed by the dataset lock, so N is identical
+        # across seeds by construction; assert that rather than averaging it.
+        "N": blocks[0][1]["n_samples"],
     }
+    for disp, key in PERF_METRICS:
+        row[disp] = _agg_pm([b[key] for _, b in blocks])
+    return row
+
+
+def _perf_seed_rows(model: str, dataset: str, blocks: list[tuple[int, dict]]) -> list[dict]:
+    return [
+        {"Model": MODEL_DISPLAY[model], "Dataset": dataset, "Seed": seed,
+         "N": b["n_samples"], **{disp: b[key] for disp, key in PERF_METRICS}}
+        for seed, b in blocks
+    ]
 
 
 def table_in_domain(results: dict) -> pd.DataFrame:
-    rows = []
+    rows, per_seed = [], []
     for prefix, dataset in (("pv", "PlantVillage"), ("pdc", "PlantDoc Core")):
         for model in MODEL_ORDER:
-            rid = f"{prefix}_{model}_s42"
-            if rid not in results:
+            runs = seed_results(results, prefix, model)
+            blocks = [(s, r["evaluations"]["in_domain_test"]) for s, r in runs
+                      if "in_domain_test" in r["evaluations"]]
+            if not blocks:
                 continue
-            rows.append(_perf_row(model, dataset, results[rid]["evaluations"]["in_domain_test"]))
+            n_values = {b["n_samples"] for _, b in blocks}
+            if len(n_values) > 1:
+                raise RuntimeError(
+                    f"{prefix}_{model}: in-domain test size differs across seeds {n_values}; "
+                    "the evaluation split is locked and must not vary"
+                )
+            rows.append(_perf_agg_row(model, dataset, blocks))
+            per_seed += _perf_seed_rows(model, dataset, blocks)
     df = pd.DataFrame(rows)
     if not df.empty:
         _write(df, "table2_in_domain_performance",
-               "In-domain test performance. Macro averages are computed over the classes "
-               "present in the evaluation split; PlantDoc Core's arthropod-pest class has "
-               "zero test images and is reported separately rather than averaged in as zero.",
+               "In-domain test performance, mean $\\pm$ sample standard deviation over "
+               "independent training seeds (42, 1337, 2026). Macro averages are computed over "
+               "the classes present in the evaluation split; PlantDoc Core's arthropod-pest "
+               "class has zero test images and is reported separately rather than averaged in "
+               "as zero.",
                "tab:in-domain")
+        _write_per_seed(per_seed, "table2_in_domain_performance_per_seed")
     return df
 
 
 def table_cross_domain(results: dict) -> pd.DataFrame:
-    rows = []
+    rows, per_seed = [], []
     for model in MODEL_ORDER:
-        rid = f"pv_{model}_s42"
-        block = results.get(rid, {}).get("evaluations", {}).get("cross_domain_plantdoc_core")
-        if not block:
+        runs = seed_results(results, "pv", model)
+        blocks = [(s, r["evaluations"]["cross_domain_plantdoc_core"]) for s, r in runs
+                  if "cross_domain_plantdoc_core" in r["evaluations"]]
+        if not blocks:
             continue
-        r = _perf_row(model, "PlantVillage -> PlantDoc Core", block)
-        r["Shared classes"] = block["protocol"]["n_shared_classes"]
+        r = _perf_agg_row(model, "PlantVillage → PlantDoc Core", blocks)
+        r["Shared classes"] = blocks[0][1]["protocol"]["n_shared_classes"]
+        r["Retained prob. mass"] = _agg_pm(
+            [b["protocol"]["mean_retained_probability_mass_before_renormalisation"]
+             for _, b in blocks]
+        )
         rows.append(r)
+        per_seed += _perf_seed_rows(model, "PlantVillage → PlantDoc Core", blocks)
     df = pd.DataFrame(rows)
     if not df.empty:
         _write(df, "table3_cross_domain_performance",
-               "Cross-domain generalisation: PlantVillage-trained models evaluated on the "
-               "frozen shared-class PlantDoc Core subset. Metrics are computed only over the "
-               "21 shared classes; unmapped PlantDoc images are excluded from the evaluation "
-               "set rather than counted as errors.",
+               "Cross-domain generalisation, mean $\\pm$ sample standard deviation over three "
+               "seeds: PlantVillage-trained models evaluated on the frozen shared-class "
+               "PlantDoc Core subset. Metrics are computed only over the 21 shared classes; "
+               "unmapped PlantDoc images are excluded from the evaluation set rather than "
+               "counted as errors. Retained probability mass is the share of the source "
+               "model's belief falling inside the shared space before renormalisation.",
                "tab:cross-domain")
+        _write_per_seed(per_seed, "table3_cross_domain_performance_per_seed")
     return df
 
 
@@ -170,134 +276,348 @@ def table_cross_domain(results: dict) -> pd.DataFrame:
 # 4. efficiency
 # --------------------------------------------------------------------------- #
 def table_efficiency(results: dict) -> None:
-    rows = []
+    rows, per_seed = [], []
     for prefix, dataset in (("pv", "PlantVillage"), ("pdc", "PlantDoc Core")):
         for model in MODEL_ORDER:
-            rid = f"{prefix}_{model}_s42"
-            if rid not in results:
+            runs = seed_results(results, prefix, model)
+            if not runs:
                 continue
-            e = results[rid]["efficiency"]
-            t = results[rid]["training"]
+            effs = [r["efficiency"] for _, r in runs]
+            trains = [r["training"] for _, r in runs]
             rows.append({
                 "Model": MODEL_DISPLAY[model],
                 "Dataset": dataset,
-                "Params (M)": round(e["total_parameters"] / 1e6, 2),
-                "Epochs": t["epochs_run"],
-                "Train time (min)": round(e["training_time_seconds"] / 60, 1),
-                "s / epoch": round(e["seconds_per_epoch"], 1) if e.get("seconds_per_epoch") else None,
-                "Latency b1 (ms)": e.get("inference_latency_ms_batch1"),
-                "Throughput (img/s)": e.get("inference_throughput_img_per_s"),
-                "Peak mem (MB)": e.get("peak_memory_mb"),
+                "Seeds": len(runs),
+                # Parameter count is a property of the architecture, not the run.
+                "Params (M)": round(effs[0]["total_parameters"] / 1e6, 2),
+                "Epochs": _agg_pm([t["epochs_run"] for t in trains], places=1),
+                "Train time (min)": _agg_pm(
+                    [e["training_time_seconds"] / 60 for e in effs], places=1),
+                "s / epoch": _agg_pm(
+                    [e.get("seconds_per_epoch") for e in effs], places=1),
+                "Latency b1 (ms)": _agg_pm(
+                    [e.get("inference_latency_ms_batch1") for e in effs], places=2),
+                "Throughput (img/s)": _agg_pm(
+                    [e.get("inference_throughput_img_per_s") for e in effs], places=1),
+                "Peak mem (MB)": _agg_pm([e.get("peak_memory_mb") for e in effs], places=1),
             })
+            per_seed += [
+                {"Model": MODEL_DISPLAY[model], "Dataset": dataset, "Seed": seed,
+                 "Params (M)": round(r["efficiency"]["total_parameters"] / 1e6, 2),
+                 "Epochs": r["training"]["epochs_run"],
+                 "Train time (min)": round(r["efficiency"]["training_time_seconds"] / 60, 2),
+                 "s / epoch": r["efficiency"].get("seconds_per_epoch"),
+                 "Latency b1 (ms)": r["efficiency"].get("inference_latency_ms_batch1"),
+                 "Throughput (img/s)": r["efficiency"].get("inference_throughput_img_per_s"),
+                 "Peak mem (MB)": r["efficiency"].get("peak_memory_mb")}
+                for seed, r in runs
+            ]
     df = pd.DataFrame(rows)
     if not df.empty:
         _write(df, "table4_efficiency",
-               "Model efficiency. Latency and throughput measured after warm-up on the "
-               "accelerator reported in the run metadata.",
+               "Model efficiency, mean $\\pm$ sample standard deviation over three seeds. "
+               "Epoch counts vary between seeds because early stopping fires at different "
+               "points, so training time is reported alongside seconds per epoch. Latency and "
+               "throughput are measured after warm-up on the accelerator reported in the run "
+               "metadata.",
                "tab:efficiency", float_fmt="%.2f")
+        _write_per_seed(per_seed, "table4_efficiency_per_seed")
 
 
 # --------------------------------------------------------------------------- #
 # 5. domain-shift degradation
 # --------------------------------------------------------------------------- #
 def table_degradation(results: dict) -> None:
-    rows = []
+    rows, per_seed = [], []
     for model in MODEL_ORDER:
-        rid = f"pv_{model}_s42"
-        res = results.get(rid)
-        if not res:
+        paired = []
+        for seed, res in seed_results(results, "pv", model):
+            ind = res["evaluations"].get("in_domain_test")
+            cd = res["evaluations"].get("cross_domain_plantdoc_core")
+            if ind and cd:
+                paired.append((seed, ind, cd))
+        if not paired:
             continue
-        ind = res["evaluations"]["in_domain_test"]
-        cd = res["evaluations"].get("cross_domain_plantdoc_core")
-        if not cd:
-            continue
-        row = {"Model": MODEL_DISPLAY[model]}
+        row = {"Model": MODEL_DISPLAY[model], "Seeds": len(paired)}
+        seed_row = {}
         for metric, key in (("Accuracy", "accuracy"), ("Macro-F1", "macro_f1")):
-            a, b = ind[key], cd[key]
-            row[f"{metric} (in-domain)"] = a
-            row[f"{metric} (cross-domain)"] = b
-            row[f"{metric} abs. drop"] = a - b
-            row[f"{metric} rel. drop %"] = (a - b) / a * 100 if a else float("nan")
+            # Drops are computed within a seed and then averaged. Differencing
+            # the two seed-averages instead would discard the pairing, which is
+            # the only thing that makes the drop a per-model quantity.
+            ins = [ind[key] for _, ind, _ in paired]
+            outs = [cd[key] for _, _, cd in paired]
+            abs_drop = [a - b for a, b in zip(ins, outs)]
+            rel_drop = [(a - b) / a * 100 for a, b in zip(ins, outs) if a]
+            row[f"{metric} (in-domain)"] = _agg_pm(ins)
+            row[f"{metric} (cross-domain)"] = _agg_pm(outs)
+            row[f"{metric} abs. drop"] = _agg_pm(abs_drop)
+            row[f"{metric} rel. drop %"] = _agg_pm(rel_drop, places=2)
+            seed_row[key] = (ins, outs, abs_drop, rel_drop)
         rows.append(row)
+        for i, (seed, _, _) in enumerate(paired):
+            entry = {"Model": MODEL_DISPLAY[model], "Seed": seed}
+            for metric, key in (("Accuracy", "accuracy"), ("Macro-F1", "macro_f1")):
+                ins, outs, abs_drop, rel_drop = seed_row[key]
+                entry[f"{metric} (in-domain)"] = ins[i]
+                entry[f"{metric} (cross-domain)"] = outs[i]
+                entry[f"{metric} abs. drop"] = abs_drop[i]
+                entry[f"{metric} rel. drop %"] = rel_drop[i] if i < len(rel_drop) else None
+            per_seed.append(entry)
     df = pd.DataFrame(rows)
     if not df.empty:
         _write(df, "table5_domain_shift_degradation",
-               "Domain-shift degradation. In-domain is the PlantVillage test split over 38 "
-               "classes; cross-domain is the PlantDoc Core shared-class subset over 21 "
-               "classes. The two label spaces differ, so the drop combines domain shift with "
-               "the change of task difficulty and should be read as a paired trend across "
-               "models rather than as an isolated quantity.",
+               "Domain-shift degradation, mean $\\pm$ sample standard deviation over three "
+               "seeds. Drops are computed within each seed and then averaged, preserving the "
+               "pairing between a checkpoint and its own cross-domain evaluation. In-domain is "
+               "the PlantVillage test split over 38 classes; cross-domain is the PlantDoc Core "
+               "shared-class subset over 21 classes. The two label spaces differ, so the drop "
+               "combines domain shift with the change of task difficulty and should be read as "
+               "a paired trend across models rather than as an isolated quantity.",
                "tab:degradation")
+        _write_per_seed(per_seed, "table5_domain_shift_degradation_per_seed")
 
 
 # --------------------------------------------------------------------------- #
 # 6. calibration
 # --------------------------------------------------------------------------- #
+CALIBRATION_SETTINGS = (
+    ("in_domain_test", "in-domain"),
+    ("in_domain_test_temperature_scaled", "in-domain (T-scaled)"),
+    ("cross_domain_plantdoc_core", "cross-domain"),
+    ("cross_domain_plantdoc_core_temperature_scaled", "cross-domain (T-scaled)"),
+)
+CALIBRATION_METRICS = [
+    ("NLL", lambda b: b["probabilistic"]["negative_log_likelihood"]),
+    ("Brier", lambda b: b["probabilistic"]["brier_score"]),
+    ("ECE", lambda b: b["probabilistic"]["expected_calibration_error"]),
+    ("MCE", lambda b: b["probabilistic"]["maximum_calibration_error"]),
+    ("AURC", lambda b: b.get("selective_prediction", {}).get("area_under_risk_coverage")),
+    # Read the temperature the block actually used. Inferring it from the row
+    # label previously reported T=1.0 for cross-domain rows that had in fact
+    # been temperature-scaled.
+    ("T", lambda b: b.get("temperature") or 1.0),
+]
+
+
 def table_calibration(results: dict) -> None:
-    rows = []
+    rows, per_seed = [], []
     for prefix, dataset in (("pv", "PlantVillage"), ("pdc", "PlantDoc Core")):
         for model in MODEL_ORDER:
-            rid = f"{prefix}_{model}_s42"
-            res = results.get(rid)
-            if not res:
-                continue
-            for eval_name, disp in (
-                ("in_domain_test", "in-domain"),
-                ("in_domain_test_temperature_scaled", "in-domain (T-scaled)"),
-                ("cross_domain_plantdoc_core", "cross-domain"),
-                ("cross_domain_plantdoc_core_temperature_scaled", "cross-domain (T-scaled)"),
-            ):
-                block = res["evaluations"].get(eval_name)
-                if not block or "probabilistic" not in block:
+            runs = seed_results(results, prefix, model)
+            for eval_name, disp in CALIBRATION_SETTINGS:
+                blocks = [(s, r["evaluations"][eval_name]) for s, r in runs
+                          if eval_name in r["evaluations"]
+                          and "probabilistic" in r["evaluations"][eval_name]]
+                if not blocks:
                     continue
-                p = block["probabilistic"]
-                # Read the temperature the block actually used. Inferring it from
-                # the row label previously reported T=1.0 for cross-domain rows
-                # that had in fact been temperature-scaled.
-                applied = block.get("temperature")
-                rows.append({
-                    "Model": MODEL_DISPLAY[model],
-                    "Dataset": dataset,
-                    "Setting": disp,
-                    "NLL": p["negative_log_likelihood"],
-                    "Brier": p["brier_score"],
-                    "ECE": p["expected_calibration_error"],
-                    "MCE": p["maximum_calibration_error"],
-                    "AURC": block.get("selective_prediction", {}).get("area_under_risk_coverage"),
-                    "T": applied if applied else 1.0,
-                })
+                row = {"Model": MODEL_DISPLAY[model], "Dataset": dataset,
+                       "Setting": disp, "Seeds": len(blocks)}
+                for name, getter in CALIBRATION_METRICS:
+                    row[name] = _agg_pm([getter(b) for _, b in blocks])
+                rows.append(row)
+                per_seed += [
+                    {"Model": MODEL_DISPLAY[model], "Dataset": dataset, "Setting": disp,
+                     "Seed": seed, **{name: getter(b) for name, getter in CALIBRATION_METRICS}}
+                    for seed, b in blocks
+                ]
     df = pd.DataFrame(rows)
     if not df.empty:
         _write(df, "table6_calibration",
-               "Confidence calibration and selective prediction. Temperature is fitted on the "
-               "held-out validation split only and applied unchanged to test and cross-domain "
-               "logits. AURC is the area under the risk-coverage curve; lower is better.",
+               "Confidence calibration and selective prediction, mean $\\pm$ sample standard "
+               "deviation over three seeds. Temperature is fitted on the held-out validation "
+               "split only and applied unchanged to test and cross-domain logits; it is never "
+               "refitted on evaluation data. AURC is the area under the risk-coverage curve; "
+               "lower is better.",
                "tab:calibration")
+        _write_per_seed(per_seed, "table6_calibration_per_seed")
+
+
+# --------------------------------------------------------------------------- #
+# 7. ranking stability across seeds
+# --------------------------------------------------------------------------- #
+RANKING_SETTINGS = [
+    ("PlantVillage in-domain", "pv", "in_domain_test"),
+    ("PlantVillage → PlantDoc Core", "pv", "cross_domain_plantdoc_core"),
+    ("PlantDoc Core in-domain", "pdc", "in_domain_test"),
+]
+
+
+def _macro_f1_by_model(results: dict, prefix: str, eval_name: str) -> dict[str, dict[int, float]]:
+    out: dict[str, dict[int, float]] = {}
+    for model in MODEL_ORDER:
+        per_seed = {}
+        for seed, res in seed_results(results, prefix, model):
+            block = res["evaluations"].get(eval_name)
+            if block:
+                per_seed[seed] = block["macro_f1"]
+        if per_seed:
+            out[model] = per_seed
+    return out
+
+
+def table_ranking_stability(results: dict) -> None:
+    """Does the backbone ordering survive reseeding, and does it survive the shift?
+
+    A ranking flip between two evaluation settings is only a finding if the gap
+    that produces it is larger than the gap the seed alone produces. This table
+    reports the per-seed ordering next to the between-model margin and the seed
+    spread, so the two can be compared directly rather than asserted.
+    """
+    rank_rows, margin_rows = [], []
+
+    for disp, prefix, eval_name in RANKING_SETTINGS:
+        by_model = _macro_f1_by_model(results, prefix, eval_name)
+        if len(by_model) < 2:
+            continue
+        seeds_here = sorted(set.intersection(*(set(v) for v in by_model.values())))
+
+        orderings = []
+        for seed in seeds_here:
+            order = sorted(by_model, key=lambda m: by_model[m][seed], reverse=True)
+            orderings.append(tuple(order))
+            rank_rows.append({
+                "Setting": disp,
+                "Seed": seed,
+                "Ranking (macro-F1; best first)": " > ".join(MODEL_DISPLAY[m] for m in order),
+                **{f"{MODEL_DISPLAY[m]} macro-F1": round(by_model[m][seed], 4) for m in MODEL_ORDER
+                   if m in by_model},
+            })
+        if orderings:
+            modal = max(set(orderings), key=orderings.count)
+            rank_rows.append({
+                "Setting": disp,
+                "Seed": "all",
+                "Ranking (macro-F1; best first)": (
+                    f"{'STABLE' if len(set(orderings)) == 1 else 'UNSTABLE'}: "
+                    f"{orderings.count(modal)}/{len(orderings)} seeds give "
+                    + " > ".join(MODEL_DISPLAY[m] for m in modal)
+                ),
+                **{f"{MODEL_DISPLAY[m]} macro-F1": round(
+                    float(np.mean([by_model[m][s] for s in seeds_here])), 4)
+                   for m in MODEL_ORDER if m in by_model},
+            })
+
+        # Pairwise margins against seed noise.
+        models_here = [m for m in MODEL_ORDER if m in by_model]
+        for i, a in enumerate(models_here):
+            for b in models_here[i + 1:]:
+                diffs = [by_model[a][s] - by_model[b][s] for s in seeds_here]
+                agg_d = _agg(diffs)
+                spread = _agg([by_model[a][s] for s in seeds_here])["std"]
+                spread_b = _agg([by_model[b][s] for s in seeds_here])["std"]
+                pooled = (None if spread is None or spread_b is None
+                          else float(np.sqrt((spread ** 2 + spread_b ** 2) / 2)))
+                n_pos = sum(1 for d in diffs if d > 0)
+                margin_rows.append({
+                    "Setting": disp,
+                    "Comparison": f"{MODEL_DISPLAY[a]} - {MODEL_DISPLAY[b]}",
+                    "Seeds": len(diffs),
+                    "Mean margin": _pm(agg_d),
+                    "Pooled seed SD": "—" if pooled is None else f"{pooled:.4f}",
+                    "|Margin| / seed SD": (
+                        "—" if not pooled or agg_d["mean"] is None
+                        else f"{abs(agg_d['mean']) / pooled:.2f}"),
+                    "Sign consistent": f"{max(n_pos, len(diffs) - n_pos)}/{len(diffs)}",
+                })
+
+    if rank_rows:
+        _write(pd.DataFrame(rank_rows), "table7_ranking_stability",
+               "Backbone ranking by macro-F1 under each evaluation setting, per seed. A "
+               "setting is STABLE when all seeds agree on the ordering. This is the direct "
+               "test of whether the in-domain ranking predicts the cross-domain ranking, or "
+               "whether an apparent reordering is within seed noise.",
+               "tab:ranking-stability")
+    if margin_rows:
+        _write(pd.DataFrame(margin_rows), "table7b_ranking_margins",
+               "Pairwise macro-F1 margins against seed noise. The margin is computed within "
+               "each seed and then averaged. Pooled seed SD is the root-mean-square of the two "
+               "models' across-seed standard deviations. A margin comfortably exceeding the "
+               "seed SD, with a consistent sign across all seeds, is a difference the seed "
+               "alone does not explain; one below it is not claimed. With three seeds these "
+               "are descriptive ratios, not significance tests.",
+               "tab:ranking-margins")
 
 
 # --------------------------------------------------------------------------- #
 # figures
 # --------------------------------------------------------------------------- #
+MODEL_COLOUR = {
+    "resnet50": "#1f77b4",
+    "efficientnet_b0": "#d62728",
+    "mobilenet_v3_small": "#2ca02c",
+}
+SEED_STYLE = {42: "-", 1337: "--", 2026: ":"}
+
+
 def figure_training_curves(results: dict) -> None:
+    """One panel per (corpus, quantity); colour is the backbone, dash is the seed.
+
+    Eighteen runs on two axes is unreadable, and averaging epoch-indexed curves
+    across seeds would be worse: early stopping fires at different epochs, so a
+    mean curve would silently shorten to the earliest stop. Every seed is drawn.
+    """
     FIGURES.mkdir(parents=True, exist_ok=True)
-    present = [(rid, r) for rid, r in results.items()]
-    if not present:
+    if not results:
         return
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-    for rid, res in sorted(present):
-        hist = res["training"]["history"]
-        ep = [h["epoch"] for h in hist]
-        axes[0].plot(ep, [h["train_loss"] for h in hist], marker="o", ms=3, label=rid)
-        axes[1].plot(ep, [h["val_macro_f1"] for h in hist], marker="o", ms=3, label=rid)
-    axes[0].set_xlabel("epoch"); axes[0].set_ylabel("train loss"); axes[0].set_title("Training loss")
-    axes[1].set_xlabel("epoch"); axes[1].set_ylabel("validation macro-F1"); axes[1].set_title("Validation macro-F1")
-    for ax in axes:
-        ax.grid(alpha=0.3)
-    axes[1].legend(fontsize=7, loc="lower right")
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8.5))
+    for row, (prefix, corpus) in enumerate((("pv", "PlantVillage"), ("pdc", "PlantDoc Core"))):
+        drew = False
+        for model in MODEL_ORDER:
+            for seed, res in seed_results(results, prefix, model):
+                hist = res["training"]["history"]
+                ep = [h["epoch"] for h in hist]
+                style = dict(color=MODEL_COLOUR[model], ls=SEED_STYLE.get(seed, "-"),
+                             lw=1.4, marker="o", ms=2.5)
+                axes[row][0].plot(ep, [h["train_loss"] for h in hist], **style)
+                axes[row][1].plot(ep, [h["val_macro_f1"] for h in hist],
+                                  label=f"{MODEL_DISPLAY[model]} s{seed}", **style)
+                drew = True
+        axes[row][0].set_title(f"{corpus} — training loss", fontsize=10)
+        axes[row][1].set_title(f"{corpus} — validation macro-F1", fontsize=10)
+        axes[row][0].set_ylabel("train loss")
+        axes[row][1].set_ylabel("validation macro-F1")
+        for ax in axes[row]:
+            ax.set_xlabel("epoch")
+            ax.grid(alpha=0.3)
+        if drew:
+            axes[row][1].legend(fontsize=6, loc="lower right", ncol=3)
     fig.tight_layout()
     fig.savefig(FIGURES / "fig_training_curves.png", dpi=200)
     plt.close(fig)
     print("  wrote fig_training_curves.png")
+
+
+def figure_seed_spread(results: dict) -> None:
+    """Between-model margins next to across-seed spread, for the ranking claim."""
+    FIGURES.mkdir(parents=True, exist_ok=True)
+    panels = [(d, p, e) for d, p, e in RANKING_SETTINGS
+              if len(_macro_f1_by_model(results, p, e)) >= 2]
+    if not panels:
+        return
+    fig, axes = plt.subplots(1, len(panels), figsize=(4.6 * len(panels), 4.4), squeeze=False)
+    for ax, (disp, prefix, eval_name) in zip(axes[0], panels):
+        by_model = _macro_f1_by_model(results, prefix, eval_name)
+        models_here = [m for m in MODEL_ORDER if m in by_model]
+        for x, model in enumerate(models_here):
+            vals = [by_model[model][s] for s in sorted(by_model[model])]
+            agg = _agg(vals)
+            ax.errorbar(x, agg["mean"], yerr=(agg["std"] or 0.0), fmt="o", ms=7, capsize=6,
+                        color=MODEL_COLOUR[model], lw=1.5)
+            # Every seed drawn beside the mean: with n=3 the individual points
+            # are more informative than the error bar computed from them.
+            ax.scatter([x + 0.14] * len(vals), vals, s=16, alpha=0.65,
+                       color=MODEL_COLOUR[model], zorder=3)
+        ax.set_xticks(range(len(models_here)))
+        ax.set_xticklabels([MODEL_DISPLAY[m] for m in models_here], rotation=20,
+                           ha="right", fontsize=8)
+        ax.set_ylabel("macro-F1")
+        ax.set_title(disp, fontsize=9)
+        ax.grid(alpha=0.3, axis="y")
+    fig.suptitle("Backbone macro-F1: mean ± seed SD, with individual seeds", fontsize=10)
+    fig.tight_layout()
+    fig.savefig(FIGURES / "fig_seed_spread.png", dpi=200)
+    plt.close(fig)
+    print("  wrote fig_seed_spread.png")
 
 
 def figure_confusion(results: dict) -> None:
@@ -353,24 +673,53 @@ def figure_reliability(results: dict) -> None:
 
 
 def figure_risk_coverage(results: dict) -> None:
+    """Seed-averaged risk-coverage curves, one panel per evaluation setting.
+
+    Thirty-six individual curves cannot be read. Each seed's curve is
+    interpolated onto a common coverage grid and averaged, with a shaded band at
+    ± one seed standard deviation so the averaging never hides disagreement.
+    """
     FIGURES.mkdir(parents=True, exist_ok=True)
-    fig, ax = plt.subplots(figsize=(6.5, 4.5))
-    drew = False
-    for rid, res in sorted(results.items()):
-        for name in ("in_domain_test", "cross_domain_plantdoc_core"):
-            block = res["evaluations"].get(name)
-            if not block or "selective_prediction" not in block:
+    grid = np.linspace(0.05, 1.0, 96)
+    panels = [
+        ("PlantVillage in-domain", "pv", "in_domain_test"),
+        ("PlantVillage → PlantDoc Core", "pv", "cross_domain_plantdoc_core"),
+        ("PlantDoc Core in-domain", "pdc", "in_domain_test"),
+    ]
+    fig, axes = plt.subplots(1, len(panels), figsize=(4.7 * len(panels), 4.3), squeeze=False)
+    drew_any = False
+    for ax, (disp, prefix, eval_name) in zip(axes[0], panels):
+        for model in MODEL_ORDER:
+            curves = []
+            for _, res in seed_results(results, prefix, model):
+                block = res["evaluations"].get(eval_name)
+                if not block or "selective_prediction" not in block:
+                    continue
+                pts = block["selective_prediction"]["points"]
+                cov = np.asarray([p["coverage"] for p in pts], dtype=float)
+                acc = np.asarray([p["selective_accuracy"] for p in pts], dtype=float)
+                order = np.argsort(cov)
+                curves.append(np.interp(grid, cov[order], acc[order]))
+            if not curves:
                 continue
-            pts = block["selective_prediction"]["points"]
-            ax.plot([p["coverage"] for p in pts], [p["selective_accuracy"] for p in pts],
-                    lw=1.2, label=f"{rid} / {name}")
-            drew = True
-    if not drew:
+            stack = np.vstack(curves)
+            mean = stack.mean(axis=0)
+            ax.plot(grid, mean, lw=1.6, color=MODEL_COLOUR[model],
+                    label=f"{MODEL_DISPLAY[model]} (n={len(curves)})")
+            if len(curves) > 1:
+                sd = stack.std(axis=0, ddof=1)
+                ax.fill_between(grid, mean - sd, mean + sd, alpha=0.18,
+                                color=MODEL_COLOUR[model], lw=0)
+            drew_any = True
+        ax.set_xlabel("coverage")
+        ax.set_ylabel("selective accuracy")
+        ax.set_title(disp, fontsize=9)
+        ax.grid(alpha=0.3)
+        ax.legend(fontsize=7, loc="lower left")
+    if not drew_any:
         plt.close(fig)
         return
-    ax.set_xlabel("coverage"); ax.set_ylabel("selective accuracy")
-    ax.set_title("Confidence-abstention (risk-coverage) curves")
-    ax.grid(alpha=0.3); ax.legend(fontsize=6)
+    fig.suptitle("Confidence-abstention (risk-coverage) curves, mean ± seed SD", fontsize=10)
     fig.tight_layout()
     fig.savefig(FIGURES / "fig_risk_coverage.png", dpi=200)
     plt.close(fig)
@@ -381,11 +730,23 @@ def write_environment(results: dict) -> None:
     if not results:
         return
     any_res = next(iter(results.values()))
+    digests = sorted({r.get("experiment_lock_digest") for r in results.values()})
+    commits = sorted({r.get("git_commit") for r in results.values() if r.get("git_commit")})
+    if len(digests) > 1:
+        # Runs trained against different corpora cannot be pooled into one mean.
+        raise RuntimeError(
+            f"runs disagree on experiment_lock_digest {digests}; "
+            "results across different locked corpora must not be aggregated"
+        )
     env = {
-        "schema": "ica26.experiment_environment/1",
+        "schema": "ica26.experiment_environment/2",
         "hardware": any_res["hardware"],
-        "experiment_lock_digest": any_res.get("experiment_lock_digest"),
-        "git_commit": any_res.get("git_commit"),
+        "experiment_lock_digest": digests[0],
+        # Seeds were run across more than one commit; every commit that produced
+        # a pooled result is recorded rather than collapsed to the first.
+        "git_commits": commits,
+        "seeds_expected": SEEDS,
+        "seeds_present": sorted({r["config"]["seed"] for r in results.values()}),
         "runs_present": sorted(results),
         "runs_expected": RUN_IDS,
         "runs_missing": sorted(set(RUN_IDS) - set(results)),
@@ -403,6 +764,8 @@ TABLE_SPECS = [
     ("Table 4", "Efficiency", "table4_efficiency"),
     ("Table 5", "Domain-shift degradation", "table5_domain_shift_degradation"),
     ("Table 6", "Calibration and selective prediction", "table6_calibration"),
+    ("Table 7", "Backbone ranking stability across seeds", "table7_ranking_stability"),
+    ("Table 7b", "Pairwise ranking margins against seed noise", "table7b_ranking_margins"),
 ]
 
 FIGURE_SPECS = [
@@ -410,6 +773,7 @@ FIGURE_SPECS = [
     ("Figure 2", "Confusion matrices", "fig_confusion_*.png"),
     ("Figure 3", "Reliability diagrams", "fig_reliability_*.png"),
     ("Figure 4", "Risk-coverage (confidence-abstention) curves", "fig_risk_coverage.png"),
+    ("Figure 5", "Backbone macro-F1 mean, seed SD, and individual seeds", "fig_seed_spread.png"),
 ]
 
 
@@ -516,11 +880,13 @@ def main() -> int:
     table_efficiency(results)
     table_degradation(results)
     table_calibration(results)
+    table_ranking_stability(results)
     print("figures:")
     figure_training_curves(results)
     figure_confusion(results)
     figure_reliability(results)
     figure_risk_coverage(results)
+    figure_seed_spread(results)
     write_environment(results)
     write_placeholders(results)
 

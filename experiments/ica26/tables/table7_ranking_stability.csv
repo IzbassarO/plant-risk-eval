@@ -1,0 +1,7 @@
+Setting,Seed,Ranking (macro-F1; best first),ResNet-50 macro-F1,EfficientNet-B0 macro-F1,MobileNetV3-Small macro-F1
+PlantVillage in-domain,42,EfficientNet-B0 > MobileNetV3-Small > ResNet-50,0.9899,0.9956,0.9927
+PlantVillage in-domain,all,STABLE: 1/1 seeds give EfficientNet-B0 > MobileNetV3-Small > ResNet-50,0.9899,0.9956,0.9927
+PlantVillage → PlantDoc Core,42,ResNet-50 > EfficientNet-B0 > MobileNetV3-Small,0.2414,0.2359,0.1982
+PlantVillage → PlantDoc Core,all,STABLE: 1/1 seeds give ResNet-50 > EfficientNet-B0 > MobileNetV3-Small,0.2414,0.2359,0.1982
+PlantDoc Core in-domain,42,ResNet-50 > EfficientNet-B0 > MobileNetV3-Small,0.6994,0.6927,0.5841
+PlantDoc Core in-domain,all,STABLE: 1/1 seeds give ResNet-50 > EfficientNet-B0 > MobileNetV3-Small,0.6994,0.6927,0.5841

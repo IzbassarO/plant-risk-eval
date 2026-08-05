@@ -1,16 +1,16 @@
 \begin{table}[htbp]
-\caption{Model efficiency. Latency and throughput measured after warm-up on the accelerator reported in the run metadata.}
+\caption{Model efficiency, mean $\pm$ sample standard deviation over three seeds. Epoch counts vary between seeds because early stopping fires at different points, so training time is reported alongside seconds per epoch. Latency and throughput are measured after warm-up on the accelerator reported in the run metadata.}
 \label{tab:efficiency}
-\begin{tabular}{llrrrrrrr}
+\begin{tabular}{llrrllllll}
 \toprule
-Model & Dataset & Params (M) & Epochs & Train time (min) & s / epoch & Latency b1 (ms) & Throughput (img/s) & Peak mem (MB) \\
+Model & Dataset & Seeds & Params (M) & Epochs & Train time (min) & s / epoch & Latency b1 (ms) & Throughput (img/s) & Peak mem (MB) \\
 \midrule
-ResNet-50 & PlantVillage & 23.59 & 11 & 120.80 & 658.80 & 8.43 & 219.85 & 9461.80 \\
-EfficientNet-B0 & PlantVillage & 4.06 & 14 & 132.10 & 566.20 & 9.31 & 275.00 & 9237.60 \\
-MobileNetV3-Small & PlantVillage & 1.56 & 15 & 33.50 & 134.00 & 6.65 & 1275.82 & 2144.70 \\
-ResNet-50 & PlantDoc Core & 23.57 & 10 & 12.10 & 72.70 & 8.44 & 216.14 & 12531.80 \\
-EfficientNet-B0 & PlantDoc Core & 4.04 & 9 & 8.40 & 56.20 & 9.58 & 274.86 & 11437.60 \\
-MobileNetV3-Small & PlantDoc Core & 1.55 & 11 & 2.30 & 12.50 & 6.80 & 1270.61 & 2144.70 \\
+ResNet-50 & PlantVillage & 1 & 23.59 & 11.0 & 120.8 & 658.8 & 8.43 & 219.8 & 9461.8 \\
+EfficientNet-B0 & PlantVillage & 1 & 4.06 & 14.0 & 132.1 & 566.2 & 9.31 & 275.0 & 9237.6 \\
+MobileNetV3-Small & PlantVillage & 1 & 1.56 & 15.0 & 33.5 & 134.0 & 6.65 & 1275.8 & 2144.7 \\
+ResNet-50 & PlantDoc Core & 1 & 23.57 & 10.0 & 12.1 & 72.7 & 8.44 & 216.1 & 12531.8 \\
+EfficientNet-B0 & PlantDoc Core & 1 & 4.04 & 9.0 & 8.4 & 56.2 & 9.58 & 274.9 & 11437.6 \\
+MobileNetV3-Small & PlantDoc Core & 2 & 1.55 & 13.0 $\pm$ 2.8 & 2.7 $\pm$ 0.6 & 12.4 $\pm$ 0.1 & 6.48 $\pm$ 0.45 & 1272.1 $\pm$ 2.1 & 2144.7 $\pm$ 0.0 \\
 \bottomrule
 \end{tabular}
 \end{table}
