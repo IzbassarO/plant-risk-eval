@@ -59,8 +59,18 @@ if [ -z "$TECTONIC" ]; then
 fi
 
 echo
-echo "== compiling =="
+echo "== compiling supplementary =="
 cd "$PAPER"
+if "$TECTONIC" -X compile supplementary.tex --keep-logs 2>&1 | grep -E "^(error|warning: .*Overfull)" | head -5; then :; fi
+if [ -f "$PAPER/supplementary.pdf" ]; then
+  SPAGES=$(sed -n 's/.*Output written on .*(\([0-9]*\) pages.*/\1/p' supplementary.log | tail -1)
+  echo "wrote paper/supplementary.pdf (${SPAGES:-?} pages)"
+else
+  echo "supplementary compilation FAILED"
+fi
+
+echo
+echo "== compiling paper =="
 if "$TECTONIC" -X compile ica2026.tex --keep-logs 2>&1 | tail -20; then
   echo
   if [ -f "$PAPER/ica2026.pdf" ]; then
