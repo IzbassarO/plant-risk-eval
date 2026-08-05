@@ -128,16 +128,20 @@ with McNemar's exact test on per-item correctness \cite{mcnemar1947,dietterich19
 and bias-corrected accelerated bootstrap intervals \cite{efron1987bca}, with
 family-wise error control \cite{holm1979}.
 
-\item \textbf{Two findings that matter for practice.} In-domain ranking on a
-saturated benchmark does not predict cross-domain ranking; and a temperature
-fitted on in-domain validation data, applied across the domain shift, degrades
-calibration rather than repairing it---the opposite of the standard
-recommendation.
+\item \textbf{Two findings that matter for practice.} The in-domain ordering of
+backbones does not merely compress under the domain shift---it \emph{crosses},
+and the crossing between the largest and smallest backbone is statistically
+significant in both directions. Separately, a temperature fitted on in-domain
+validation data and carried across the shift degrades calibration below the
+uncalibrated baseline, which is the opposite of the standard recommendation.
 \end{enumerate}
 
-Every input is bound to a digest-verified dataset lock, every reported number is
-generated from run artefacts by script, and no number in this document was typed
-by hand.
+We are careful throughout to separate what the evidence supports from what it
+merely suggests. Where two backbones are not statistically distinguishable we
+say so rather than reporting their order; where a difference is smaller than the
+variation induced by the random seed alone, we do not claim it. Every input is
+bound to a digest-verified dataset lock, every reported number is generated from
+run artefacts by script, and no number in this document was typed by hand.
 
 % =========================================================================== %
 \section{Related Work}
@@ -193,7 +197,7 @@ the cross-domain measurement it rests on. We aim to make that foundation
 auditable.
 
 % =========================================================================== %
-\section{Datasets and Leakage Control}
+\section{Datasets and Leakage-Controlled Preparation}
 % =========================================================================== %
 
 \subsection{Corpora}
@@ -255,8 +259,40 @@ carve from train is \emph{also} leaf-grouped, so no physical leaf appears on
 both sides of model selection. Ignoring this would let a model be selected on a
 near-copy of something it trained on.
 
+\subsection{Why the Two Evaluation Sets Differ in Size}
+\label{sec:two-eval-sets}
+
+Two field-corpus evaluation sets appear in this paper and they are deliberately
+different sizes: cross-domain evaluation uses \NXdImages{} images, while
+in-domain PlantDoc testing uses \NPdcTest{}. This is not an inconsistency, and
+the reason is worth stating plainly because it determines what each number
+means.
+
+The constraint that sets the size of an evaluation set is \emph{what the model
+under test has already seen}.
+
+A PlantVillage-trained model has seen \emph{no} PlantDoc image, of either split.
+PlantDoc's train/test boundary is a fact about PlantDoc-trained models and
+carries no information about a model trained on a different corpus. For such a
+model the entire shared-class subset is legitimately held out, so restricting it
+to PlantDoc's own test split would discard \NPdcTest{}-image-scale evidence for
+no methodological gain --- and would leave per-class supports far too thin to
+support the class-wise reporting in Section \ref{sec:xdomain}.
+
+A PlantDoc-trained model, by contrast, has seen the PlantDoc training split.
+Only the \NPdcTest{} held-out images are admissible for it, and every in-domain
+PlantDoc figure in this paper uses exactly those.
+
+The two numbers therefore answer different questions --- ``how well does a
+laboratory-trained model transfer to field imagery?'' and ``how well does a
+field-trained model do on held-out field imagery?'' --- and neither evaluation
+set contains an image the model being evaluated has trained on. The composition
+of the cross-domain set by PlantDoc split is recorded in every result file, so a
+reader who prefers the more restrictive choice can see exactly which images it
+would remove.
+
 % =========================================================================== %
-\section{Experimental Protocol}
+\section{Experimental Methodology}
 % =========================================================================== %
 
 \subsection{The Shared Label Space}
@@ -391,6 +427,22 @@ to server GPUs, though relative ordering between backbones should. Seeds are
 set for Python, NumPy, and the framework at the start of every run, and the
 validation carve-out depends only on the frame, the fraction, and the seed---not
 on row order or platform.
+
+\textbf{A mixed-precision failure mode worth reporting.} Training uses fp16
+autocast. On CUDA, the framework's gradient scaler inspects gradients for
+non-finite values and skips the optimiser step when it finds them; the
+Metal backend used here has no equivalent, so a single overflowing gradient
+reached the optimiser, whose $m/\sqrt{v}$ update evaluated to $\infty/\infty$
+and left the parameter permanently NaN. The failure was silent rather than
+loud: training loss and training accuracy are computed from batch statistics
+and stayed indistinguishable from a healthy run, and because a NaN model emits
+one constant class it scored near the majority-class rate rather than zero ---
+an implausible validation number, not an error. We added the same
+non-finite-gradient step skip on the Metal path, and record the count of
+skipped steps in every result file. Seed \SigSeed{} was verified unaffected,
+and the guard was confirmed to be a no-op by re-training a completed run and
+reproducing a byte-identical checkpoint. Any run that does skip a step is
+identified rather than pooled silently: \SkippedStepsNote{}.
 
 \textbf{Draft status.} This version reports \NRunsDone{} of \NRunsPlanned{}
 planned runs, covering seeds \SeedList{}. All statistical tests in Section
@@ -544,8 +596,21 @@ absolute terms.
 
 \item \textbf{Cross-domain evaluation includes field-corpus training images.}
 All \NXdImages{} shared-class images are used, since a laboratory-trained model
-has seen none of them. This is stated explicitly and the split composition is
-recorded in every result file.
+has seen none of them; the reasoning is set out in Section
+\ref{sec:two-eval-sets}. A reader preferring the more restrictive choice ---
+scoring only PlantDoc's own \NPdcTest{}-image test split --- would obtain a
+much smaller evaluation set with correspondingly wider intervals. The split
+composition is recorded in every result file so that alternative can be
+reconstructed.
+
+\item \textbf{Mixed precision required a numerical guard.} fp16 training on the
+Metal backend overflowed a gradient and permanently corrupted a model, silently
+(Section \ref{sec:stats}). The remedy skips only steps whose gradients are
+non-finite, which leaves a run that never overflows numerically identical, so
+runs before and after the change remain comparable. The count of skipped steps
+is reported per run rather than aggregated away, and any run with a non-zero
+count is identified as such. Reproductions on other accelerators may see a
+different overflow pattern, or none.
 
 \item \textbf{Governance status.} These results rest on a scientific experiment
 lock that binds digests, counts, taxonomy, and splits. It is not a completed

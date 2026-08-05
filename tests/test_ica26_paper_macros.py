@@ -216,6 +216,7 @@ KNOWN_LATEX = {
     "subsection", "subsubsection", "label", "ref", "cite", "item", "emph",
     "textbf", "textit", "texttt", "bibliographystyle", "bibliography", "times",
     "leq", "geq", "pm", "rightarrow", "to", "noindent", "ResultPending", "circ",
+    "infty", "sqrt", "frac", "cdot", "times", "ldots", "dots",
     "caption", "toprule", "midrule", "bottomrule", "hline", "includegraphics",
     "centering", "figure", "table", "tabular", "textwidth", "linewidth",
     "url", "footnote", "quad", "qquad", ",", ";", ":", "%", "&", "_", "#",

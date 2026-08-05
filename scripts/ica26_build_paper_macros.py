@@ -165,6 +165,41 @@ def build() -> tuple[str, dict]:
     m.add("NRunsDone", len(complete), "provenance")
     m.add("NRunsPlanned", len(SEEDS) * 6, "provenance")
 
+    # ---- numerical-guard evidence ------------------------------------------- #
+    # A run that skipped a step is not numerically identical to one that did
+    # not, so the paper states which runs those were rather than pooling them
+    # silently. Exposed as macros for the same reason as every other number.
+    skipped = {rid: r["training"].get("skipped_nonfinite_steps")
+               for rid, r in runs.items()
+               if r["training"].get("skipped_nonfinite_steps")}
+    # Only runs trained under the guard record a step count. Summing over all
+    # runs would silently mix guarded and pre-guard ones and report a total far
+    # below the true number of optimiser steps taken.
+    guarded = {rid: r["training"]["optimiser_steps"] for rid, r in runs.items()
+               if r["training"].get("optimiser_steps") is not None}
+    m.add("NRunsWithSkippedSteps", len(skipped), "numerical guard")
+    m.add("NSkippedSteps", sum(skipped.values()) if skipped else 0, "numerical guard")
+    m.add("NGuardedRuns", len(guarded), "numerical guard")
+    m.add("NGuardedOptimiserSteps",
+          integer(sum(guarded.values())) if guarded else None, "numerical guard")
+    listing = ", ".join(f"\\texttt{{{k.replace('_', '\\_')}}} ({v})"
+                        for k, v in sorted(skipped.items()))
+    m.add("RunsWithSkippedSteps", listing or "none", "numerical guard")
+    # The whole clause is composed here rather than with a TeX \ifnum in the
+    # paper: a conditional over a generated macro breaks the moment that macro
+    # expands to \ResultPending instead of a bare integer.
+    if not guarded:
+        note = None
+    elif not skipped:
+        note = (rf"no run trained under the guard skipped a step "
+                rf"({len(guarded)} run{'s' if len(guarded) != 1 else ''}, "
+                rf"{integer(sum(guarded.values()))} steps)")
+    else:
+        note = (rf"{len(skipped)} of {len(guarded)} runs trained under the guard "
+                rf"skipped a step, {sum(skipped.values())} in total out of "
+                rf"{integer(sum(guarded.values()))}: {listing}")
+    m.add("SkippedStepsNote", note, "numerical guard")
+
     # ---- dataset composition ----------------------------------------------- #
     pv, pdc = lock["corpora"]["plantvillage"], lock["corpora"]["plantdoc_core"]
     cd = lock["cross_domain_mapping"]
