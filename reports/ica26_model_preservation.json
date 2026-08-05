@@ -1,0 +1,245 @@
+{
+  "archive_root": "/Users/izbassar/ICA2026_model_archive",
+  "created_at_utc": "2026-08-05T06:41:05+00:00",
+  "n_artifacts": 39,
+  "n_runs": 6,
+  "note": "Checkpoints and prediction dumps are gitignored; the bytes live in archive_root and only their digests are tracked here. Verify with scripts/ica26_preserve_models.py --verify.",
+  "runs": {
+    "pdc_efficientnet_b0_s42": {
+      "files": {
+        "best.pt": {
+          "bytes": 16449829,
+          "sha256": "e651af6efd91be8fb4386f7afd5dac2b8ba016c45e1d75e8f1bfbde0bfee2000"
+        },
+        "config.resolved.json": {
+          "bytes": 935,
+          "sha256": "ac60ff31481c87e1a96ec79fbc5d55b786556de5dd7c0abc7ab1fd1ce8cab217"
+        },
+        "history.json": {
+          "bytes": 1970,
+          "sha256": "292f138947d8e9ee7323e91345a9275229d349261fe96568e3f1ac0d7ad55e24"
+        },
+        "predictions_in_domain_test.npz": {
+          "bytes": 15628,
+          "sha256": "d9a672323de1dd7ef20a8e56f87548557d7cc0e40fded3416209ece13630758a"
+        },
+        "predictions_validation.npz": {
+          "bytes": 16217,
+          "sha256": "3b38d95e98b85b33a25742cd8bb4091f2149d103e87e3ad5f0dcaa83f5928c05"
+        },
+        "result.json": {
+          "bytes": 99034,
+          "sha256": "283f190b781a7b2225a8e8f6bc3eb2b988198575beefc14972276d4911b578e9"
+        }
+      },
+      "provenance": {
+        "best_epoch": 6,
+        "best_val_macro_f1": 0.7436571399836233,
+        "dataset": "plantdoc_core",
+        "experiment_lock_digest": "83449f60136918554904cb9c596122f8b89cb51ff5bb5c52c541394a5698082d",
+        "git_commit": "054834cd450cf35df4497cfd886da09f9b790a68",
+        "model": "efficientnet_b0",
+        "seed": 42
+      }
+    },
+    "pdc_mobilenet_v3_small_s42": {
+      "files": {
+        "best.pt": {
+          "bytes": 6307817,
+          "sha256": "9027e9794e2ae1c09be1a2c0ab18a940221a8a2baf648bf034a00dbad1d4f84b"
+        },
+        "config.resolved.json": {
+          "bytes": 941,
+          "sha256": "ca31471a5b7886a1dac0fba31077256ec579d5ed38c9bd9343ddaaecb9fd0d1e"
+        },
+        "history.json": {
+          "bytes": 2389,
+          "sha256": "4a08bf1c9102f0067c854bed18e9be44baede54e1bdbe91f07c0c59421c425b7"
+        },
+        "predictions_in_domain_test.npz": {
+          "bytes": 15729,
+          "sha256": "208cdb06713bd3341732f9edd8362fa67604d76e40f1346954dc119e7c0f1b47"
+        },
+        "predictions_validation.npz": {
+          "bytes": 16299,
+          "sha256": "ef4527b6a685a62a63523d95c16493cf97b51528143c5b2e34fcdcf224451c3b"
+        },
+        "result.json": {
+          "bytes": 100038,
+          "sha256": "12dcc421ff156234ecc9c7f95294a31f2a96f15f0858567a68ee7f1b0890f0d8"
+        }
+      },
+      "provenance": {
+        "best_epoch": 8,
+        "best_val_macro_f1": 0.6461430302393573,
+        "dataset": "plantdoc_core",
+        "experiment_lock_digest": "83449f60136918554904cb9c596122f8b89cb51ff5bb5c52c541394a5698082d",
+        "git_commit": "476b3543954c31e4e7ac8b0f6b9a4988a5bb4eae",
+        "model": "mobilenet_v3_small",
+        "seed": 42
+      }
+    },
+    "pdc_resnet50_s42": {
+      "files": {
+        "best.pt": {
+          "bytes": 94559085,
+          "sha256": "bd57344e9f4c00855634a5957344f7886025562f44996ee7fad622f7b90a35b6"
+        },
+        "config.resolved.json": {
+          "bytes": 921,
+          "sha256": "3764bfb4745639a4d413157eef947cea4b08630a16ac1fc7cff9578dd5d95454"
+        },
+        "history.json": {
+          "bytes": 2172,
+          "sha256": "708e9fabc31074b7db974038752a5ceb4352868a7ef934db87c36d28ea681d68"
+        },
+        "predictions_in_domain_test.npz": {
+          "bytes": 14809,
+          "sha256": "b0e7d47ea7b36752d9cd5f652407bcb9760d609335cdc99f9fb9d2e2a1047fa0"
+        },
+        "predictions_validation.npz": {
+          "bytes": 15281,
+          "sha256": "5c64a6e8f51562a9a0da5e4a8e0535442aed7d17dfbf5345c97795b9ee890181"
+        },
+        "result.json": {
+          "bytes": 99081,
+          "sha256": "992c3f3ddd80550ac871548fdff3e97401ccf35c2b65667bcf994f1833980b45"
+        }
+      },
+      "provenance": {
+        "best_epoch": 7,
+        "best_val_macro_f1": 0.7588139102601814,
+        "dataset": "plantdoc_core",
+        "experiment_lock_digest": "83449f60136918554904cb9c596122f8b89cb51ff5bb5c52c541394a5698082d",
+        "git_commit": "784ec9cba4a63f30af01a7d9969a640510e63147",
+        "model": "resnet50",
+        "seed": 42
+      }
+    },
+    "pv_efficientnet_b0_s42": {
+      "files": {
+        "best.pt": {
+          "bytes": 16501477,
+          "sha256": "9f88ac2a62e581621fad2a43a97b40dd6ad5c89f367c1da8d1890469db63797f"
+        },
+        "config.resolved.json": {
+          "bytes": 764,
+          "sha256": "3069eb928b02ccd4422d31b60068d4ec74c570eae4e14b3f00814b4484666257"
+        },
+        "history.json": {
+          "bytes": 3039,
+          "sha256": "5355d50285b919c5b2d8f553805dfe144bf7babd493233981c9a48aca8d9c1a1"
+        },
+        "predictions_cross_domain.npz": {
+          "bytes": 150063,
+          "sha256": "bf642e7a335dc9fe4db376a39121c6bb450c4c71f285dfa17270b6d1c3e7317c"
+        },
+        "predictions_in_domain_test.npz": {
+          "bytes": 884163,
+          "sha256": "1d56814d0e38eb763a51dbfb35a9e107024cc1ca5b64ae3c87a78d70432ddf25"
+        },
+        "predictions_validation.npz": {
+          "bytes": 362942,
+          "sha256": "2916f284ced1bdaf9e48d83a57cca55b5895d2fc5d81ffcdb1717a6a9e01084d"
+        },
+        "result.json": {
+          "bytes": 227330,
+          "sha256": "0a6466ba58080c92b447c2704bf1a4e8d1bca9d0cee66d13c4cd62485a413c91"
+        }
+      },
+      "provenance": {
+        "best_epoch": 11,
+        "best_val_macro_f1": 0.9987836672727951,
+        "dataset": "plantvillage",
+        "experiment_lock_digest": "83449f60136918554904cb9c596122f8b89cb51ff5bb5c52c541394a5698082d",
+        "git_commit": "261fd3af0a8e1271239cd66e34e6062b1da34e73",
+        "model": "efficientnet_b0",
+        "seed": 42
+      }
+    },
+    "pv_mobilenet_v3_small_s42": {
+      "files": {
+        "best.pt": {
+          "bytes": 6349225,
+          "sha256": "7b6a20f44296665059026a7261a167e2bfa24b9d29bb07b496689f6a7466388e"
+        },
+        "config.resolved.json": {
+          "bytes": 770,
+          "sha256": "a125e818bb800e71ea06767bbf487f77692fa838a53cfc919fd8156ada7288f4"
+        },
+        "history.json": {
+          "bytes": 3244,
+          "sha256": "4fb91c7f1820e88f438886b73bfa8480ce7bba07802d9fa026ec48a079732900"
+        },
+        "predictions_cross_domain.npz": {
+          "bytes": 148636,
+          "sha256": "11cb7d855921c633f617f9023ef6696da2a0c8cec693dec55502229935a51469"
+        },
+        "predictions_in_domain_test.npz": {
+          "bytes": 946449,
+          "sha256": "2ac8c9a28c6b34b9025f2e7f4af5348a6bda49dbd8b76e52e6fb22d3833c4e2b"
+        },
+        "predictions_validation.npz": {
+          "bytes": 388237,
+          "sha256": "645767a63ca2b44aa3bfb9ea2afc5abf0d0f1c4dc7a887d7034ce0e6853745f1"
+        },
+        "result.json": {
+          "bytes": 227920,
+          "sha256": "9be2858eed9389c5bb3bb9703024b51b11994fdabd2eb17e84d3a95dd9fcf8cf"
+        }
+      },
+      "provenance": {
+        "best_epoch": 15,
+        "best_val_macro_f1": 0.998783634347702,
+        "dataset": "plantvillage",
+        "experiment_lock_digest": "83449f60136918554904cb9c596122f8b89cb51ff5bb5c52c541394a5698082d",
+        "git_commit": "476b3543954c31e4e7ac8b0f6b9a4988a5bb4eae",
+        "model": "mobilenet_v3_small",
+        "seed": 42
+      }
+    },
+    "pv_resnet50_s42": {
+      "files": {
+        "best.pt": {
+          "bytes": 94641453,
+          "sha256": "b2579386215bb9b16be8d4bd1ebe1f81f91867c43086eea3580f0c5a31113110"
+        },
+        "config.resolved.json": {
+          "bytes": 750,
+          "sha256": "68ecaea0f4cbcf84b888662df34f8dacad892145698f42b7a752fde0853569f5"
+        },
+        "history.json": {
+          "bytes": 2389,
+          "sha256": "e737aae4c15e4d5d7e19d749e49cedb7b859e7b548426163f81047b5097e9d7b"
+        },
+        "predictions_cross_domain.npz": {
+          "bytes": 149953,
+          "sha256": "5dd7da91ab45c4855bd1b6f8461ff5cfd4bbf0030d15fd1ff8f11211af032334"
+        },
+        "predictions_in_domain_test.npz": {
+          "bytes": 783137,
+          "sha256": "861b5dbe034eebef9194b6959fdbde22748730b300a42ea6190a20ade097b72a"
+        },
+        "predictions_validation.npz": {
+          "bytes": 320480,
+          "sha256": "6b952a7e2afc7b8d776c9dad4740959e26dbdcae18b7a41414743b180fc22cf7"
+        },
+        "result.json": {
+          "bytes": 226929,
+          "sha256": "7467e720b5f4b2ed152089382784a1c83914e1024e8c22a8ad1601294538b36e"
+        }
+      },
+      "provenance": {
+        "best_epoch": 8,
+        "best_val_macro_f1": 0.9963176542103336,
+        "dataset": "plantvillage",
+        "experiment_lock_digest": "83449f60136918554904cb9c596122f8b89cb51ff5bb5c52c541394a5698082d",
+        "git_commit": "261fd3af0a8e1271239cd66e34e6062b1da34e73",
+        "model": "resnet50",
+        "seed": 42
+      }
+    }
+  },
+  "schema": "ica26.model_preservation/1",
+  "total_bytes": 240037525
+}
