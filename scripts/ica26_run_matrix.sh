@@ -42,6 +42,18 @@ log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" | tee -a "$MASTER"; }
 
 log "=== ICA 2026 matrix starting (pid $$): ${RUNS[*]} ==="
 
+# Keep the machine awake for the whole matrix. `caffeinate -w` waits on this
+# launcher's PID, so the assertion dies with the matrix rather than outliving
+# it, and the log records which PID it is attached to. A display sleep part-way
+# through a multi-hour PlantVillage run stalls it indefinitely.
+if command -v caffeinate >/dev/null 2>&1; then
+  caffeinate -dimsu -w $$ &
+  CAFFEINATE_PID=$!
+  log "caffeinate pid $CAFFEINATE_PID attached to launcher pid $$ (-dimsu -w $$)"
+else
+  log "WARNING: caffeinate not found; the machine may sleep mid-matrix"
+fi
+
 if ! "$PY" scripts/ica26_validate_experiment_lock.py >>"$MASTER" 2>&1; then
   log "ABORT: dataset lock did not validate"
   rm -f "$PIDFILE"

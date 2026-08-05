@@ -77,14 +77,14 @@
   "efficiency": {
     "epochs_run": 11,
     "inference_batch_size": 128,
-    "inference_latency_ms_batch1": 6.801,
-    "inference_throughput_img_per_s": 1270.61,
-    "peak_memory_bytes": 2248835072,
-    "peak_memory_mb": 2144.7,
-    "seconds_per_epoch": 12.454710746181346,
+    "inference_latency_ms_batch1": 6.55,
+    "inference_throughput_img_per_s": 1268.35,
+    "peak_memory_bytes": 2257223680,
+    "peak_memory_mb": 2152.7,
+    "seconds_per_epoch": 12.724336272729984,
     "total_parameters": 1546556,
     "trainable_parameters": 1546556,
-    "training_time_seconds": 137.0018182079948
+    "training_time_seconds": 139.96769900002982
   },
   "evaluations": {
     "in_domain_test": {
@@ -4952,7 +4952,7 @@
   },
   "experiment_id": "pdc_mobilenet_v3_small_s42",
   "experiment_lock_digest": "83449f60136918554904cb9c596122f8b89cb51ff5bb5c52c541394a5698082d",
-  "git_commit": "476b3543954c31e4e7ac8b0f6b9a4988a5bb4eae",
+  "git_commit": "ddcfd18853d222e47c74363c11f628b3ecadb129",
   "hardware": {
     "backend": "mps",
     "cuda_device_name": null,
@@ -4972,8 +4972,9 @@
     "history": [
       {
         "epoch": 1,
-        "epoch_seconds": 35.73,
+        "epoch_seconds": 32.1,
         "lr": 0.00029672,
+        "skipped_nonfinite_steps": 0,
         "train_accuracy": 0.084681,
         "train_loss": 3.431546,
         "val_accuracy": 0.166667,
@@ -4981,8 +4982,9 @@
       },
       {
         "epoch": 2,
-        "epoch_seconds": 10.09,
+        "epoch_seconds": 10.72,
         "lr": 0.00028703,
+        "skipped_nonfinite_steps": 0,
         "train_accuracy": 0.381541,
         "train_loss": 2.582386,
         "val_accuracy": 0.346154,
@@ -4990,8 +4992,9 @@
       },
       {
         "epoch": 3,
-        "epoch_seconds": 10.13,
+        "epoch_seconds": 11.27,
         "lr": 0.00027135,
+        "skipped_nonfinite_steps": 0,
         "train_accuracy": 0.548525,
         "train_loss": 2.181777,
         "val_accuracy": 0.431624,
@@ -4999,8 +5002,9 @@
       },
       {
         "epoch": 4,
-        "epoch_seconds": 10.4,
+        "epoch_seconds": 11.01,
         "lr": 0.00025037,
+        "skipped_nonfinite_steps": 0,
         "train_accuracy": 0.633206,
         "train_loss": 1.973416,
         "val_accuracy": 0.521368,
@@ -5008,8 +5012,9 @@
       },
       {
         "epoch": 5,
-        "epoch_seconds": 9.89,
+        "epoch_seconds": 10.31,
         "lr": 0.000225,
+        "skipped_nonfinite_steps": 0,
         "train_accuracy": 0.702188,
         "train_loss": 1.838262,
         "val_accuracy": 0.564103,
@@ -5017,8 +5022,9 @@
       },
       {
         "epoch": 6,
-        "epoch_seconds": 10.15,
+        "epoch_seconds": 10.95,
         "lr": 0.00019635,
+        "skipped_nonfinite_steps": 0,
         "train_accuracy": 0.748811,
         "train_loss": 1.741731,
         "val_accuracy": 0.564103,
@@ -5026,8 +5032,9 @@
       },
       {
         "epoch": 7,
-        "epoch_seconds": 9.96,
+        "epoch_seconds": 10.63,
         "lr": 0.00016568,
+        "skipped_nonfinite_steps": 0,
         "train_accuracy": 0.77117,
         "train_loss": 1.65374,
         "val_accuracy": 0.606838,
@@ -5035,8 +5042,9 @@
       },
       {
         "epoch": 8,
-        "epoch_seconds": 10.04,
+        "epoch_seconds": 10.76,
         "lr": 0.00013432,
+        "skipped_nonfinite_steps": 0,
         "train_accuracy": 0.801142,
         "train_loss": 1.586211,
         "val_accuracy": 0.615385,
@@ -5044,8 +5052,9 @@
       },
       {
         "epoch": 9,
-        "epoch_seconds": 10.09,
+        "epoch_seconds": 10.65,
         "lr": 0.00010365,
+        "skipped_nonfinite_steps": 0,
         "train_accuracy": 0.836346,
         "train_loss": 1.542539,
         "val_accuracy": 0.57265,
@@ -5053,8 +5062,9 @@
       },
       {
         "epoch": 10,
-        "epoch_seconds": 10.03,
+        "epoch_seconds": 10.53,
         "lr": 7.5e-05,
+        "skipped_nonfinite_steps": 0,
         "train_accuracy": 0.860609,
         "train_loss": 1.48632,
         "val_accuracy": 0.589744,
@@ -5062,13 +5072,16 @@
       },
       {
         "epoch": 11,
-        "epoch_seconds": 9.96,
+        "epoch_seconds": 10.51,
         "lr": 4.963e-05,
+        "skipped_nonfinite_steps": 0,
         "train_accuracy": 0.8549,
         "train_loss": 1.476552,
         "val_accuracy": 0.598291,
         "val_macro_f1": 0.642314
       }
-    ]
+    ],
+    "optimiser_steps": 363,
+    "skipped_nonfinite_steps": 0
   }
 }

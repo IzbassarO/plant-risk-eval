@@ -10,6 +10,7 @@ checkpoint can always be traced back to an exact, digest-bound corpus.
 from __future__ import annotations
 
 import json
+import math
 import os
 import random
 import time
@@ -260,6 +261,30 @@ def _sync(device: str) -> None:
         torch.mps.synchronize()
 
 
+def gradient_norm(model) -> torch.Tensor:
+    """Total gradient norm, computed without modifying any gradient.
+
+    ``clip_grad_norm_`` with an infinite threshold computes the norm through the
+    same fused path the optimiser would use, then scales by a coefficient that
+    clamps to exactly 1.0 -- an IEEE-exact no-op. That gives one fused pass and
+    one device synchronisation instead of a per-tensor check.
+    """
+    return torch.nn.utils.clip_grad_norm_(model.parameters(), float("inf"))
+
+
+def assert_finite_state(model, context: str) -> None:
+    """Refuse to report anything computed from a model containing NaN or Inf."""
+    bad = [name for name, p in model.state_dict().items()
+           if p.dtype.is_floating_point and not torch.isfinite(p).all()]
+    if bad:
+        raise RuntimeError(
+            f"{context}: {len(bad)} parameter tensor(s) contain NaN or Inf "
+            f"(first: {bad[:3]}). A model in this state predicts a constant class "
+            "and would report a plausible-looking accuracy near the majority-class "
+            "rate. Refusing to write a result."
+        )
+
+
 def train_one_run(
     cfg: ExperimentConfig,
     repo_root: str | Path = ".",
@@ -313,6 +338,8 @@ def train_one_run(
     patience_left = cfg.early_stopping_patience
     t_start = time.perf_counter()
     epochs_run = 0
+    skipped_steps = 0      # optimiser steps skipped for non-finite gradients
+    total_steps = 0
 
     for epoch in range(1, cfg.epochs + 1):
         model.train()
@@ -327,17 +354,40 @@ def train_one_run(
             with _autocast(device, cfg.amp):
                 out = model(x)
                 loss = criterion(out, y)
+            total_steps += 1
             if scaler is not None:
+                # CUDA: GradScaler already inspects gradients for Inf/NaN and
+                # skips the step when it finds them.
                 scaler.scale(loss).backward()
                 scaler.step(optimiser)
                 scaler.update()
             else:
                 loss.backward()
-                optimiser.step()
+                # MPS/CPU have no scaler, so the same inf-check is done here.
+                # Without it, one fp16 gradient overflowing to Inf enters AdamW,
+                # whose update m/sqrt(v) becomes Inf/Inf = NaN, and the parameter
+                # is dead for the rest of the run -- while training accuracy,
+                # computed from batch statistics, still looks healthy. Seed 42
+                # never overflowed; seed 1337 did, on the first epoch.
+                #
+                # This is a no-op for a run whose gradients stay finite: the
+                # norm is computed without modifying any gradient, so a healthy
+                # run follows exactly the trajectory it followed before.
+                if torch.isfinite(gradient_norm(model)):
+                    optimiser.step()
+                else:
+                    skipped_steps += 1
+                    optimiser.zero_grad(set_to_none=True)
             scheduler.step()
             running += float(loss.detach()) * y.size(0)
             correct += int((out.detach().argmax(1) == y).sum())
             seen += y.size(0)
+
+        # Fail fast at the epoch boundary, before the validation pass. The
+        # broken seed-1337 run trained on dead weights and surfaced only as an
+        # implausible validation number, which is a slow and ambiguous way to
+        # learn that the model died in the first epoch.
+        assert_finite_state(model, f"{cfg.experiment_id}: end of epoch {epoch}")
 
         val_logits, val_labels = collect_logits(model, val_loader, device, cfg.amp)
         val_pred = val_logits.argmax(1)
@@ -355,6 +405,9 @@ def train_one_run(
             "val_macro_f1": round(val_macro_f1, 6),
             "lr": round(scheduler.get_last_lr()[0], 8),
             "epoch_seconds": round(time.perf_counter() - t_epoch, 2),
+            # Cumulative, so a run that starts overflowing is visible in the
+            # history rather than only in the final total.
+            "skipped_nonfinite_steps": skipped_steps,
         }
         history.append(record)
         print(f"[{cfg.experiment_id}] {record}", flush=True)
@@ -375,10 +428,29 @@ def train_one_run(
 
     train_seconds = time.perf_counter() - t_start
 
+    # A run that skipped a large share of its steps did not follow the protocol,
+    # whatever its final metrics look like. The threshold is deliberately low:
+    # occasional overflow is survivable, sustained overflow means the run should
+    # be diagnosed rather than reported.
+    skip_fraction = skipped_steps / max(total_steps, 1)
+    if skip_fraction > 0.01:
+        raise RuntimeError(
+            f"{cfg.experiment_id}: {skipped_steps} of {total_steps} optimiser steps "
+            f"({skip_fraction:.1%}) were skipped for non-finite gradients. The run "
+            "did not train under the intended protocol; refusing to write a result."
+        )
+    if skipped_steps:
+        print(f"[{cfg.experiment_id}] skipped {skipped_steps}/{total_steps} steps "
+              f"({skip_fraction:.3%}) for non-finite gradients", flush=True)
+
     # Restore the selected checkpoint before any reported evaluation.
     state = torch.load(ckpt_path, map_location=device, weights_only=False)
     model.load_state_dict(state["model_state"])
     model.to(device)
+    # The last line of defence: a NaN model predicts one constant class and
+    # would report an accuracy near the majority-class rate, which looks like a
+    # weak result rather than a broken one.
+    assert_finite_state(model, f"{cfg.experiment_id}: selected checkpoint")
 
     inference = measure_inference(model, device, cfg.image_size, cfg.eval_batch_size)
     peak_mem = models_mod.peak_memory_bytes(device)
@@ -403,6 +475,8 @@ def train_one_run(
             "epochs_run": epochs_run,
             "early_stopped": epochs_run < cfg.epochs,
             "class_weighting": cfg.class_weighting,
+            "optimiser_steps": total_steps,
+            "skipped_nonfinite_steps": skipped_steps,
             "history": history,
         },
         "efficiency": mmod.efficiency_metrics(
@@ -449,6 +523,8 @@ def train_one_run(
         results["evaluations"]["cross_domain_plantdoc_core"] = cd
         if cd_scaled is not None:
             results["evaluations"]["cross_domain_plantdoc_core_temperature_scaled"] = cd_scaled
+
+    _assert_reportable(results, cfg.experiment_id)
 
     _write_json(run_dir / "result.json", results)
     _write_json(metrics_dir / f"{cfg.experiment_id}.json", results)
@@ -553,6 +629,32 @@ def evaluate_cross_domain(
             "fitted on the in-domain validation split, applied unchanged out of domain"
         )
     return out, scaled
+
+
+def _assert_reportable(results: dict, experiment_id: str) -> None:
+    """Refuse to write a result containing a non-finite reported metric.
+
+    A NaN model still produces *finite* accuracy and F1 -- it predicts one
+    constant class, which scores near the majority-class rate rather than zero.
+    So this is not the primary guard (``assert_finite_state`` is); it catches
+    the probabilistic metrics, where NaN logits do propagate into NaN
+    log-likelihood, and any future metric that behaves the same way.
+    """
+    bad: list[str] = []
+    for eval_name, block in results.get("evaluations", {}).items():
+        for key in ("accuracy", "macro_f1", "weighted_f1", "balanced_accuracy"):
+            value = block.get(key)
+            if value is not None and not math.isfinite(value):
+                bad.append(f"{eval_name}.{key}={value}")
+        for key, value in (block.get("probabilistic") or {}).items():
+            if isinstance(value, float) and not math.isfinite(value):
+                bad.append(f"{eval_name}.probabilistic.{key}={value}")
+    if bad:
+        raise RuntimeError(
+            f"{experiment_id}: {len(bad)} reported metric(s) are not finite "
+            f"({bad[:4]}). Refusing to write a result file that would be pooled "
+            "into a paper mean."
+        )
 
 
 def _write_json(path: Path, payload: dict) -> None:
