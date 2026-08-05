@@ -23,9 +23,53 @@ sys.path.insert(0, str(REPO / "src"))
 import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
+
+# Figures are emitted as vector PDF for the camera-ready. These must be set
+# before any figure is created, or they apply only to figures built afterwards.
+# Type 42 embeds TrueType outlines rather than referencing Type 3 bitmaps, which
+# is what Springer's production check flags as a missing font.
+matplotlib.rcParams["pdf.fonttype"] = 42
+matplotlib.rcParams["ps.fonttype"] = 42
+matplotlib.rcParams["pdf.compression"] = 9
+matplotlib.rcParams["font.family"] = "serif"
+matplotlib.rcParams["font.size"] = 8
+
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+
+# LNCS text width is 122 mm = 4.8 in. Figures are authored at exactly that width
+# so \includegraphics[width=\textwidth] applies no scaling and an 8 pt label
+# renders at 8 pt. Sizing a figure larger and letting LaTeX shrink it is how
+# figure text ends up smaller than the caption beneath it.
+TEXT_WIDTH_IN = 4.8
+FIG_SINGLE = (TEXT_WIDTH_IN, 3.2)        # one panel
+FIG_ROW3 = (TEXT_WIDTH_IN, 1.8)          # three panels side by side
+FIG_GRID22 = (TEXT_WIDTH_IN, 3.6)        # two rows of two
+FIG_CONFUSION = (TEXT_WIDTH_IN, 4.4)     # near-square, dense tick labels
+
+# Paper-facing summary figures also get a PNG, purely so the repository and any
+# reviewer packet can be skimmed without a PDF viewer. The per-run diagnostic
+# figures (confusion matrices, reliability diagrams) are PDF-only: there are
+# dozens of them and duplicating every one buys nothing.
+PREVIEW_PNG = {"fig_training_curves", "fig_risk_coverage", "fig_seed_spread"}
+
+
+def _save(fig, name: str, raster_dpi: int | None = None) -> None:
+    """Write a figure as vector PDF, plus a PNG preview for paper-facing ones.
+
+    ``raster_dpi`` applies to figures containing an ``imshow`` image, which
+    stays a raster inside the PDF however it is saved; the DPI then decides
+    whether that embedded raster is print quality.
+    """
+    FIGURES.mkdir(parents=True, exist_ok=True)
+    kwargs = {"bbox_inches": "tight"}
+    if raster_dpi is not None:
+        kwargs["dpi"] = raster_dpi
+    fig.savefig(FIGURES / f"{name}.pdf", **kwargs)
+    if name in PREVIEW_PNG:
+        fig.savefig(FIGURES / f"{name}.png", dpi=200, bbox_inches="tight")
+    plt.close(fig)
 
 METRICS = REPO / "experiments/ica26/metrics"
 TABLES = REPO / "experiments/ica26/tables"
@@ -556,72 +600,86 @@ def figure_training_curves(results: dict) -> None:
     across seeds would be worse: early stopping fires at different epochs, so a
     mean curve would silently shorten to the earliest stop. Every seed is drawn.
     """
-    FIGURES.mkdir(parents=True, exist_ok=True)
     if not results:
         return
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8.5))
+    fig, axes = plt.subplots(2, 2, figsize=FIG_GRID22)
+    handles: dict[str, object] = {}
     for row, (prefix, corpus) in enumerate((("pv", "PlantVillage"), ("pdc", "PlantDoc Core"))):
-        drew = False
         for model in MODEL_ORDER:
             for seed, res in seed_results(results, prefix, model):
                 hist = res["training"]["history"]
                 ep = [h["epoch"] for h in hist]
                 style = dict(color=MODEL_COLOUR[model], ls=SEED_STYLE.get(seed, "-"),
-                             lw=1.4, marker="o", ms=2.5)
+                             lw=0.9, marker="o", ms=1.6)
                 axes[row][0].plot(ep, [h["train_loss"] for h in hist], **style)
-                axes[row][1].plot(ep, [h["val_macro_f1"] for h in hist],
-                                  label=f"{MODEL_DISPLAY[model]} s{seed}", **style)
-                drew = True
-        axes[row][0].set_title(f"{corpus} — training loss", fontsize=10)
-        axes[row][1].set_title(f"{corpus} — validation macro-F1", fontsize=10)
-        axes[row][0].set_ylabel("train loss")
-        axes[row][1].set_ylabel("validation macro-F1")
+                line, = axes[row][1].plot(ep, [h["val_macro_f1"] for h in hist], **style)
+                handles.setdefault(f"{MODEL_DISPLAY[model]} s{seed}", line)
+        axes[row][0].set_title(f"{corpus} — training loss", fontsize=7)
+        axes[row][1].set_title(f"{corpus} — validation macro-F1", fontsize=7)
+        axes[row][0].set_ylabel("train loss", fontsize=7)
+        axes[row][1].set_ylabel("val macro-F1", fontsize=7)
         for ax in axes[row]:
-            ax.set_xlabel("epoch")
-            ax.grid(alpha=0.3)
-        if drew:
-            axes[row][1].legend(fontsize=6, loc="lower right", ncol=3)
+            ax.set_xlabel("epoch", fontsize=7)
+            ax.tick_params(labelsize=6)
+            ax.grid(alpha=0.3, lw=0.4)
+    # One shared legend below the grid: nine per-axes entries at this width
+    # would cover the curves they describe.
+    if handles:
+        fig.legend(handles.values(), handles.keys(), fontsize=5, ncol=3,
+                   loc="upper center", bbox_to_anchor=(0.5, 0.03), frameon=False)
     fig.tight_layout()
-    fig.savefig(FIGURES / "fig_training_curves.png", dpi=200)
-    plt.close(fig)
-    print("  wrote fig_training_curves.png")
+    _save(fig, "fig_training_curves")
+    print("  wrote fig_training_curves.pdf (+png preview)")
 
 
 def figure_seed_spread(results: dict) -> None:
     """Between-model margins next to across-seed spread, for the ranking claim."""
-    FIGURES.mkdir(parents=True, exist_ok=True)
     panels = [(d, p, e) for d, p, e in RANKING_SETTINGS
               if len(_macro_f1_by_model(results, p, e)) >= 2]
     if not panels:
         return
-    fig, axes = plt.subplots(1, len(panels), figsize=(4.6 * len(panels), 4.4), squeeze=False)
+    fig, axes = plt.subplots(1, len(panels), figsize=FIG_ROW3, squeeze=False)
+    # Backbone names do not fit under a 1.6 in panel, so the x axis carries
+    # short codes and a shared legend expands them once.
+    short = {"resnet50": "R50", "efficientnet_b0": "EB0", "mobilenet_v3_small": "MNv3"}
     for ax, (disp, prefix, eval_name) in zip(axes[0], panels):
         by_model = _macro_f1_by_model(results, prefix, eval_name)
         models_here = [m for m in MODEL_ORDER if m in by_model]
         for x, model in enumerate(models_here):
             vals = [by_model[model][s] for s in sorted(by_model[model])]
             agg = _agg(vals)
-            ax.errorbar(x, agg["mean"], yerr=(agg["std"] or 0.0), fmt="o", ms=7, capsize=6,
-                        color=MODEL_COLOUR[model], lw=1.5)
+            ax.errorbar(x, agg["mean"], yerr=(agg["std"] or 0.0), fmt="o", ms=3.5,
+                        capsize=2.5, color=MODEL_COLOUR[model], lw=1.0)
             # Every seed drawn beside the mean: with n=3 the individual points
             # are more informative than the error bar computed from them.
-            ax.scatter([x + 0.14] * len(vals), vals, s=16, alpha=0.65,
+            ax.scatter([x + 0.16] * len(vals), vals, s=5, alpha=0.65,
                        color=MODEL_COLOUR[model], zorder=3)
         ax.set_xticks(range(len(models_here)))
-        ax.set_xticklabels([MODEL_DISPLAY[m] for m in models_here], rotation=20,
-                           ha="right", fontsize=8)
-        ax.set_ylabel("macro-F1")
-        ax.set_title(disp, fontsize=9)
-        ax.grid(alpha=0.3, axis="y")
-    fig.suptitle("Backbone macro-F1: mean ± seed SD, with individual seeds", fontsize=10)
+        ax.set_xticklabels([short[m] for m in models_here], fontsize=6)
+        ax.set_xlim(-0.5, len(models_here) - 0.3)
+        ax.tick_params(labelsize=6)
+        ax.set_title(disp, fontsize=6)
+        ax.grid(alpha=0.3, axis="y", lw=0.4)
+    axes[0][0].set_ylabel("macro-F1", fontsize=7)
+    fig.legend(
+        handles=[plt.Line2D([], [], color=MODEL_COLOUR[m], marker="o", ms=3, lw=0,
+                            label=f"{short[m]} = {MODEL_DISPLAY[m]}") for m in MODEL_ORDER],
+        fontsize=5, ncol=3, loc="upper center", bbox_to_anchor=(0.5, 0.06), frameon=False,
+    )
     fig.tight_layout()
-    fig.savefig(FIGURES / "fig_seed_spread.png", dpi=200)
-    plt.close(fig)
-    print("  wrote fig_seed_spread.png")
+    _save(fig, "fig_seed_spread")
+    print("  wrote fig_seed_spread.pdf (+png preview)")
 
 
 def figure_confusion(results: dict) -> None:
-    FIGURES.mkdir(parents=True, exist_ok=True)
+    """Row-normalised confusion matrices, one per run and evaluation.
+
+    ``imshow`` produces an embedded raster no matter how the figure is saved,
+    so these are the one case where save DPI still decides print quality.
+    ``interpolation="nearest"`` keeps cell boundaries crisp instead of letting
+    the viewer smooth a 38x38 grid into mush.
+    """
+    n_written = 0
     for rid, res in results.items():
         for eval_name in ("in_domain_test", "cross_domain_plantdoc_core"):
             block = res["evaluations"].get(eval_name)
@@ -632,44 +690,52 @@ def figure_confusion(results: dict) -> None:
             with np.errstate(invalid="ignore"):
                 norm = cm / np.maximum(cm.sum(axis=1, keepdims=True), 1)
             n = len(labels)
-            fig, ax = plt.subplots(figsize=(max(6, n * 0.32), max(5, n * 0.30)))
-            im = ax.imshow(norm, cmap="viridis", vmin=0, vmax=1)
+            fig, ax = plt.subplots(figsize=FIG_CONFUSION)
+            im = ax.imshow(norm, cmap="viridis", vmin=0, vmax=1, interpolation="nearest")
             ax.set_xticks(range(n)); ax.set_yticks(range(n))
-            ax.set_xticklabels(labels, rotation=90, fontsize=5)
-            ax.set_yticklabels(labels, fontsize=5)
-            ax.set_xlabel("predicted"); ax.set_ylabel("true")
-            ax.set_title(f"{rid} — {eval_name} (row-normalised)", fontsize=8)
-            fig.colorbar(im, ax=ax, fraction=0.046)
+            # 38 class names at text width cannot be legible; they are kept
+            # because the reader needs to identify a cell, not read the axis.
+            tick = 3.2 if n > 24 else 4.5
+            ax.set_xticklabels(labels, rotation=90, fontsize=tick)
+            ax.set_yticklabels(labels, fontsize=tick)
+            ax.set_xlabel("predicted", fontsize=7)
+            ax.set_ylabel("true", fontsize=7)
+            ax.set_title(f"{rid} — {eval_name} (row-normalised)", fontsize=6)
+            cb = fig.colorbar(im, ax=ax, fraction=0.046)
+            cb.ax.tick_params(labelsize=5)
             fig.tight_layout()
-            fig.savefig(FIGURES / f"fig_confusion_{rid}_{eval_name}.png", dpi=200)
-            plt.close(fig)
-    print("  wrote confusion matrices")
+            _save(fig, f"fig_confusion_{rid}_{eval_name}", raster_dpi=300)
+            n_written += 1
+    print(f"  wrote {n_written} confusion matrices (pdf, 300 dpi raster)")
 
 
 def figure_reliability(results: dict) -> None:
-    FIGURES.mkdir(parents=True, exist_ok=True)
+    n_written = 0
     for rid, res in results.items():
         blocks = [(n, b) for n, b in res["evaluations"].items() if "probabilistic" in b]
         if not blocks:
             continue
-        fig, axes = plt.subplots(1, len(blocks), figsize=(4.2 * len(blocks), 4), squeeze=False)
+        fig, axes = plt.subplots(1, len(blocks), figsize=(TEXT_WIDTH_IN, 1.6), squeeze=False)
         for ax, (name, block) in zip(axes[0], blocks):
             rel = block["probabilistic"]["reliability"]
             xs, ys = [], []
             for b in rel["bins"]:
                 if b["count"]:
                     xs.append(b["avg_confidence"]); ys.append(b["accuracy"])
-            ax.plot([0, 1], [0, 1], "k--", lw=1, label="perfect")
-            ax.plot(xs, ys, marker="o", ms=4, label="observed")
+            ax.plot([0, 1], [0, 1], "k--", lw=0.6)
+            ax.plot(xs, ys, marker="o", ms=1.8, lw=0.9)
             ax.set_xlim(0, 1); ax.set_ylim(0, 1)
-            ax.set_xlabel("confidence"); ax.set_ylabel("accuracy")
-            ax.set_title(f"{name}\nECE={block['probabilistic']['expected_calibration_error']:.4f}",
-                         fontsize=8)
-            ax.grid(alpha=0.3); ax.legend(fontsize=7)
+            ax.set_xlabel("confidence", fontsize=6)
+            ax.tick_params(labelsize=5)
+            ax.set_title(
+                f"{name}\nECE={block['probabilistic']['expected_calibration_error']:.4f}",
+                fontsize=5)
+            ax.grid(alpha=0.3, lw=0.4)
+        axes[0][0].set_ylabel("accuracy", fontsize=6)
         fig.tight_layout()
-        fig.savefig(FIGURES / f"fig_reliability_{rid}.png", dpi=200)
-        plt.close(fig)
-    print("  wrote reliability diagrams")
+        _save(fig, f"fig_reliability_{rid}")
+        n_written += 1
+    print(f"  wrote {n_written} reliability diagrams (pdf)")
 
 
 def figure_risk_coverage(results: dict) -> None:
@@ -679,15 +745,15 @@ def figure_risk_coverage(results: dict) -> None:
     interpolated onto a common coverage grid and averaged, with a shaded band at
     ± one seed standard deviation so the averaging never hides disagreement.
     """
-    FIGURES.mkdir(parents=True, exist_ok=True)
     grid = np.linspace(0.05, 1.0, 96)
     panels = [
         ("PlantVillage in-domain", "pv", "in_domain_test"),
         ("PlantVillage → PlantDoc Core", "pv", "cross_domain_plantdoc_core"),
         ("PlantDoc Core in-domain", "pdc", "in_domain_test"),
     ]
-    fig, axes = plt.subplots(1, len(panels), figsize=(4.7 * len(panels), 4.3), squeeze=False)
+    fig, axes = plt.subplots(1, len(panels), figsize=FIG_ROW3, squeeze=False)
     drew_any = False
+    handles: dict[str, object] = {}
     for ax, (disp, prefix, eval_name) in zip(axes[0], panels):
         for model in MODEL_ORDER:
             curves = []
@@ -704,26 +770,26 @@ def figure_risk_coverage(results: dict) -> None:
                 continue
             stack = np.vstack(curves)
             mean = stack.mean(axis=0)
-            ax.plot(grid, mean, lw=1.6, color=MODEL_COLOUR[model],
-                    label=f"{MODEL_DISPLAY[model]} (n={len(curves)})")
+            line, = ax.plot(grid, mean, lw=0.9, color=MODEL_COLOUR[model])
+            handles.setdefault(MODEL_DISPLAY[model], line)
             if len(curves) > 1:
                 sd = stack.std(axis=0, ddof=1)
                 ax.fill_between(grid, mean - sd, mean + sd, alpha=0.18,
                                 color=MODEL_COLOUR[model], lw=0)
             drew_any = True
-        ax.set_xlabel("coverage")
-        ax.set_ylabel("selective accuracy")
-        ax.set_title(disp, fontsize=9)
-        ax.grid(alpha=0.3)
-        ax.legend(fontsize=7, loc="lower left")
+        ax.set_xlabel("coverage", fontsize=6)
+        ax.tick_params(labelsize=5)
+        ax.set_title(disp, fontsize=6)
+        ax.grid(alpha=0.3, lw=0.4)
     if not drew_any:
         plt.close(fig)
         return
-    fig.suptitle("Confidence-abstention (risk-coverage) curves, mean ± seed SD", fontsize=10)
+    axes[0][0].set_ylabel("selective accuracy", fontsize=6)
+    fig.legend(handles.values(), handles.keys(), fontsize=5, ncol=3,
+               loc="upper center", bbox_to_anchor=(0.5, 0.06), frameon=False)
     fig.tight_layout()
-    fig.savefig(FIGURES / "fig_risk_coverage.png", dpi=200)
-    plt.close(fig)
-    print("  wrote fig_risk_coverage.png")
+    _save(fig, "fig_risk_coverage")
+    print("  wrote fig_risk_coverage.pdf (+png preview)")
 
 
 def write_environment(results: dict) -> None:
@@ -768,12 +834,14 @@ TABLE_SPECS = [
     ("Table 7b", "Pairwise ranking margins against seed noise", "table7b_ranking_margins"),
 ]
 
+# Vector PDF is the submission format; the .png beside three of these is a
+# preview only and is never what LaTeX includes.
 FIGURE_SPECS = [
-    ("Figure 1", "Training curves (loss and validation macro-F1)", "fig_training_curves.png"),
-    ("Figure 2", "Confusion matrices", "fig_confusion_*.png"),
-    ("Figure 3", "Reliability diagrams", "fig_reliability_*.png"),
-    ("Figure 4", "Risk-coverage (confidence-abstention) curves", "fig_risk_coverage.png"),
-    ("Figure 5", "Backbone macro-F1 mean, seed SD, and individual seeds", "fig_seed_spread.png"),
+    ("Figure 1", "Training curves (loss and validation macro-F1)", "fig_training_curves.pdf"),
+    ("Figure 2", "Confusion matrices", "fig_confusion_*.pdf"),
+    ("Figure 3", "Reliability diagrams", "fig_reliability_*.pdf"),
+    ("Figure 4", "Risk-coverage (confidence-abstention) curves", "fig_risk_coverage.pdf"),
+    ("Figure 5", "Backbone macro-F1 mean, seed SD, and individual seeds", "fig_seed_spread.pdf"),
 ]
 
 

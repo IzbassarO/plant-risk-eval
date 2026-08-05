@@ -278,19 +278,91 @@ pixels for the intended ones.
 Anyone reproducing this on macOS should expect the same and may prefer to exclude
 the dataset directory from Spotlight indexing.
 
-## 11. Random seed
+## 11. Random seeds
 
-Seed 42 for Python `random`, NumPy, and PyTorch, set at the start of every run.
+Seeds are set for Python `random`, NumPy, and PyTorch at the start of every run.
 The validation carve-out is seeded identically and depends only on (frame,
 fraction, seed) — not on row order or platform.
 
-**One seed for the initial matrix.** Three-seed repetitions are not launched
-until the complete one-seed matrix succeeds. Single-seed results carry no
-variance estimate and are reported as such.
+**Three seeds: 42, 1337, 2026.** Seed 42 ran the initial matrix; the two
+repetitions were launched only after that complete one-seed matrix succeeded,
+as this protocol required. 1337 and 2026 were chosen arbitrarily and fixed
+before the runs; nothing about either value is special, and the choice is
+recorded in `scripts/ica26_make_seed_configs.py` rather than remembered.
+
+The repetition configs are **derived mechanically** from the seed-42 files by
+that script, not copied by hand, and `--check` verifies semantically that each
+derived config differs from its source in exactly `experiment_id` and `seed`.
+A seed repetition only estimates variance if the seed is the only thing that
+varied; hand-copying twelve YAML files invites a silent divergence that would
+turn a variance estimate into a comparison of two protocols.
+
+Run directories are keyed by `experiment_id`, which carries the seed, so a new
+seed cannot overwrite an existing run's checkpoint.
+
+**Preservation.** Checkpoints and prediction dumps are gitignored, so they exist
+only in the working tree. `scripts/ica26_preserve_models.py` copies the bytes to
+an archive outside the repository and records their SHA-256 digests in
+`reports/ica26_model_preservation.json`, which *is* tracked — so the archive can
+be proven intact, or proven damaged, from a clean checkout that contains no
+weights. Each digest sits next to the `experiment_lock_digest` and `git_commit`
+that run's own `result.json` bound at training time, which is what lets a paper
+number be traced back to a specific weight file. `--verify` re-hashes both
+locations.
+
+## 11a. Statistical methodology
+
+Aggregated tables report **mean ± sample standard deviation** across seeds.
+A single seed reports the bare mean: one run has no variance estimate and
+printing `± 0.0000` would claim it does. Domain-shift drops are computed
+*within* a seed and then averaged, preserving the pairing between a checkpoint
+and its own cross-domain evaluation; differencing the two seed-averages would
+discard it. Every aggregated table has a `*_per_seed.csv` companion so the
+aggregation can be recomputed without rerunning anything.
+
+Two further instruments, in `scripts/ica26_significance.py`:
+
+**McNemar's exact test** on per-item correctness, for every backbone pair in
+every evaluation setting. Two models scored on one evaluation set are not
+independent samples, so comparing their accuracies as though they were is the
+wrong test. The exact binomial form is used rather than the chi-square
+approximation because the discordant counts here are small. Because every
+pairwise comparison is reported, p-values are also given with **Holm** step-down
+adjustment across the whole family.
+
+**BCa bootstrap** 95% intervals for accuracy and macro-F1, 10,000 resamples at a
+fixed RNG seed. Both the bias correction and the acceleration are computed; if
+either is undefined — as it is for a statistic that does not vary across
+resamples — the interval degrades to a percentile interval and is *labelled* as
+such rather than silently reported as BCa. The evaluated label space is pinned
+to the classes present in the original evaluation, so the statistic keeps one
+definition across all replicates.
+
+Both are exact rather than approximate. Accuracy and macro-F1 over a fixed label
+set depend on the data only through the (true, predicted) contingency table, so
+a bootstrap resample of n items is exactly a multinomial draw over that table's
+cells, and the leave-one-out jackknife has at most `n_true × n_pred` distinct
+outcomes instead of n. The equivalence is not assumed: a test drives both routes
+from one RNG seed and requires exact agreement.
+
+Two gates run before any statistic is computed, and both currently pass for all
+nine seed-42 evaluations:
+
+1. The label vectors must be **identical across models**, or the runs were not
+   scored on the same items in the same order and no paired test over them is
+   valid.
+2. Every recomputed accuracy and macro-F1 must match `result.json` to 1e-9, or
+   the prediction dump and the result file describe different runs.
+
+**What the two interval types mean is different and they are not
+interchangeable.** A bootstrap interval describes sampling variability of a
+fixed evaluation set for one trained checkpoint. An across-seed standard
+deviation describes variability of the training process. A difference smaller
+than the seed spread is not claimed as a finding regardless of its p-value.
 
 ## 12. Experiment matrix
 
-Six training runs:
+Eighteen training runs: six configurations × three seeds. The six per seed are:
 
 | # | Run ID | Train on | In-domain eval | Cross-domain eval |
 |---|---|---|---|---|
@@ -304,10 +376,20 @@ Six training runs:
 The PlantVillage checkpoints supply both in-domain and cross-domain results, so
 no separate cross-domain model is trained.
 
+The `_s42` suffix becomes `_s1337` and `_s2026` for the repetitions, giving 18
+run IDs and 18 non-colliding run directories. The repetitions were run in
+seed-complete order — all six of 1337, then all six of 2026 — with the cheap
+MobileNet runs first within each seed, so an interrupted session leaves whole
+seeds finished rather than three partial ones.
+
 ## 13. Limitations
 
-1. **One seed.** No variance estimate. Differences between backbones smaller than
-   run-to-run noise cannot be claimed from this matrix alone.
+1. **Three seeds.** Three repetitions give a usable spread but a weak variance
+   estimate. The across-seed standard deviation is reported as a descriptive
+   quantity; no significance claim is attached to it, and a between-model
+   difference smaller than that spread is not claimed as a finding. Table 7b
+   reports each margin against the pooled seed SD so the comparison is visible
+   rather than asserted.
 2. **The two label spaces differ.** In-domain PlantVillage is 38-way; cross-domain
    is 21-way over a restricted space. The measured drop therefore combines
    domain shift with a change in task difficulty and should be read as a paired
@@ -343,6 +425,11 @@ The hypotheses in §2 were written before any result existed and are left
 unedited above. This section records what actually happened, seed 42, one run
 each. Every number is read from `experiments/ica26/metrics/*.json`.
 
+> **Status: seed 42 only; revised once the three-seed matrix completes.** The
+> paired tests in §11a have since sharpened one of these outcomes materially —
+> see the note appended to H3 below. The rest of this section has not yet been
+> re-derived across seeds.
+
 **H1 — supported.** All three backbones exceed 0.99 accuracy on the PlantVillage
 test split: EfficientNet-B0 0.9968, MobileNetV3-Small 0.9950, ResNet-50 0.9925.
 
@@ -360,6 +447,25 @@ domain. Cross-domain ordering instead matches the PlantDoc-trained in-domain
 ordering exactly (ResNet-50 0.6933 > EfficientNet-B0 0.6800 >
 MobileNetV3-Small 0.5556). A saturated in-domain benchmark carried essentially
 no information about which backbone transfers.
+
+**H3, corrected by the paired tests (§11a).** The raw ordering above overstates
+what the data supports, and the correction cuts both ways. Cross-domain,
+ResNet-50 and EfficientNet-B0 are **not** statistically distinguishable
+(McNemar exact p = 0.7488, Holm 1.0000, 351 discordant items). "ResNet-50 first,
+EfficientNet-B0 second" is not a finding; it is a coin landing.
+
+What *is* a finding is the ResNet-50 / MobileNetV3-Small crossing, which is
+significant **in both directions** after family-wise correction:
+
+| Setting | Margin (ResNet-50 − MobileNetV3-Small) | p exact | p Holm |
+|---|---:|---:|---:|
+| PlantVillage in-domain | −0.0024 | 0.0095 | 0.0363 |
+| PlantVillage → PlantDoc Core | +0.0359 | 0.0002 | 0.0013 |
+
+MobileNetV3-Small is significantly *better* in domain and significantly *worse*
+out of domain. That is a genuine crossing rather than a re-ordering within
+noise, and it is a stronger claim than the raw ranking flip — so the paper makes
+that one and drops the other.
 
 **H4 — first clause supported, second clause falsified.** Miscalibration does
 worsen out of domain: ECE rises from 0.090/0.098/0.096 in domain to

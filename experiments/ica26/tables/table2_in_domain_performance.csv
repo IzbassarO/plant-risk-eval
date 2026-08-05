@@ -1,7 +1,7 @@
 Model,Dataset,Seeds,N,Accuracy,Macro-F1,Weighted-F1,Balanced Acc.,Macro Prec.,Macro Rec.
 ResNet-50,PlantVillage,1,10709,0.9925,0.9899,0.9925,0.9898,0.9903,0.9898
 EfficientNet-B0,PlantVillage,1,10709,0.9968,0.9956,0.9968,0.9954,0.9958,0.9954
-MobileNetV3-Small,PlantVillage,1,10709,0.9950,0.9927,0.9950,0.9918,0.9939,0.9918
+MobileNetV3-Small,PlantVillage,2,10709,0.9950 ± 0.0001,0.9929 ± 0.0002,0.9950 ± 0.0001,0.9917 ± 0.0001,0.9942 ± 0.0005,0.9917 ± 0.0001
 ResNet-50,PlantDoc Core,1,225,0.6933,0.6994,0.7157,0.6813,0.7585,0.6813
 EfficientNet-B0,PlantDoc Core,1,225,0.6800,0.6927,0.7108,0.6666,0.7518,0.6666
 MobileNetV3-Small,PlantDoc Core,2,225,0.5578 ± 0.0031,0.5893 ± 0.0075,0.5931 ± 0.0061,0.5654 ± 0.0024,0.6589 ± 0.0182,0.5654 ± 0.0024
