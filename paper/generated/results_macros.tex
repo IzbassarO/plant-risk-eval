@@ -9,7 +9,7 @@
 %   python scripts/ica26_build_paper_macros.py
 %
 % seeds complete : [42, 1337]
-% runs complete  : 9/18
+% runs complete  : 10/18
 % pending macros : 0
 
 % Typeset marker for a number that does not exist yet. A draft with any
@@ -21,16 +21,16 @@
 \newcommand{\LockDigestFull}{\texttt{83449f6013691855\allowbreak 4904cb9c596122f8\allowbreak b89cb51ff5bb5c52\allowbreak c541394a5698082d}}
 \newcommand{\NSeedsDone}{2}
 \newcommand{\SeedList}{42, 1337}
-\newcommand{\NRunsDone}{9}
+\newcommand{\NRunsDone}{10}
 \newcommand{\NRunsPlanned}{18}
 
 % --- numerical guard -----------------------------------------------------
-\newcommand{\NRunsWithSkippedSteps}{0}
-\newcommand{\NSkippedSteps}{0}
-\newcommand{\NGuardedRuns}{1}
-\newcommand{\NGuardedOptimiserSteps}{363}
-\newcommand{\RunsWithSkippedSteps}{none}
-\newcommand{\SkippedStepsNote}{no run trained under the guard skipped a step (1 run, 363 steps)}
+\newcommand{\NRunsWithSkippedSteps}{1}
+\newcommand{\NSkippedSteps}{11}
+\newcommand{\NGuardedRuns}{2}
+\newcommand{\NGuardedOptimiserSteps}{7\,117}
+\newcommand{\RunsWithSkippedSteps}{\texttt{pv\_efficientnet\_b0\_s1337} (11)}
+\newcommand{\SkippedStepsNote}{1 of 2 runs trained under the guard skipped a step, 11 in total out of 7\,117: \texttt{pv\_efficientnet\_b0\_s1337} (11)}
 
 % --- dataset composition -------------------------------------------------
 \newcommand{\NPv}{54\,305}
@@ -74,15 +74,15 @@
 \newcommand{\AurcPvInRn}{\ensuremath{0.0005}}
 \newcommand{\AccMeanPvInRn}{0.9925}
 \newcommand{\MacroFMeanPvInRn}{0.9899}
-\newcommand{\AccPvInEb}{\ensuremath{0.9968}}
-\newcommand{\MacroFPvInEb}{\ensuremath{0.9956}}
-\newcommand{\BalAccPvInEb}{\ensuremath{0.9954}}
-\newcommand{\EcePvInEb}{\ensuremath{0.0985}}
-\newcommand{\NllPvInEb}{\ensuremath{0.115}}
-\newcommand{\BrierPvInEb}{\ensuremath{0.0150}}
-\newcommand{\AurcPvInEb}{\ensuremath{0.0010}}
-\newcommand{\AccMeanPvInEb}{0.9968}
-\newcommand{\MacroFMeanPvInEb}{0.9956}
+\newcommand{\AccPvInEb}{\ensuremath{0.9964 \pm 0.0007}}
+\newcommand{\MacroFPvInEb}{\ensuremath{0.9950 \pm 0.0008}}
+\newcommand{\BalAccPvInEb}{\ensuremath{0.9946 \pm 0.0012}}
+\newcommand{\EcePvInEb}{\ensuremath{0.1040 \pm 0.0078}}
+\newcommand{\NllPvInEb}{\ensuremath{0.121 \pm 0.010}}
+\newcommand{\BrierPvInEb}{\ensuremath{0.0168 \pm 0.0025}}
+\newcommand{\AurcPvInEb}{\ensuremath{0.0010 \pm 0.0001}}
+\newcommand{\AccMeanPvInEb}{0.9964}
+\newcommand{\MacroFMeanPvInEb}{0.9950}
 \newcommand{\AccPvInMn}{\ensuremath{0.9950 \pm 0.0001}}
 \newcommand{\MacroFPvInMn}{\ensuremath{0.9929 \pm 0.0002}}
 \newcommand{\BalAccPvInMn}{\ensuremath{0.9917 \pm 0.0001}}
@@ -103,15 +103,15 @@
 \newcommand{\AurcPvInTRn}{\ensuremath{0.0004}}
 \newcommand{\AccMeanPvInTRn}{0.9925}
 \newcommand{\MacroFMeanPvInTRn}{0.9899}
-\newcommand{\AccPvInTEb}{\ensuremath{0.9968}}
-\newcommand{\MacroFPvInTEb}{\ensuremath{0.9956}}
-\newcommand{\BalAccPvInTEb}{\ensuremath{0.9954}}
-\newcommand{\EcePvInTEb}{\ensuremath{0.0093}}
-\newcommand{\NllPvInTEb}{\ensuremath{0.021}}
-\newcommand{\BrierPvInTEb}{\ensuremath{0.0051}}
-\newcommand{\AurcPvInTEb}{\ensuremath{0.0009}}
-\newcommand{\AccMeanPvInTEb}{0.9968}
-\newcommand{\MacroFMeanPvInTEb}{0.9956}
+\newcommand{\AccPvInTEb}{\ensuremath{0.9964 \pm 0.0007}}
+\newcommand{\MacroFPvInTEb}{\ensuremath{0.9950 \pm 0.0008}}
+\newcommand{\BalAccPvInTEb}{\ensuremath{0.9946 \pm 0.0012}}
+\newcommand{\EcePvInTEb}{\ensuremath{0.0101 \pm 0.0012}}
+\newcommand{\NllPvInTEb}{\ensuremath{0.022 \pm 0.001}}
+\newcommand{\BrierPvInTEb}{\ensuremath{0.0057 \pm 0.0008}}
+\newcommand{\AurcPvInTEb}{\ensuremath{0.0009 \pm 0.0000}}
+\newcommand{\AccMeanPvInTEb}{0.9964}
+\newcommand{\MacroFMeanPvInTEb}{0.9950}
 \newcommand{\AccPvInTMn}{\ensuremath{0.9950 \pm 0.0001}}
 \newcommand{\MacroFPvInTMn}{\ensuremath{0.9929 \pm 0.0002}}
 \newcommand{\BalAccPvInTMn}{\ensuremath{0.9917 \pm 0.0001}}
@@ -190,15 +190,15 @@
 \newcommand{\AurcXdRn}{\ensuremath{0.6284}}
 \newcommand{\AccMeanXdRn}{0.2778}
 \newcommand{\MacroFMeanXdRn}{0.2414}
-\newcommand{\AccXdEb}{\ensuremath{0.2742}}
-\newcommand{\MacroFXdEb}{\ensuremath{0.2359}}
-\newcommand{\BalAccXdEb}{\ensuremath{0.2602}}
-\newcommand{\EceXdEb}{\ensuremath{0.2390}}
-\newcommand{\NllXdEb}{\ensuremath{2.858}}
-\newcommand{\BrierXdEb}{\ensuremath{0.9309}}
-\newcommand{\AurcXdEb}{\ensuremath{0.5879}}
-\newcommand{\AccMeanXdEb}{0.2742}
-\newcommand{\MacroFMeanXdEb}{0.2359}
+\newcommand{\AccXdEb}{\ensuremath{0.2642 \pm 0.0141}}
+\newcommand{\MacroFXdEb}{\ensuremath{0.2335 \pm 0.0033}}
+\newcommand{\BalAccXdEb}{\ensuremath{0.2507 \pm 0.0135}}
+\newcommand{\EceXdEb}{\ensuremath{0.2463 \pm 0.0102}}
+\newcommand{\NllXdEb}{\ensuremath{2.865 \pm 0.010}}
+\newcommand{\BrierXdEb}{\ensuremath{0.9508 \pm 0.0281}}
+\newcommand{\AurcXdEb}{\ensuremath{0.6159 \pm 0.0396}}
+\newcommand{\AccMeanXdEb}{0.2642}
+\newcommand{\MacroFMeanXdEb}{0.2335}
 \newcommand{\AccXdMn}{\ensuremath{0.2263 \pm 0.0221}}
 \newcommand{\MacroFXdMn}{\ensuremath{0.1873 \pm 0.0154}}
 \newcommand{\BalAccXdMn}{\ensuremath{0.2203 \pm 0.0115}}
@@ -219,15 +219,15 @@
 \newcommand{\AurcXdTRn}{\ensuremath{0.6276}}
 \newcommand{\AccMeanXdTRn}{0.2778}
 \newcommand{\MacroFMeanXdTRn}{0.2414}
-\newcommand{\AccXdTEb}{\ensuremath{0.2742}}
-\newcommand{\MacroFXdTEb}{\ensuremath{0.2359}}
-\newcommand{\BalAccXdTEb}{\ensuremath{0.2602}}
-\newcommand{\EceXdTEb}{\ensuremath{0.3778}}
-\newcommand{\NllXdTEb}{\ensuremath{3.434}}
-\newcommand{\BrierXdTEb}{\ensuremath{1.0303}}
-\newcommand{\AurcXdTEb}{\ensuremath{0.5857}}
-\newcommand{\AccMeanXdTEb}{0.2742}
-\newcommand{\MacroFMeanXdTEb}{0.2359}
+\newcommand{\AccXdTEb}{\ensuremath{0.2642 \pm 0.0141}}
+\newcommand{\MacroFXdTEb}{\ensuremath{0.2335 \pm 0.0033}}
+\newcommand{\BalAccXdTEb}{\ensuremath{0.2507 \pm 0.0135}}
+\newcommand{\EceXdTEb}{\ensuremath{0.3878 \pm 0.0142}}
+\newcommand{\NllXdTEb}{\ensuremath{3.449 \pm 0.022}}
+\newcommand{\BrierXdTEb}{\ensuremath{1.0563 \pm 0.0368}}
+\newcommand{\AurcXdTEb}{\ensuremath{0.6152 \pm 0.0418}}
+\newcommand{\AccMeanXdTEb}{0.2642}
+\newcommand{\MacroFMeanXdTEb}{0.2335}
 \newcommand{\AccXdTMn}{\ensuremath{0.2263 \pm 0.0221}}
 \newcommand{\MacroFXdTMn}{\ensuremath{0.1873 \pm 0.0154}}
 \newcommand{\BalAccXdTMn}{\ensuremath{0.2203 \pm 0.0115}}
@@ -241,7 +241,7 @@
 % --- calibration: fitted temperature -------------------------------------
 \newcommand{\TempPvRn}{\ensuremath{0.7086}}
 \newcommand{\TempPdcRn}{\ensuremath{0.8350}}
-\newcommand{\TempPvEb}{\ensuremath{0.7030}}
+\newcommand{\TempPvEb}{\ensuremath{0.6995 \pm 0.0050}}
 \newcommand{\TempPdcEb}{\ensuremath{0.7697 \pm 0.0585}}
 \newcommand{\TempPvMn}{\ensuremath{0.7002 \pm 0.0019}}
 \newcommand{\TempPdcMn}{\ensuremath{0.8427 \pm 0.0673}}
@@ -251,10 +251,10 @@
 \newcommand{\RelDropFRn}{\ensuremath{75.6}}
 \newcommand{\AbsDropFRn}{\ensuremath{0.7485}}
 \newcommand{\RelDropFMeanRn}{75.6}
-\newcommand{\RelDropAccEb}{\ensuremath{72.5}}
-\newcommand{\RelDropFEb}{\ensuremath{76.3}}
-\newcommand{\AbsDropFEb}{\ensuremath{0.7597}}
-\newcommand{\RelDropFMeanEb}{76.3}
+\newcommand{\RelDropAccEb}{\ensuremath{73.5 \pm 1.4}}
+\newcommand{\RelDropFEb}{\ensuremath{76.5 \pm 0.3}}
+\newcommand{\AbsDropFEb}{\ensuremath{0.7615 \pm 0.0025}}
+\newcommand{\RelDropFMeanEb}{76.5}
 \newcommand{\RelDropAccMn}{\ensuremath{77.3 \pm 2.2}}
 \newcommand{\RelDropFMn}{\ensuremath{81.1 \pm 1.6}}
 \newcommand{\AbsDropFMn}{\ensuremath{0.8056 \pm 0.0157}}
@@ -262,14 +262,14 @@
 
 % --- cross-domain protocol -----------------------------------------------
 \newcommand{\RetainedMassRn}{\ensuremath{0.728}}
-\newcommand{\RetainedMassEb}{\ensuremath{0.652}}
+\newcommand{\RetainedMassEb}{\ensuremath{0.655 \pm 0.004}}
 \newcommand{\RetainedMassMn}{\ensuremath{0.589 \pm 0.038}}
 
 % --- efficiency ----------------------------------------------------------
 \newcommand{\ParamsRn}{23.6}
 \newcommand{\LatencyRn}{\ensuremath{8.43 \pm 0.01}}
 \newcommand{\ParamsEb}{4.0}
-\newcommand{\LatencyEb}{\ensuremath{9.61 \pm 0.31}}
+\newcommand{\LatencyEb}{\ensuremath{9.46 \pm 0.39}}
 \newcommand{\ParamsMn}{1.5}
 \newcommand{\LatencyMn}{\ensuremath{6.48 \pm 0.22}}
 \newcommand{\ParamRatio}{15}
