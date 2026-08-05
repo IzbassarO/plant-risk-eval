@@ -1,0 +1,86 @@
+{
+  "experiment_id": "pdc_efficientnet_b0_s1337",
+  "history": [
+    {
+      "epoch": 1,
+      "epoch_seconds": 60.62,
+      "lr": 0.00029672,
+      "train_accuracy": 0.122265,
+      "train_loss": 3.334969,
+      "val_accuracy": 0.401709,
+      "val_macro_f1": 0.459609
+    },
+    {
+      "epoch": 2,
+      "epoch_seconds": 41.92,
+      "lr": 0.00028703,
+      "train_accuracy": 0.486679,
+      "train_loss": 2.392628,
+      "val_accuracy": 0.576923,
+      "val_macro_f1": 0.574587
+    },
+    {
+      "epoch": 3,
+      "epoch_seconds": 55.4,
+      "lr": 0.00027135,
+      "train_accuracy": 0.669363,
+      "train_loss": 1.930592,
+      "val_accuracy": 0.628205,
+      "val_macro_f1": 0.63086
+    },
+    {
+      "epoch": 4,
+      "epoch_seconds": 83.72,
+      "lr": 0.00025037,
+      "train_accuracy": 0.744053,
+      "train_loss": 1.710744,
+      "val_accuracy": 0.623932,
+      "val_macro_f1": 0.625546
+    },
+    {
+      "epoch": 5,
+      "epoch_seconds": 98.94,
+      "lr": 0.000225,
+      "train_accuracy": 0.811132,
+      "train_loss": 1.563597,
+      "val_accuracy": 0.662393,
+      "val_macro_f1": 0.678175
+    },
+    {
+      "epoch": 6,
+      "epoch_seconds": 90.88,
+      "lr": 0.00019635,
+      "train_accuracy": 0.852997,
+      "train_loss": 1.460351,
+      "val_accuracy": 0.662393,
+      "val_macro_f1": 0.686222
+    },
+    {
+      "epoch": 7,
+      "epoch_seconds": 95.67,
+      "lr": 0.00016568,
+      "train_accuracy": 0.88392,
+      "train_loss": 1.396339,
+      "val_accuracy": 0.65812,
+      "val_macro_f1": 0.670352
+    },
+    {
+      "epoch": 8,
+      "epoch_seconds": 82.32,
+      "lr": 0.00013432,
+      "train_accuracy": 0.911989,
+      "train_loss": 1.351324,
+      "val_accuracy": 0.65812,
+      "val_macro_f1": 0.674723
+    },
+    {
+      "epoch": 9,
+      "epoch_seconds": 99.65,
+      "lr": 0.00010365,
+      "train_accuracy": 0.925785,
+      "train_loss": 1.31893,
+      "val_accuracy": 0.662393,
+      "val_macro_f1": 0.672178
+    }
+  ]
+}

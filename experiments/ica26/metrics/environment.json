@@ -5,8 +5,10 @@
     "261fd3af0a8e1271239cd66e34e6062b1da34e73",
     "370d4cff001c061a8bc54e3ad98c92b98f65db4a",
     "476b3543954c31e4e7ac8b0f6b9a4988a5bb4eae",
+    "4e25c4ecb4beda8662c17ca421836e01629a4d26",
     "784ec9cba4a63f30af01a7d9969a640510e63147",
-    "d3d7e5f1b6d950b21a27baa90089ba206cde179c"
+    "d3d7e5f1b6d950b21a27baa90089ba206cde179c",
+    "ddcfd18853d222e47c74363c11f628b3ecadb129"
   ],
   "hardware": {
     "backend": "mps",
@@ -38,7 +40,6 @@
     "pdc_mobilenet_v3_small_s2026"
   ],
   "runs_missing": [
-    "pdc_efficientnet_b0_s1337",
     "pdc_efficientnet_b0_s2026",
     "pdc_mobilenet_v3_small_s2026",
     "pdc_resnet50_s1337",
@@ -50,6 +51,7 @@
     "pv_resnet50_s2026"
   ],
   "runs_present": [
+    "pdc_efficientnet_b0_s1337",
     "pdc_efficientnet_b0_s42",
     "pdc_mobilenet_v3_small_s1337",
     "pdc_mobilenet_v3_small_s42",
