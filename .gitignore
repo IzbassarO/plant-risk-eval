@@ -164,3 +164,14 @@ desktop.ini
 
 # ICA 2026 smoke-run scratch tree (evidence lives in metrics/smoke_test_report.json)
 experiments/ica26/_smoke/
+
+# --- ICA 2026 paper build byproducts -------------------------------------------
+# The .tex sources, the generated macros, and the built PDF are tracked; LaTeX's
+# scratch files are not. (*.log is already excluded above.)
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.out
+paper/*.toc
+paper/*.xdv
+paper/*.synctex.gz
