@@ -237,6 +237,94 @@ def test_every_macro_the_paper_uses_is_defined(macros):
     )
 
 
+# --------------------------------------------------------------------------- #
+# structural well-formedness, without invoking a TeX engine
+# --------------------------------------------------------------------------- #
+TEX_SOURCES = ["paper/ica2026.tex", "paper/supplementary.tex"]
+
+
+def _strip_comments(text: str) -> str:
+    return re.sub(r"(?<!\\)%.*", "", text)
+
+
+@pytest.mark.parametrize("relpath", TEX_SOURCES)
+def test_braces_balance(relpath):
+    """An unbalanced brace is a compile error that no macro check would catch."""
+    path = REPO / relpath
+    if not path.exists():
+        pytest.skip(f"{relpath} not present")
+    depth = 0
+    for line_no, line in enumerate(_strip_comments(path.read_text()).splitlines(), 1):
+        # \{ and \} are literal braces, not grouping.
+        for char in re.sub(r"\\[{}]", "", line):
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+        assert depth >= 0, f"{relpath}:{line_no}: closing brace with no opener"
+    assert depth == 0, f"{relpath}: {depth} unclosed brace(s)"
+
+
+@pytest.mark.parametrize("relpath", TEX_SOURCES)
+def test_environments_are_balanced_and_correctly_nested(relpath):
+    path = REPO / relpath
+    if not path.exists():
+        pytest.skip(f"{relpath} not present")
+    stack: list[tuple[str, int]] = []
+    for line_no, line in enumerate(_strip_comments(path.read_text()).splitlines(), 1):
+        for kind, name in re.findall(r"\\(begin|end)\{([^}]+)\}", line):
+            if kind == "begin":
+                stack.append((name, line_no))
+            else:
+                assert stack, f"{relpath}:{line_no}: \\end{{{name}}} with nothing open"
+                opened, opened_at = stack.pop()
+                assert opened == name, (
+                    f"{relpath}:{line_no}: \\end{{{name}}} closes "
+                    f"\\begin{{{opened}}} from line {opened_at}"
+                )
+    assert not stack, f"{relpath}: unclosed environments {stack}"
+
+
+@pytest.mark.parametrize("relpath", TEX_SOURCES)
+def test_every_input_and_includegraphics_target_exists(relpath):
+    """A missing \\input is a hard compile error; a missing figure is a silent
+    placeholder box in some engines."""
+    path = REPO / relpath
+    if not path.exists():
+        pytest.skip(f"{relpath} not present")
+    body = _strip_comments(path.read_text())
+    missing = []
+    for target in re.findall(r"\\input\{([^}]+)\}", body):
+        candidate = (path.parent / target).resolve()
+        if not (candidate.exists() or candidate.with_suffix(".tex").exists()):
+            missing.append(f"\\input{{{target}}}")
+    for target in re.findall(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}", body):
+        if not (REPO / "experiments/ica26/figures" / target).exists():
+            missing.append(f"\\includegraphics{{{target}}}")
+    assert not missing, f"{relpath} references missing files: {missing}"
+
+
+@pytest.mark.parametrize("relpath", TEX_SOURCES)
+def test_every_label_reference_resolves(relpath):
+    """An unresolved \\ref typesets as `??' rather than failing the build."""
+    path = REPO / relpath
+    if not path.exists():
+        pytest.skip(f"{relpath} not present")
+    body = _strip_comments(path.read_text())
+    labels = set(re.findall(r"\\label\{([^}]+)\}", body))
+    # Table labels come from the generated .tex files that get \input.
+    for target in re.findall(r"\\input\{([^}]+)\}", body):
+        included = (path.parent / target)
+        if included.suffix != ".tex":
+            included = included.with_suffix(".tex")
+        if included.exists():
+            labels |= set(re.findall(r"\\label\{([^}]+)\}", included.read_text()))
+    referenced = set(re.findall(r"\\ref\{([^}]+)\}", body))
+    assert not (referenced - labels), (
+        f"{relpath} references undefined labels: {sorted(referenced - labels)}"
+    )
+
+
 def test_paper_defines_no_results_of_its_own():
     """All result definitions live in the generated file, so regenerating it
     updates every number in the paper. A \\newcommand in the body would escape
