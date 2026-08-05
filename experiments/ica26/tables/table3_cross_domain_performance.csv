@@ -1,4 +1,4 @@
 Model,Dataset,Seeds,N,Accuracy,Macro-F1,Weighted-F1,Balanced Acc.,Macro Prec.,Macro Rec.,Shared classes,Retained prob. mass
-ResNet-50,PlantVillage → PlantDoc Core,2,1951,0.2573 ± 0.0290,0.2316 ± 0.0139,0.2527 ± 0.0192,0.2404 ± 0.0263,0.3667 ± 0.0262,0.2404 ± 0.0263,21,0.6853 ± 0.0606
-EfficientNet-B0,PlantVillage → PlantDoc Core,2,1951,0.2642 ± 0.0141,0.2335 ± 0.0033,0.2551 ± 0.0095,0.2507 ± 0.0135,0.3518 ± 0.0329,0.2507 ± 0.0135,21,0.6547 ± 0.0038
-MobileNetV3-Small,PlantVillage → PlantDoc Core,2,1951,0.2263 ± 0.0221,0.1873 ± 0.0154,0.2018 ± 0.0226,0.2203 ± 0.0115,0.3232 ± 0.0041,0.2203 ± 0.0115,21,0.5891 ± 0.0376
+ResNet-50,PlantVillage → PlantDoc Core,3,1951,0.2583 ± 0.0206,0.2291 ± 0.0107,0.2512 ± 0.0138,0.2389 ± 0.0188,0.3629 ± 0.0197,0.2389 ± 0.0188,21,0.6367 ± 0.0945
+EfficientNet-B0,PlantVillage → PlantDoc Core,3,1951,0.2653 ± 0.0102,0.2300 ± 0.0065,0.2528 ± 0.0078,0.2475 ± 0.0110,0.3455 ± 0.0257,0.2475 ± 0.0110,21,0.6595 ± 0.0086
+MobileNetV3-Small,PlantVillage → PlantDoc Core,3,1951,0.2238 ± 0.0162,0.1869 ± 0.0109,0.2013 ± 0.0160,0.2141 ± 0.0135,0.3090 ± 0.0248,0.2141 ± 0.0135,21,0.5662 ± 0.0477

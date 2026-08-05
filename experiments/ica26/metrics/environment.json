@@ -9,6 +9,9 @@
     "5e81b9fd1cae70173d3b9236a94235ba04da8895",
     "784ec9cba4a63f30af01a7d9969a640510e63147",
     "7d21448721cf54ed93f2680367d06b63f1ca7122",
+    "872b5f6ed8c1452ac27a36f4e1c8ebdc122a1a39",
+    "b385ca602b7b1e586ee68dd44209e410b4ab5c3d",
+    "ba881b11755636b33bde1c6942a532d224b5281f",
     "d3d7e5f1b6d950b21a27baa90089ba206cde179c",
     "ddcfd18853d222e47c74363c11f628b3ecadb129"
   ],
@@ -41,26 +44,25 @@
     "pdc_mobilenet_v3_small_s1337",
     "pdc_mobilenet_v3_small_s2026"
   ],
-  "runs_missing": [
-    "pdc_efficientnet_b0_s2026",
-    "pdc_mobilenet_v3_small_s2026",
-    "pdc_resnet50_s2026",
-    "pv_efficientnet_b0_s2026",
-    "pv_mobilenet_v3_small_s2026",
-    "pv_resnet50_s2026"
-  ],
+  "runs_missing": [],
   "runs_present": [
     "pdc_efficientnet_b0_s1337",
+    "pdc_efficientnet_b0_s2026",
     "pdc_efficientnet_b0_s42",
     "pdc_mobilenet_v3_small_s1337",
+    "pdc_mobilenet_v3_small_s2026",
     "pdc_mobilenet_v3_small_s42",
     "pdc_resnet50_s1337",
+    "pdc_resnet50_s2026",
     "pdc_resnet50_s42",
     "pv_efficientnet_b0_s1337",
+    "pv_efficientnet_b0_s2026",
     "pv_efficientnet_b0_s42",
     "pv_mobilenet_v3_small_s1337",
+    "pv_mobilenet_v3_small_s2026",
     "pv_mobilenet_v3_small_s42",
     "pv_resnet50_s1337",
+    "pv_resnet50_s2026",
     "pv_resnet50_s42"
   ],
   "schema": "ica26.experiment_environment/2",
@@ -71,6 +73,7 @@
   ],
   "seeds_present": [
     42,
-    1337
+    1337,
+    2026
   ]
 }
