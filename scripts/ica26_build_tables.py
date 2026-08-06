@@ -38,6 +38,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
+from ica26.experiments.latexfmt import Raw, cell, fmt_int  # noqa: E402
+
 # LNCS text width is 122 mm = 4.8 in. Figures are authored at exactly that width
 # so \includegraphics[width=\textwidth] applies no scaling and an 8 pt label
 # renders at 8 pt. Sizing a figure larger and letting LaTeX shrink it is how
@@ -169,11 +171,15 @@ def _write(df: pd.DataFrame, name: str, caption: str, label: str, float_fmt: str
                      f"{label}-compact", float_fmt, small=True)
 
 
+# Columns holding identifiers rather than quantities. A seed of 1337 must not
+# be typeset as "1 337"; it names a run, it does not count anything.
+IDENTIFIER_COLUMNS = {"Seed"}
+
 # Corpus names repeat down a column and are the widest cell in several tables.
 # Backbone names are left in full: they are what the reader is comparing, and a
 # table whose row labels need decoding is a false economy.
 COMPACT_ABBREV = {
-    "PlantVillage → PlantDoc Core": "PV $\\rightarrow$ PDC",
+    "PlantVillage → PlantDoc Core": Raw(r"PV $\rightarrow$ PDC"),
     "PlantVillage in-domain": "PV in-domain",
     "PlantDoc Core in-domain": "PDC in-domain",
     "PlantVillage": "PV",
@@ -187,25 +193,121 @@ COMPACT_ABBREV = {
 
 def _write_latex(df: pd.DataFrame, name: str, caption: str, label: str,
                  float_fmt: str, small: bool = False) -> None:
-    latex = df.to_latex(
-        index=False, escape=True, float_format=float_fmt,
-        caption=caption, label=label, position="htbp",
-    )
-    # pandas escapes LaTeX specials but passes non-ASCII through as raw bytes,
-    # and U+2192 in particular is undefined under pdflatex's utf8 inputenc.
-    # Swapping the few characters this script deliberately introduces for their
-    # math-mode equivalents after escaping keeps the CSV readable and the .tex
-    # portable across pdflatex, xelatex, and lualatex. `>` is escaped too: it is
-    # only ever the ranking separator here, and it renders as an inverted
-    # question mark under the OT1 encoding.
-    for raw, tex in (("±", r"$\pm$"), ("→", r"$\rightarrow$"), (" > ", r" $>$ ")):
-        latex = latex.replace(raw, tex)
+    """Render a table, escaping data cells but never the markup we authored.
+
+    pandas' own ``escape=True`` cannot tell the two apart: it would rewrite a
+    heading like ``$\\Delta$ acc.`` into literal ``\\textbackslash Delta``.
+    Cells are therefore escaped here --- ``Raw`` passing through untouched ---
+    and pandas is asked not to escape anything.
+    """
+    def render(v, is_identifier: bool):
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            return ""
+        if isinstance(v, bool):
+            return cell(str(v))
+        if isinstance(v, (int, np.integer)) and not is_identifier:
+            # Thousands separator matches results_macros, so one quantity does
+            # not read two ways on facing pages.
+            return Raw(fmt_int(v))
+        if isinstance(v, (float, np.floating)):
+            return Raw(float_fmt % v)      # a formatted number needs no escaping
+        return cell(v)
+
+    rendered = df.copy()
+    for column in rendered.columns:
+        identifier = str(column) in IDENTIFIER_COLUMNS
+        rendered[column] = rendered[column].map(lambda v, i=identifier: render(v, i))
+    # Headings go through the same gate: escaped unless explicitly marked Raw,
+    # so a heading carrying a literal `%` is still safe while one carrying
+    # intentional math survives intact.
+    rendered.columns = [cell(c) for c in rendered.columns]
+
+    latex = df_to_latex(rendered, caption=caption, label=label)
     if small:
         # \footnotesize inside the table environment, so it does not leak into
         # the caption or the surrounding text.
         latex = latex.replace(r"\begin{tabular}", "\\footnotesize\n\\centering\n\\begin{tabular}")
     (TABLES / f"{name}.tex").write_text(latex)
     print(f"  wrote {name}.tex  ({len(df)} rows{', compact' if small else ''})")
+
+
+def _write_manual(name: str, caption: str, label: str, colspec: str,
+                  header_lines: list[str], body_rows: list[list[str]],
+                  size: str = "\\footnotesize", tabcolsep: int = 2) -> None:
+    """Emit a table whose header spans columns, which ``to_latex`` cannot build.
+
+    Used where a long thin table has to become a short wide one to fit the page
+    budget. Cells arrive already rendered, because a grouped header means the
+    caller --- not a DataFrame --- decides what each column holds.
+    """
+    TABLES.mkdir(parents=True, exist_ok=True)
+    lines = [
+        r"\begin{table}[htbp]",
+        rf"\caption{{{caption}}}",
+        rf"\label{{{label}}}",
+        size,
+        r"\centering",
+        rf"\setlength{{\tabcolsep}}{{{tabcolsep}pt}}",
+        rf"\begin{{tabular}}{{{colspec}}}",
+        r"\toprule",
+    ]
+    lines += header_lines
+    lines.append(r"\midrule")
+    lines += [" & ".join(row) + r" \\" for row in body_rows]
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}", ""]
+    (TABLES / f"{name}.tex").write_text("\n".join(lines))
+    print(f"  wrote {name}.tex  ({len(body_rows)} rows, transposed)")
+
+
+def table_calibration_compact(results: dict) -> None:
+    """Calibration for the paper: one row per backbone, not one per setting.
+
+    The row-per-setting form runs to eighteen rows and costs about a page. The
+    argument only needs the PlantVillage-trained models --- those are the ones
+    whose in-domain temperature is transported across the shift --- and only
+    ECE, since the temperatures themselves are quoted in the prose. Rotating it
+    to four columns keeps every number the claim rests on.
+    """
+    body = []
+    for model in MODEL_ORDER:
+        runs = seed_results(results, "pv", model)
+        if not runs:
+            continue
+        cells = []
+        for key in ("in_domain_test", "in_domain_test_temperature_scaled",
+                    "cross_domain_plantdoc_core",
+                    "cross_domain_plantdoc_core_temperature_scaled"):
+            blocks = [r["evaluations"][key] for _, r in runs if key in r["evaluations"]]
+            cells.append(cell(_agg_pm(
+                [b["probabilistic"]["expected_calibration_error"] for b in blocks])))
+        body.append([cell(MODEL_DISPLAY[model])] + cells)
+    if not body:
+        return
+    _write_manual(
+        "table6_calibration_compact",
+        "Expected calibration error of the PlantVillage-trained models, mean "
+        "$\\pm$ sample standard deviation over three seeds. `with $T$' applies "
+        "the temperature fitted on the in-domain validation split, unchanged. "
+        "Temperature does not move the argmax, so accuracy is identical in every "
+        "column. PlantDoc-trained calibration and the fitted temperatures are in "
+        "the supplementary table.",
+        "tab:calibration-compact",
+        colspec="lcccc",
+        header_lines=[
+            r" & \multicolumn{2}{c}{PlantVillage test} "
+            r"& \multicolumn{2}{c}{PlantDoc Core (shift)} \\",
+            r"\cmidrule(lr){2-3}\cmidrule(lr){4-5}",
+            r"Model & uncalibrated & with $T$ & uncalibrated & with $T$ \\",
+        ],
+        body_rows=body,
+    )
+
+
+def df_to_latex(rendered: pd.DataFrame, caption: str, label: str) -> str:
+    """booktabs table from an already-escaped frame."""
+    return rendered.to_latex(
+        index=False, escape=False, caption=caption, label=label, position="htbp",
+    )
 
 
 def _write_per_seed(rows: list[dict], name: str) -> None:
@@ -241,7 +343,8 @@ def table_dataset_statistics() -> None:
     df = pd.DataFrame(rows)
     _write(df, "table1_dataset_statistics",
            "Dataset composition after leakage control and conservative exclusion. "
-           f"The cross-domain evaluation subset holds {cd['n_evaluable_plantdoc_core_images']} "
+           f"The cross-domain evaluation subset holds "
+           f"{fmt_int(cd['n_evaluable_plantdoc_core_images'])} "
            f"PlantDoc Core images over {cd['n_shared_classes']} shared classes.",
            "tab:dataset-stats", float_fmt="%.0f")
 
@@ -491,7 +594,7 @@ def table_degradation(results: dict) -> None:
                         "Macro-F1 (in-domain)": "F1 in-dom.",
                         "Macro-F1 (cross-domain)": "F1 cross-dom.",
                         "Macro-F1 abs. drop": "Abs. drop",
-                        "Macro-F1 rel. drop %": "Rel. drop (\\%)"},
+                        "Macro-F1 rel. drop %": "Rel. drop (%)"},
                compact_caption=(
                    "Domain-shift degradation in macro-F1, mean $\\pm$ sample standard "
                    "deviation over three seeds. Drops are computed within each seed and then "
@@ -557,8 +660,9 @@ def table_calibration(results: dict) -> None:
                # NLL is dropped from the compact view: with three text columns
                # already, a fourth numeric one pushes the table past the text
                # block. ECE and the fitted temperature carry the argument.
-               compact={"Model": "Model", "Dataset": "Corpus", "Setting": "Setting",
-                        "ECE": "ECE", "T": "T"},
+               # No compact variant here: table_calibration_compact builds a
+               # transposed one, since the row-per-setting form costs a page.
+               compact=None,
                compact_caption=(
                    "Expected calibration error, mean $\\pm$ sample standard deviation over "
                    "three seeds. `T' is the temperature fitted on the held-out validation "
@@ -675,7 +779,7 @@ def table_ranking_stability(results: dict) -> None:
                "tab:ranking-margins",
                compact={"Setting": "Setting", "Comparison": "Comparison",
                         "Mean margin": "Margin",
-                        "|Margin| / seed SD": "$|$Margin$|$/SD",
+                        "|Margin| / seed SD": Raw(r"$|$Margin$|$/SD"),
                         "Sign consistent": "Sign"},
                compact_caption=(
                    "Pairwise macro-F1 margins against seed noise. The margin is computed "
@@ -1051,6 +1155,7 @@ def main() -> int:
     table_efficiency(results)
     table_degradation(results)
     table_calibration(results)
+    table_calibration_compact(results)
     table_ranking_stability(results)
     print("figures:")
     figure_training_curves(results)

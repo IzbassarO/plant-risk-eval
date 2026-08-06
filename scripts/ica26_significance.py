@@ -55,6 +55,8 @@ from scipy import stats
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
+from ica26.experiments.latexfmt import Raw, cell, fmt_int  # noqa: E402
+
 RUNS = REPO / "experiments/ica26/runs"
 METRICS = REPO / "experiments/ica26/metrics"
 TABLES = REPO / "experiments/ica26/tables"
@@ -392,12 +394,17 @@ def analyse(seed: int) -> dict:
         "created_at_utc": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
         "seed": seed,
         "method": {
+            # Machine-readable alongside the prose, so a consumer never has to
+            # parse a number back out of a sentence.
+            "n_bootstrap": N_BOOTSTRAP,
+            "confidence_level": CONF,
+            "bootstrap_rng_seed": BOOTSTRAP_SEED,
             "paired_test": "McNemar exact binomial on per-item correctness",
             "multiplicity": (
                 f"Holm-Bonferroni across all {len(all_p)} pairwise tests in this file"
             ),
             "interval": (
-                f"BCa bootstrap, {N_BOOTSTRAP} resamples, {int(CONF * 100)}% level, "
+                f"BCa bootstrap, {fmt_int(N_BOOTSTRAP)} resamples, {int(CONF * 100)}% level, "
                 f"rng seed {BOOTSTRAP_SEED}"
             ),
             "label_space": (
@@ -445,16 +452,16 @@ def write_tables(payload: dict) -> None:
 
     _write_table(pd.DataFrame(ci_rows), "table8_confidence_intervals",
                  f"BCa bootstrap {int(CONF * 100)}\\% confidence intervals for accuracy and "
-                 f"macro-F1, seed {payload['seed']}, {N_BOOTSTRAP} resamples. Intervals "
+                 f"macro-F1, seed {payload['seed']}, {fmt_int(N_BOOTSTRAP)} resamples. Intervals "
                  "describe sampling variability of the fixed evaluation set for one trained "
                  "checkpoint; they are not seed variance, which is reported separately.",
                  "tab:confidence-intervals",
                  compact={"Setting": "Setting", "Model": "Model",
-                          "Accuracy 95% CI": "Accuracy 95\\% CI",
-                          "Macro-F1 95% CI": "Macro-F1 95\\% CI"},
+                          "Accuracy 95% CI": "Accuracy 95% CI",
+                          "Macro-F1 95% CI": "Macro-F1 95% CI"},
                  compact_caption=(
                      f"BCa bootstrap {int(CONF * 100)}\\% confidence intervals, seed "
-                     f"{payload['seed']}, {N_BOOTSTRAP} resamples. These describe sampling "
+                     f"{payload['seed']}, {fmt_int(N_BOOTSTRAP)} resamples. These describe sampling "
                      "variability of a fixed evaluation set for one trained checkpoint, and "
                      "are not seed variance --- which is reported separately and answers a "
                      "different question. Point estimates are in Tables~\\ref{tab:in-domain} "
@@ -466,8 +473,8 @@ def write_tables(payload: dict) -> None:
                  "rate across all pairwise tests reported here.",
                  "tab:mcnemar",
                  compact={"Setting": "Setting", "Comparison": "Comparison",
-                          "Diff.": "$\\Delta$ acc.", "Discordant": "Disc.",
-                          "p (exact)": "$p$", "p (Holm)": "$p$ (Holm)"},
+                          "Diff.": Raw(r"$\Delta$ acc."), "Discordant": "Disc.",
+                          "p (exact)": Raw(r"$p$"), "p (Holm)": Raw(r"$p$ (Holm)")},
                  compact_caption=(
                      f"Pairwise McNemar exact tests on per-item correctness, seed "
                      f"{payload['seed']}. Two models scored on one evaluation set are not "
@@ -487,7 +494,7 @@ def _fmt_p(p) -> str:
 
 # Corpus names repeat down the Setting column and are its widest cell.
 COMPACT_ABBREV = {
-    "PlantVillage -> PlantDoc Core": "PV $\\rightarrow$ PDC",
+    "PlantVillage -> PlantDoc Core": Raw(r"PV $\rightarrow$ PDC"),
     "PlantVillage in-domain": "PV in-domain",
     "PlantDoc Core in-domain": "PDC in-domain",
 }
@@ -515,9 +522,26 @@ def _write_table(df: pd.DataFrame, name: str, caption: str, label: str,
 
 
 def _emit(df: pd.DataFrame, name: str, caption: str, label: str, small: bool = False) -> None:
-    latex = df.to_latex(index=False, escape=True, caption=caption, label=label, position="htbp")
-    for raw, tex in (("±", r"$\pm$"), ("→", r"$\rightarrow$"), ("->", r"$\rightarrow$")):
-        latex = latex.replace(raw, tex)
+    """Escape data cells, pass authored markup through, then render.
+
+    pandas' ``escape=True`` cannot distinguish a value read from a result file
+    from a heading like ``$\\Delta$ acc.`` that this script wrote, and escaping
+    the latter prints ``\\textbackslash Delta`` in the PDF.
+    """
+    def render(v):
+        if isinstance(v, bool):
+            return cell(str(v))
+        if isinstance(v, (int, np.integer)):
+            return Raw(fmt_int(v))
+        return cell(v)
+
+    rendered = df.copy()
+    for column in rendered.columns:
+        rendered[column] = rendered[column].map(render)
+    rendered.columns = [cell(c) for c in rendered.columns]
+
+    latex = rendered.to_latex(index=False, escape=False, caption=caption,
+                              label=label, position="htbp")
     if small:
         latex = latex.replace(r"\begin{tabular}", "\\footnotesize\n\\centering\n\\begin{tabular}")
     (TABLES / f"{name}.tex").write_text(latex)
@@ -591,6 +615,97 @@ def cross_seed_consistency(per_seed: dict[int, dict]) -> list[dict]:
     return rows
 
 
+SHORT_MODEL = {
+    "ResNet-50": "RN50",
+    "EfficientNet-B0": "EB0",
+    "MobileNetV3-Small": "MNv3-S",
+}
+SHORT_SETTING = {
+    "PlantVillage in-domain": "PlantVillage (lab)",
+    "PlantDoc Core in-domain": "PlantDoc Core (field)",
+    "PlantVillage -> PlantDoc Core": Raw(r"PV $\rightarrow$ PDC (shift)"),
+}
+
+
+def write_consistency_table_compact(rows: list[dict]) -> None:
+    """Cross-seed consistency for the paper: three rows, not nine.
+
+    One row per evaluation setting, one column group per backbone pair. The
+    row-per-comparison form is nine rows and costs roughly a page; the argument
+    needs the same nine cells either way, so the page is bought back by rotating
+    rather than by dropping evidence.
+    """
+    if not rows:
+        return
+    by_key = {(r["setting"], r["comparison"]): r for r in rows}
+    settings = [s[0] for s in SETTINGS]
+    pairs: list[str] = []
+    for r in rows:
+        if r["comparison"] not in pairs:
+            pairs.append(r["comparison"])
+    if not pairs:
+        return
+
+    def short_pair(comparison: str) -> str:
+        a, b = comparison.split(" vs ")
+        return f"{SHORT_MODEL.get(a, a)} vs {SHORT_MODEL.get(b, b)}"
+
+    groups = " & ".join(
+        rf"\multicolumn{{3}}{{c}}{{{short_pair(p)}}}" for p in pairs)
+    rules = "".join(
+        rf"\cmidrule(lr){{{2 + 3 * i}-{4 + 3 * i}}}" for i in range(len(pairs)))
+    subhead = " & ".join([r"Evaluation"] +
+                         [x for _ in pairs for x in ("sig", "sgn", r"$\Delta$")])
+
+    body = []
+    for setting in settings:
+        cells = [cell(SHORT_SETTING.get(setting, setting))]
+        present = False
+        for pair in pairs:
+            r = by_key.get((setting, pair))
+            if r is None:
+                cells += ["--", "--", "--"]
+                continue
+            present = True
+            cells += [
+                f"{r['n_significant_holm']}/{r['n_seeds']}",
+                "yes" if r["sign_consistent"] else "no",
+                f"{r['mean_accuracy_difference']:+.4f}",
+            ]
+        if present:
+            body.append(cells)
+    if not body:
+        return
+
+    from ica26.experiments.latexfmt import cell as _c  # noqa: F401  (clarity)
+    lines = [
+        r"\begin{table}[htbp]",
+        r"\caption{Stability of each pairwise verdict across independent training "
+        r"seeds. `sig' counts the seeds in which the comparison is significant "
+        r"after Holm adjustment within that seed; `sgn' is whether the sign of the "
+        r"difference agrees across seeds; $\Delta$ is the mean accuracy "
+        r"difference. A comparison significant in every seed is a conclusion "
+        r"about the architectures; one significant in a single seed is a "
+        r"statement about that run. RN50 = ResNet-50, EB0 = EfficientNet-B0, "
+        r"MNv3-S = MobileNetV3-Small.}",
+        r"\label{tab:significance-across-seeds-compact}",
+        r"\scriptsize",
+        r"\centering",
+        r"\setlength{\tabcolsep}{4pt}",
+        rf"\begin{{tabular}}{{l{'ccc' * len(pairs)}}}",
+        r"\toprule",
+        rf" & {groups} \\",
+        rules,
+        rf"{subhead} \\",
+        r"\midrule",
+    ]
+    lines += [" & ".join(row) + r" \\" for row in body]
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}", ""]
+    (TABLES / "table9_significance_across_seeds_compact.tex").write_text("\n".join(lines))
+    print(f"  wrote table9_significance_across_seeds_compact.tex "
+          f"({len(body)} rows, transposed)")
+
+
 def write_consistency_table(rows: list[dict]) -> None:
     if not rows:
         return
@@ -609,9 +724,9 @@ def write_consistency_table(rows: list[dict]) -> None:
                  "a conclusion about the architectures; one significant in a single seed is "
                  "a statement about that run.",
                  "tab:significance-across-seeds",
-                 compact={"Setting": "Setting", "Comparison": "Comparison",
-                          "Significant (Holm)": "Sig. (Holm)",
-                          "Sign consistent": "Sign", "Mean acc. diff.": "$\\Delta$ acc."},
+                 # Compact variant is built transposed by
+                 # write_consistency_table_compact; nine rows costs a page.
+                 compact=None,
                  compact_caption=(
                      "Stability of each pairwise verdict across independent training seeds. "
                      "Each seed's McNemar test uses that seed's own checkpoints, Holm-adjusted "
@@ -656,6 +771,7 @@ def main() -> int:
         }
         ALL_SEEDS_OUT.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
         write_consistency_table(rows)
+        write_consistency_table_compact(rows)
         print(f"  wrote {ALL_SEEDS_OUT.relative_to(REPO)}")
         stable = sum(1 for r in rows if r["n_significant_holm"] == r["n_seeds"])
         never = sum(1 for r in rows if r["n_significant_holm"] == 0)
