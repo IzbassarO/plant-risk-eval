@@ -1,19 +1,22 @@
 \begin{table}[htbp]
-\caption{BCa bootstrap 95\% confidence intervals for accuracy and macro-F1, seed 42, 10000 resamples. Intervals describe sampling variability of the fixed evaluation set for one trained checkpoint; they are not seed variance, which is reported separately.}
+\caption{BCa bootstrap 95\% confidence intervals for accuracy and macro-F1, seed 42, 10\,000 resamples. Intervals describe sampling variability of the fixed evaluation set for one trained checkpoint; they are not seed variance, which is reported separately.}
 \label{tab:confidence-intervals}
-\begin{tabular}{llrllll}
+\small
+\centering
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lllllll}
 \toprule
 Setting & Model & N & Accuracy & Accuracy 95\% CI & Macro-F1 & Macro-F1 95\% CI \\
 \midrule
-PlantVillage in-domain & ResNet-50 & 10709 & 0.9925 & [0.9908, 0.9940] & 0.9899 & [0.9870, 0.9922] \\
-PlantVillage in-domain & EfficientNet-B0 & 10709 & 0.9968 & [0.9956, 0.9978] & 0.9956 & [0.9938, 0.9969] \\
-PlantVillage in-domain & MobileNetV3-Small & 10709 & 0.9950 & [0.9935, 0.9962] & 0.9927 & [0.9901, 0.9948] \\
+PlantVillage in-domain & ResNet-50 & 10\,709 & 0.9925 & [0.9908, 0.9940] & 0.9899 & [0.9870, 0.9922] \\
+PlantVillage in-domain & EfficientNet-B0 & 10\,709 & 0.9968 & [0.9956, 0.9978] & 0.9956 & [0.9938, 0.9969] \\
+PlantVillage in-domain & MobileNetV3-Small & 10\,709 & 0.9950 & [0.9935, 0.9962] & 0.9927 & [0.9901, 0.9948] \\
 PlantDoc Core in-domain & ResNet-50 & 225 & 0.6933 & [0.6311, 0.7511] & 0.6994 & [0.6526, 0.7721] \\
 PlantDoc Core in-domain & EfficientNet-B0 & 225 & 0.6800 & [0.6178, 0.7378] & 0.6927 & [0.6457, 0.7598] \\
 PlantDoc Core in-domain & MobileNetV3-Small & 225 & 0.5556 & [0.4889, 0.6222] & 0.5841 & [0.5352, 0.6675] \\
-PlantVillage $\rightarrow$ PlantDoc Core & ResNet-50 & 1951 & 0.2778 & [0.2584, 0.2978] & 0.2414 & [0.2253, 0.2595] \\
-PlantVillage $\rightarrow$ PlantDoc Core & EfficientNet-B0 & 1951 & 0.2742 & [0.2553, 0.2942] & 0.2359 & [0.2203, 0.2538] \\
-PlantVillage $\rightarrow$ PlantDoc Core & MobileNetV3-Small & 1951 & 0.2419 & [0.2230, 0.2609] & 0.1982 & [0.1831, 0.2158] \\
+PlantVillage -> PlantDoc Core & ResNet-50 & 1\,951 & 0.2778 & [0.2584, 0.2978] & 0.2414 & [0.2253, 0.2595] \\
+PlantVillage -> PlantDoc Core & EfficientNet-B0 & 1\,951 & 0.2742 & [0.2553, 0.2942] & 0.2359 & [0.2203, 0.2538] \\
+PlantVillage -> PlantDoc Core & MobileNetV3-Small & 1\,951 & 0.2419 & [0.2230, 0.2609] & 0.1982 & [0.1831, 0.2158] \\
 \bottomrule
 \end{tabular}
 \end{table}

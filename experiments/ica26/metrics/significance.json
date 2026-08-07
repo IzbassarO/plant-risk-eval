@@ -1,9 +1,12 @@
 {
-  "created_at_utc": "2026-08-05T07:37:12+00:00",
+  "created_at_utc": "2026-08-06T15:22:02+00:00",
   "method": {
-    "interval": "BCa bootstrap, 10000 resamples, 95% level, rng seed 20260805",
+    "bootstrap_rng_seed": 20260805,
+    "confidence_level": 0.95,
+    "interval": "BCa bootstrap, 10\\,000 resamples, 95% level, rng seed 20260805",
     "label_space": "Fixed to the classes present in the original evaluation, matching evaluate_classification; held constant across all replicates.",
     "multiplicity": "Holm-Bonferroni across all 9 pairwise tests in this file",
+    "n_bootstrap": 10000,
     "paired_test": "McNemar exact binomial on per-item correctness",
     "resampling": "Multinomial over the (true, predicted) contingency cells, which is exactly equivalent to resampling items with replacement for statistics that depend on the data only through that table."
   },

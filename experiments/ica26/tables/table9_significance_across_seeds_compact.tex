@@ -1,21 +1,18 @@
 \begin{table}[htbp]
-\caption{Stability of each pairwise verdict across independent training seeds. Each seed's McNemar test uses that seed's own checkpoints, Holm-adjusted within the seed. A comparison significant in every seed is a conclusion about the architectures; one significant in a single seed is a statement about that run.}
+\caption{Stability of each pairwise verdict across independent training seeds. `sig' counts the seeds in which the comparison is significant after Holm adjustment within that seed; `sgn' is whether the sign of the difference agrees across seeds; $\Delta$ is the mean accuracy difference. A comparison significant in every seed is a conclusion about the architectures; one significant in a single seed is a statement about that run. RN50 = ResNet-50, EB0 = EfficientNet-B0, MNv3-S = MobileNetV3-Small.}
 \label{tab:significance-across-seeds-compact}
-\footnotesize
+\scriptsize
 \centering
-\begin{tabular}{lllll}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lccccccccc}
 \toprule
-Setting & Comparison & Sig. (Holm) & Sign & \$\textbackslash Delta\$ acc. \\
+ & \multicolumn{3}{c}{RN50 vs EB0} & \multicolumn{3}{c}{RN50 vs MNv3-S} & \multicolumn{3}{c}{EB0 vs MNv3-S} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+Evaluation & sig & sgn & $\Delta$ & sig & sgn & $\Delta$ & sig & sgn & $\Delta$ \\
 \midrule
-PV in-domain & ResNet-50 vs EfficientNet-B0 & 1/3 & no & -0.0019 \\
-PV in-domain & ResNet-50 vs MobileNetV3-Small & 2/3 & no & -0.0003 \\
-PV in-domain & EfficientNet-B0 vs MobileNetV3-Small & 2/3 & yes & +0.0016 \\
-PDC in-domain & ResNet-50 vs EfficientNet-B0 & 0/3 & no & -0.0015 \\
-PDC in-domain & ResNet-50 vs MobileNetV3-Small & 2/3 & yes & +0.1037 \\
-PDC in-domain & EfficientNet-B0 vs MobileNetV3-Small & 3/3 & yes & +0.1052 \\
-PV \$\textbackslash rightarrow\$ PDC & ResNet-50 vs EfficientNet-B0 & 0/3 & no & -0.0070 \\
-PV \$\textbackslash rightarrow\$ PDC & ResNet-50 vs MobileNetV3-Small & 3/3 & yes & +0.0345 \\
-PV \$\textbackslash rightarrow\$ PDC & EfficientNet-B0 vs MobileNetV3-Small & 3/3 & yes & +0.0415 \\
+PlantVillage (lab) & 1/3 & no & -0.0019 & 2/3 & no & -0.0003 & 2/3 & yes & +0.0016 \\
+PlantDoc Core (field) & 0/3 & no & -0.0015 & 2/3 & yes & +0.1037 & 3/3 & yes & +0.1052 \\
+PV $\rightarrow$ PDC (shift) & 0/3 & no & -0.0070 & 3/3 & yes & +0.0345 & 3/3 & yes & +0.0415 \\
 \bottomrule
 \end{tabular}
 \end{table}

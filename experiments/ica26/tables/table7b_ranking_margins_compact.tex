@@ -1,18 +1,19 @@
 \begin{table}[htbp]
 \caption{Pairwise macro-F1 margins against seed noise. The margin is computed within each seed and then averaged; SD is the root-mean-square of the two models' across-seed standard deviations. A margin well above the seed SD with a consistent sign is a difference the seed alone does not explain. With three seeds these are descriptive ratios, not significance tests.}
 \label{tab:ranking-margins-compact}
-\footnotesize
+\scriptsize
 \centering
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lllll}
 \toprule
-Setting & Comparison & Margin & \$|\$Margin\$|\$/SD & Sign \\
+Setting & Comparison & Margin & $|$Margin$|$/SD & Sign \\
 \midrule
 PV in-domain & ResNet-50 - EfficientNet-B0 & -0.0023 $\pm$ 0.0032 & 1.11 & 2/3 \\
 PV in-domain & ResNet-50 - MobileNetV3-Small & 0.0000 $\pm$ 0.0031 & 0.02 & 2/3 \\
 PV in-domain & EfficientNet-B0 - MobileNetV3-Small & 0.0023 $\pm$ 0.0008 & 4.73 & 3/3 \\
-PV \$\textbackslash rightarrow\$ PDC & ResNet-50 - EfficientNet-B0 & -0.0009 $\pm$ 0.0077 & 0.10 & 2/3 \\
-PV \$\textbackslash rightarrow\$ PDC & ResNet-50 - MobileNetV3-Small & 0.0422 $\pm$ 0.0038 & 3.90 & 3/3 \\
-PV \$\textbackslash rightarrow\$ PDC & EfficientNet-B0 - MobileNetV3-Small & 0.0431 $\pm$ 0.0102 & 4.78 & 3/3 \\
+PV $\rightarrow$ PDC & ResNet-50 - EfficientNet-B0 & -0.0009 $\pm$ 0.0077 & 0.10 & 2/3 \\
+PV $\rightarrow$ PDC & ResNet-50 - MobileNetV3-Small & 0.0422 $\pm$ 0.0038 & 3.90 & 3/3 \\
+PV $\rightarrow$ PDC & EfficientNet-B0 - MobileNetV3-Small & 0.0431 $\pm$ 0.0102 & 4.78 & 3/3 \\
 PDC in-domain & ResNet-50 - EfficientNet-B0 & 0.0054 $\pm$ 0.0383 & 0.19 & 2/3 \\
 PDC in-domain & ResNet-50 - MobileNetV3-Small & 0.0947 $\pm$ 0.0352 & 3.43 & 3/3 \\
 PDC in-domain & EfficientNet-B0 - MobileNetV3-Small & 0.0893 $\pm$ 0.0185 & 8.30 & 3/3 \\

@@ -35,6 +35,10 @@ import numpy as np
 import pandas as pd
 
 REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "src"))
+
+from ica26.experiments.latexfmt import fmt_int  # noqa: E402
+
 METRICS = REPO / "experiments/ica26/metrics"
 LOCK = REPO / "data/manifests/ica26_core_experiment_lock.json"
 OUT = REPO / "paper/generated/results_macros.tex"
@@ -95,10 +99,9 @@ def num(x, places: int = 4) -> str | None:
 
 
 def integer(x) -> str | None:
-    """Thousands-separated integer, using a thin space that survives math mode."""
-    if x is None:
-        return None
-    return f"{int(x):,}".replace(",", r"\,")
+    """Thousands-separated integer. Shared with the table generator so one
+    quantity cannot read two ways on facing pages."""
+    return None if x is None else fmt_int(x)
 
 
 def agg(values, places: int = 4) -> str | None:
@@ -111,6 +114,19 @@ def agg(values, places: int = 4) -> str | None:
         return rf"\ensuremath{{{arr[0]:.{places}f}}}"
     return (rf"\ensuremath{{{arr.mean():.{places}f} \pm "
             rf"{arr.std(ddof=1):.{places}f}}}")
+
+
+def agg_from(mean: float | None, sd: float | None, places: int = 4) -> str | None:
+    """Format an already-computed mean and standard deviation.
+
+    Same convention as :func:`agg`: a missing standard deviation prints the bare
+    mean rather than claiming a variance estimate that does not exist.
+    """
+    if mean is None:
+        return None
+    if sd is None:
+        return rf"\ensuremath{{{mean:.{places}f}}}"
+    return rf"\ensuremath{{{mean:.{places}f} \pm {sd:.{places}f}}}"
 
 
 def mean_only(values, places: int = 4) -> str | None:
@@ -324,6 +340,101 @@ def build() -> tuple[str, dict]:
         m.add(f"AbsDropF{mtag}", agg(abs_f1), section)
         m.add(f"RelDropFMean{mtag}", mean_only(rel_f1, 1), section)
 
+    # ---- majority-class baseline on the cross-domain set ---------------------- #
+    # Derived from the frozen evaluation set's label distribution, not trained:
+    # a predictor that always emits the most frequent shared class. Without it a
+    # reader cannot tell whether 0.23 macro-F1 over 21 classes is good or awful.
+    xd_any = next((blocks_for(runs, "pv", m, "cross_domain_plantdoc_core")
+                   for m in MODEL_TAG if blocks_for(runs, "pv", m, "cross_domain_plantdoc_core")),
+                  None)
+    if xd_any:
+        supports = {pc["class_name"]: pc["support"] for pc in xd_any[0]["per_class"]}
+        n_total = sum(supports.values())
+        n_classes = len(supports)
+        majority = max(supports.values())
+        acc = majority / n_total
+        # Every prediction lands on one class: that class has recall 1 and
+        # precision majority/n; every other class scores 0 under
+        # zero_division=0, matching evaluate_classification.
+        precision = majority / n_total
+        f1_majority = 2 * precision / (precision + 1.0)
+        m.add("AccXdMajority", num(acc), "cross-domain majority baseline")
+        m.add("MacroFXdMajority", num(f1_majority / n_classes),
+              "cross-domain majority baseline")
+        m.add("XdMajorityClass",
+              r"\texttt{" + max(supports, key=supports.get).replace("_", r"\_") + "}",
+              "cross-domain majority baseline")
+    else:
+        for name in ("AccXdMajority", "MacroFXdMajority", "XdMajorityClass"):
+            m.add(name, None, "cross-domain majority baseline")
+
+    # ---- single-seed point estimates paired with the bootstrap intervals ------ #
+    # The intervals are computed on one seed, so the point estimate quoted beside
+    # them must be that seed's, not the across-seed mean.
+    sig_seed = sig["seed"] if sig else None
+    for model, mtag in MODEL_TAG.items():
+        res = runs.get(f"pv_{model}_s{sig_seed}") if sig_seed else None
+        block = (res or {}).get("evaluations", {}).get("cross_domain_plantdoc_core")
+        m.add(f"MacroFXd{mtag}S", num(block["macro_f1"]) if block else None,
+              "cross-domain, significance seed only")
+
+    # ---- calibration transport ------------------------------------------------ #
+    # How much worse the in-domain temperature makes out-of-domain calibration.
+    # Computed within a seed and then averaged: the ratio belongs to a
+    # checkpoint and its own two evaluations of the same images.
+    for model, mtag in MODEL_TAG.items():
+        ratios = []
+        for seed in SEEDS:
+            res = runs.get(f"pv_{model}_s{seed}")
+            if not res:
+                continue
+            plain = res["evaluations"].get("cross_domain_plantdoc_core")
+            scaled = res["evaluations"].get("cross_domain_plantdoc_core_temperature_scaled")
+            if not (plain and scaled):
+                continue
+            base = plain["probabilistic"]["expected_calibration_error"]
+            if base:
+                ratios.append(
+                    scaled["probabilistic"]["expected_calibration_error"] / base)
+        m.add(f"EceRatio{mtag}", mean_only(ratios, 2), "calibration transport")
+
+    # Largest across-seed spread of the fitted temperature, over the
+    # PlantVillage-trained models only. Those are the checkpoints whose
+    # temperature is transported across the shift, so they are what the claim
+    # is about; the PlantDoc-trained temperatures are six times more variable
+    # and pooling them would overstate the spread by an order of magnitude.
+    temp_sds = []
+    for model in MODEL_TAG:
+        temps = [runs[f"pv_{model}_s{s}"]["calibration"]["temperature"]
+                 for s in SEEDS
+                 if f"pv_{model}_s{s}" in runs
+                 and "calibration" in runs[f"pv_{model}_s{s}"]]
+        if len(temps) > 1:
+            temp_sds.append(float(np.std(temps, ddof=1)))
+    m.add("TempSdMax", num(max(temp_sds), 4) if temp_sds else None,
+          "calibration transport")
+
+    # ---- 21-class in-domain control ------------------------------------------ #
+    # PlantVillage test scored through the identical shared-space pipeline, so
+    # the comparison is 21-way to 21-way and the label-space change is removed
+    # from the drop. Written by scripts/ica26_shared_space_control.py.
+    control_path = METRICS / "shared_space_control.json"
+    control = json.loads(control_path.read_text()) if control_path.exists() else None
+    for model, mtag in MODEL_TAG.items():
+        s = (control or {}).get("summary", {}).get(model)
+        m.add(f"MacroFPvInShared{mtag}",
+              None if not s else agg_from(s["macro_f1_in_domain_shared_mean"],
+                                          s["macro_f1_in_domain_shared_sd"]),
+              "21-class in-domain control")
+        m.add(f"RelDropFShared{mtag}",
+              None if not s else agg_from(s["relative_drop_percent_mean"],
+                                          s["relative_drop_percent_sd"], places=1),
+              "21-class in-domain control")
+    m.add("NPvTestShared",
+          None if not control else integer(
+              next(iter(control["per_run"].values()))["n_evaluated"]),
+          "21-class in-domain control")
+
     # ---- retained probability mass ------------------------------------------ #
     for model, mtag in MODEL_TAG.items():
         blocks = blocks_for(runs, "pv", model, "cross_domain_plantdoc_core")
@@ -360,7 +471,7 @@ def build() -> tuple[str, dict]:
     # ---- significance -------------------------------------------------------- #
     if sig:
         m.add("SigSeed", sig["seed"], "significance")
-        m.add("NBootstrap", integer(sig["method"]["interval"].split()[2]), "significance")
+        m.add("NBootstrap", integer(sig["method"]["n_bootstrap"]), "significance")
         for setting in sig["settings"]:
             stag = SIG_SETTING_TAG.get(setting["setting"])
             if not stag:

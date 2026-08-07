@@ -24,6 +24,13 @@ echo "== regenerating tables and figures from result files =="
 "$PY" scripts/ica26_build_tables.py || { echo "table build FAILED"; exit 1; }
 
 echo
+echo "== fitting tables to their text blocks =="
+# Measures each table by compiling it against the real document class and picks
+# the largest type that fits. Must run after the tables are generated and before
+# LaTeX, since it rewrites the size prologue in each .tex.
+"$PY" scripts/ica26_fit_tables.py || { echo "table fitting FAILED"; exit 1; }
+
+echo
 echo "== regenerating result macros =="
 "$PY" scripts/ica26_build_paper_macros.py || { echo "macro build FAILED"; exit 1; }
 
@@ -57,6 +64,18 @@ if [ -z "$TECTONIC" ]; then
   echo "Install with: brew install tectonic"
   exit 0
 fi
+
+echo
+echo "== preflight =="
+# A single missing \input aborts LaTeX with "Emergency stop". Everything after
+# it is never typeset, so the PDF truncates silently and every citation and
+# cross-reference in the document renders as [?] or ?? -- because the run never
+# reached \bibliography. The symptom looks like a bibliography problem, which is
+# why this runs before the compiler rather than after a confusing failure.
+for entry in ica2026.tex supplementary.tex; do
+  "$PY" scripts/ica26_preflight.py --root "$PAPER" --entry "$entry" \
+    || { echo "preflight FAILED for $entry; not compiling"; exit 1; }
+done
 
 echo
 echo "== compiling supplementary =="

@@ -1,7 +1,10 @@
 \begin{table}[htbp]
 \caption{Pairwise McNemar exact tests on per-item correctness, seed 42. `A only' and `B only' are the discordant counts the test is computed from. Holm-adjusted p-values control the family-wise error rate across all pairwise tests reported here.}
 \label{tab:mcnemar}
-\begin{tabular}{lllllrrrll}
+\scriptsize
+\centering
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{llllllllll}
 \toprule
 Setting & Comparison & Acc. A & Acc. B & Diff. & A only & B only & Discordant & p (exact) & p (Holm) \\
 \midrule
@@ -11,9 +14,9 @@ PlantVillage in-domain & EfficientNet-B0 vs MobileNetV3-Small & 0.9968 & 0.9950 
 PlantDoc Core in-domain & ResNet-50 vs EfficientNet-B0 & 0.6933 & 0.6800 & +0.0133 & 20 & 17 & 37 & 0.7428 & 1.0000 \\
 PlantDoc Core in-domain & ResNet-50 vs MobileNetV3-Small & 0.6933 & 0.5556 & +0.1378 & 48 & 17 & 65 & 0.0002 & 0.0012 \\
 PlantDoc Core in-domain & EfficientNet-B0 vs MobileNetV3-Small & 0.6800 & 0.5556 & +0.1244 & 47 & 19 & 66 & 0.0008 & 0.0045 \\
-PlantVillage $\rightarrow$ PlantDoc Core & ResNet-50 vs EfficientNet-B0 & 0.2778 & 0.2742 & +0.0036 & 179 & 172 & 351 & 0.7488 & 1.0000 \\
-PlantVillage $\rightarrow$ PlantDoc Core & ResNet-50 vs MobileNetV3-Small & 0.2778 & 0.2419 & +0.0359 & 207 & 137 & 344 & 0.0002 & 0.0013 \\
-PlantVillage $\rightarrow$ PlantDoc Core & EfficientNet-B0 vs MobileNetV3-Small & 0.2742 & 0.2419 & +0.0323 & 205 & 142 & 347 & 0.0008 & 0.0045 \\
+PlantVillage -> PlantDoc Core & ResNet-50 vs EfficientNet-B0 & 0.2778 & 0.2742 & +0.0036 & 179 & 172 & 351 & 0.7488 & 1.0000 \\
+PlantVillage -> PlantDoc Core & ResNet-50 vs MobileNetV3-Small & 0.2778 & 0.2419 & +0.0359 & 207 & 137 & 344 & 0.0002 & 0.0013 \\
+PlantVillage -> PlantDoc Core & EfficientNet-B0 vs MobileNetV3-Small & 0.2742 & 0.2419 & +0.0323 & 205 & 142 & 347 & 0.0008 & 0.0045 \\
 \bottomrule
 \end{tabular}
 \end{table}

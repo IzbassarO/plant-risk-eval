@@ -204,15 +204,18 @@
       "verdict": "significant in all seeds"
     }
   ],
-  "created_at_utc": "2026-08-05T19:03:57+00:00",
+  "created_at_utc": "2026-08-06T15:23:37+00:00",
   "note": "Each seed is analysed independently and Holm-adjusted within that seed. p-values are not pooled across seeds: three runs is far too few to justify a meta-analytic combination, and the useful question is whether a verdict is stable, not what its combined p-value is.",
   "per_seed": {
     "42": {
-      "created_at_utc": "2026-08-05T19:03:52+00:00",
+      "created_at_utc": "2026-08-06T15:23:33+00:00",
       "method": {
-        "interval": "BCa bootstrap, 10000 resamples, 95% level, rng seed 20260805",
+        "bootstrap_rng_seed": 20260805,
+        "confidence_level": 0.95,
+        "interval": "BCa bootstrap, 10\\,000 resamples, 95% level, rng seed 20260805",
         "label_space": "Fixed to the classes present in the original evaluation, matching evaluate_classification; held constant across all replicates.",
         "multiplicity": "Holm-Bonferroni across all 9 pairwise tests in this file",
+        "n_bootstrap": 10000,
         "paired_test": "McNemar exact binomial on per-item correctness",
         "resampling": "Multinomial over the (true, predicted) contingency cells, which is exactly equivalent to resampling items with replacement for statistics that depend on the data only through that table."
       },
@@ -645,11 +648,14 @@
       ]
     },
     "1337": {
-      "created_at_utc": "2026-08-05T19:03:55+00:00",
+      "created_at_utc": "2026-08-06T15:23:35+00:00",
       "method": {
-        "interval": "BCa bootstrap, 10000 resamples, 95% level, rng seed 20260805",
+        "bootstrap_rng_seed": 20260805,
+        "confidence_level": 0.95,
+        "interval": "BCa bootstrap, 10\\,000 resamples, 95% level, rng seed 20260805",
         "label_space": "Fixed to the classes present in the original evaluation, matching evaluate_classification; held constant across all replicates.",
         "multiplicity": "Holm-Bonferroni across all 9 pairwise tests in this file",
+        "n_bootstrap": 10000,
         "paired_test": "McNemar exact binomial on per-item correctness",
         "resampling": "Multinomial over the (true, predicted) contingency cells, which is exactly equivalent to resampling items with replacement for statistics that depend on the data only through that table."
       },
@@ -1082,11 +1088,14 @@
       ]
     },
     "2026": {
-      "created_at_utc": "2026-08-05T19:03:57+00:00",
+      "created_at_utc": "2026-08-06T15:23:37+00:00",
       "method": {
-        "interval": "BCa bootstrap, 10000 resamples, 95% level, rng seed 20260805",
+        "bootstrap_rng_seed": 20260805,
+        "confidence_level": 0.95,
+        "interval": "BCa bootstrap, 10\\,000 resamples, 95% level, rng seed 20260805",
         "label_space": "Fixed to the classes present in the original evaluation, matching evaluate_classification; held constant across all replicates.",
         "multiplicity": "Holm-Bonferroni across all 9 pairwise tests in this file",
+        "n_bootstrap": 10000,
         "paired_test": "McNemar exact binomial on per-item correctness",
         "resampling": "Multinomial over the (true, predicted) contingency cells, which is exactly equivalent to resampling items with replacement for statistics that depend on the data only through that table."
       },

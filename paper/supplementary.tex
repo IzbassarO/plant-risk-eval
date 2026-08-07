@@ -17,6 +17,10 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{longtable}
+% Four tables exceed even the 180 mm supplementary measure and are rotated by
+% scripts/ica26_fit_tables.py, which measures each table against the real class
+% and picks the largest type that fits.
+\usepackage{rotating}
 \usepackage[hidelinks]{hyperref}
 
 \graphicspath{{../experiments/ica26/figures/}}

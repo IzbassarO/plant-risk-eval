@@ -1,11 +1,12 @@
 \begin{table}[htbp]
 \caption{Domain-shift degradation in macro-F1, mean $\pm$ sample standard deviation over three seeds. Drops are computed within each seed and then averaged, preserving the pairing between a checkpoint and its own cross-domain evaluation. The label spaces differ (38-way in domain, 21-way cross-domain), so this is a paired trend across models, not an isolated quantity. Accuracy-based drops are in the supplementary table.}
 \label{tab:degradation-compact}
-\footnotesize
+\scriptsize
 \centering
+\setlength{\tabcolsep}{5pt}
 \begin{tabular}{lllll}
 \toprule
-Model & F1 in-dom. & F1 cross-dom. & Abs. drop & Rel. drop (\textbackslash \%) \\
+Model & F1 in-dom. & F1 cross-dom. & Abs. drop & Rel. drop (\%) \\
 \midrule
 ResNet-50 & 0.9927 $\pm$ 0.0029 & 0.2291 $\pm$ 0.0107 & 0.7636 $\pm$ 0.0131 & 76.92 $\pm$ 1.13 \\
 EfficientNet-B0 & 0.9950 $\pm$ 0.0006 & 0.2300 $\pm$ 0.0065 & 0.7650 $\pm$ 0.0064 & 76.89 $\pm$ 0.65 \\

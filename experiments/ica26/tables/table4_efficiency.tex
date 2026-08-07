@@ -1,7 +1,10 @@
 \begin{table}[htbp]
 \caption{Model efficiency, mean $\pm$ sample standard deviation over three seeds. Epoch counts vary between seeds because early stopping fires at different points, so training time is reported alongside seconds per epoch. Latency and throughput are measured after warm-up on the accelerator reported in the run metadata.}
 \label{tab:efficiency}
-\begin{tabular}{llrrllllll}
+\tiny
+\centering
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llllllllll}
 \toprule
 Model & Dataset & Seeds & Params (M) & Epochs & Train time (min) & s / epoch & Latency b1 (ms) & Throughput (img/s) & Peak mem (MB) \\
 \midrule

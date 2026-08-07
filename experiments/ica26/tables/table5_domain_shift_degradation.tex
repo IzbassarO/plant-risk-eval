@@ -1,7 +1,10 @@
-\begin{table}[htbp]
+\begin{sidewaystable}[htbp]
 \caption{Domain-shift degradation, mean $\pm$ sample standard deviation over three seeds. Drops are computed within each seed and then averaged, preserving the pairing between a checkpoint and its own cross-domain evaluation. In-domain is the PlantVillage test split over 38 classes; cross-domain is the PlantDoc Core shared-class subset over 21 classes. The two label spaces differ, so the drop combines domain shift with the change of task difficulty and should be read as a paired trend across models rather than as an isolated quantity.}
 \label{tab:degradation}
-\begin{tabular}{lrllllllll}
+\scriptsize
+\centering
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{llllllllll}
 \toprule
 Model & Seeds & Accuracy (in-domain) & Accuracy (cross-domain) & Accuracy abs. drop & Accuracy rel. drop \% & Macro-F1 (in-domain) & Macro-F1 (cross-domain) & Macro-F1 abs. drop & Macro-F1 rel. drop \% \\
 \midrule
@@ -10,4 +13,4 @@ EfficientNet-B0 & 3 & 0.9964 $\pm$ 0.0005 & 0.2653 $\pm$ 0.0102 & 0.7310 $\pm$ 0
 MobileNetV3-Small & 3 & 0.9948 $\pm$ 0.0004 & 0.2238 $\pm$ 0.0162 & 0.7710 $\pm$ 0.0162 & 77.50 $\pm$ 1.63 & 0.9927 $\pm$ 0.0004 & 0.1869 $\pm$ 0.0109 & 0.8058 $\pm$ 0.0111 & 81.17 $\pm$ 1.10 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{sidewaystable}
