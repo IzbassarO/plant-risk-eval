@@ -1,0 +1,178 @@
+% ICA 2026 supplementary material -- anonymized for double-blind review.
+%
+% Everything here is generated. This document exists so the main paper can cite
+% a compact table without discarding the metrics it leaves out: each compact
+% table in the paper has its full counterpart here, with every metric the
+% evaluation computed.
+%
+% Like the main paper, this file contains no literal experimental number.
+%
+% Table files are read from ONE directory, the same one the main paper reads, so
+% that a table cannot be regenerated for one document and stale in the other.
+% Point \tabledir at whatever the build script stages into.
+%
+% Build:  bash scripts/ica26_build_paper.sh
+\documentclass[runningheads]{llncs}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{longtable}
+% Several full tables carry every metric the evaluation computed and do not fit
+% the text block upright even at \tiny. They are rotated rather than shrunk
+% past legibility, which needs this package.
+\usepackage{rotating}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{figures/}}
+
+\input{results_macros}
+\input{results_macros_additions}
+
+% Tables here are wider than the LNCS text block by design: they carry every
+% metric rather than a chosen subset. The whole document therefore uses a wider
+% text block, and the tables that still do not fit are rotated by
+% scripts/ica26_fix_tables.py.
+\usepackage[margin=15mm,a4paper]{geometry}
+
+\begin{document}
+
+\title{Supplementary Material\\
+\large From Laboratory to Field: A Leakage-Controlled Cross-Domain
+Evaluation Protocol for Plant Disease Recognition}
+
+\author{Anonymous Author(s)}
+\authorrunning{Anonymous Author(s)}
+\institute{Affiliation withheld for double-blind review}
+
+\maketitle
+
+\noindent
+This supplement carries the complete metric tables behind the compact versions
+in the main paper, the per-seed values every aggregate is computed from, and the
+per-run diagnostic figures. Nothing here is a new result: it is the same
+artifacts at full width.
+
+All values come from \texttt{experiments/ica26/metrics/*.json} via
+\texttt{scripts/ica26\_build\_tables.py} and
+\texttt{scripts/ica26\_significance.py}, then sized for the page by
+\texttt{scripts/ica26\_fix\_tables.py}, which changes no value. The corpus is
+bound to dataset lock \LockDigest{}. This version covers \NRunsDone{} of
+\NRunsPlanned{} planned runs across seeds \SeedList{}.
+
+\section{Dataset Provenance and Leakage Control}
+
+\input{tables/table1b_dataset_provenance.tex}
+
+\noindent
+``Previous effective'' is the acquired population after byte-exact duplicate
+adjudication and before the reviewed exclusions; ``retained reviewed'' and
+``excluded reviewed'' partition the images the review touched. The two exclusion
+counts sum to the difference between the acquired and Core totals.
+
+\section{Complete Performance Tables}
+
+\input{tables/table2_in_domain_performance.tex}
+\input{tables/table3_cross_domain_performance.tex}
+\input{tables/table5_domain_shift_degradation.tex}
+\input{tables/table5_domain_shift_degradation_compact.tex}
+
+\section{Efficiency}
+
+\input{tables/table4_efficiency.tex}
+
+\noindent
+Throughput for EfficientNet-B0 on PlantDoc Core has a standard deviation
+comparable to its mean. That measurement is contended rather than
+representative: the three runs were timed on a shared host under different
+background load. Latency at batch size one, measured after warm-up, is the
+stable figure and is the one the main paper reasons from.
+
+\section{Complete Calibration and Selective Prediction}
+
+\input{tables/table6_calibration.tex}
+
+\section{Ranking Stability Across Seeds}
+
+\input{tables/table7_ranking_stability.tex}
+\input{tables/table7b_ranking_margins.tex}
+
+\noindent
+The ``UNSTABLE'' verdict in the first table refers to the \emph{full three-way}
+ordering, which does not reproduce in any of the three settings. That is not in
+tension with the main paper's cross-domain claim, which is about a
+\emph{partial} order: MobileNetV3-Small ranks below both larger backbones on
+every seed in both field settings. The full ordering is unstable everywhere
+because it inherits the instability of the ResNet-50 against EfficientNet-B0
+comparison, which the main paper declines to resolve.
+
+\section{Statistical Tests}
+
+\input{tables/table8_confidence_intervals.tex}
+\input{tables/table8b_mcnemar.tex}
+\input{tables/table9_significance_across_seeds.tex}
+
+\noindent
+The confidence intervals and the per-comparison McNemar table are computed on
+seed \SigSeed{}. The stability table recomputes every McNemar test on each
+seed's own checkpoints, Holm-adjusted within that seed; no $p$-value is pooled
+across seeds.
+
+\section{Training Curves}
+
+Every seed is drawn rather than averaged. Early stopping fires at different
+epochs, so a mean curve over epoch index would silently truncate to the earliest
+stop and misrepresent the runs that trained longer.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{fig_training_curves.pdf}
+\caption{Training loss and validation macro-F1. Colour is the backbone, dash
+pattern is the seed.}
+\end{figure}
+
+\section{Risk--Coverage and Seed Spread}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{fig_risk_coverage.pdf}
+\caption{Confidence--abstention curves, seed-averaged on a common coverage
+grid with a $\pm$ one standard deviation band.}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{fig_seed_spread.pdf}
+\caption{Backbone macro-F1 by evaluation setting: mean with a seed standard
+deviation bar, and each individual seed drawn beside it. With three seeds the
+individual points carry more information than the interval computed from them.}
+\end{figure}
+
+\section{Per-Run Diagnostics}
+
+Confusion matrices and reliability diagrams are generated for every run and
+evaluation. They are released as individual files rather than reproduced here,
+since the full set runs to dozens of figures:
+
+\begin{itemize}
+\item \texttt{experiments/ica26/figures/fig\_confusion\_<run>\_<eval>.pdf}
+\item \texttt{experiments/ica26/figures/fig\_reliability\_<run>.pdf}
+\end{itemize}
+
+\section{Per-Seed Values}
+
+Every aggregated table above has a per-seed companion in CSV, so each reported
+mean and standard deviation can be recomputed without rerunning any experiment:
+
+\begin{itemize}
+\item \texttt{table2\_in\_domain\_performance\_per\_seed.csv}
+\item \texttt{table3\_cross\_domain\_performance\_per\_seed.csv}
+\item \texttt{table4\_efficiency\_per\_seed.csv}
+\item \texttt{table5\_domain\_shift\_degradation\_per\_seed.csv}
+\item \texttt{table6\_calibration\_per\_seed.csv}
+\end{itemize}
+
+\end{document}

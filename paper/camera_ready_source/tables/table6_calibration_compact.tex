@@ -1,0 +1,18 @@
+\begin{table}[htbp]
+\caption{Expected calibration error of the PlantVillage-trained models, mean $\pm$ sample standard deviation over three seeds. `with $T$' applies the temperature fitted on the in-domain validation split, unchanged. Temperature does not move the argmax, so accuracy is identical in every column. PlantDoc-trained calibration and the fitted temperatures are in the supplementary table.}
+\label{tab:calibration-compact}
+\scriptsize
+\centering
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lcccc}
+\toprule
+ & \multicolumn{2}{c}{PlantVillage test} & \multicolumn{2}{c}{PlantDoc Core (shift)} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+Model & uncalibrated & with $T$ & uncalibrated & with $T$ \\
+\midrule
+ResNet-50 & 0.0987 $\pm$ 0.0113 & 0.0092 $\pm$ 0.0011 & 0.2829 $\pm$ 0.0459 & 0.4178 $\pm$ 0.0533 \\
+EfficientNet-B0 & 0.1015 $\pm$ 0.0069 & 0.0095 $\pm$ 0.0013 & 0.2561 $\pm$ 0.0186 & 0.3973 $\pm$ 0.0192 \\
+MobileNetV3-Small & 0.0988 $\pm$ 0.0025 & 0.0091 $\pm$ 0.0003 & 0.1517 $\pm$ 0.0139 & 0.2938 $\pm$ 0.0128 \\
+\bottomrule
+\end{tabular}
+\end{table}

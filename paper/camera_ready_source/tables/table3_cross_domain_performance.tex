@@ -1,0 +1,13 @@
+\begin{table}[htbp]
+\caption{Cross-domain generalisation, mean $\pm$ sample standard deviation over three seeds: PlantVillage-trained models evaluated on the frozen shared-class PlantDoc Core subset. Metrics are computed only over the 21 shared classes; unmapped PlantDoc images are excluded from the evaluation set rather than counted as errors. Retained probability mass is the share of the source model's belief falling inside the shared space before renormalisation.}
+\label{tab:cross-domain}
+\begin{tabular}{llrrllllllrl}
+\toprule
+Model & Dataset & Seeds & N & Accuracy & Macro-F1 & Weighted-F1 & Balanced Acc. & Macro Prec. & Macro Rec. & Shared classes & Retained prob. mass \\
+\midrule
+ResNet-50 & PlantVillage $\rightarrow$ PlantDoc Core & 3 & 1951 & 0.2583 $\pm$ 0.0206 & 0.2291 $\pm$ 0.0107 & 0.2512 $\pm$ 0.0138 & 0.2389 $\pm$ 0.0188 & 0.3629 $\pm$ 0.0197 & 0.2389 $\pm$ 0.0188 & 21 & 0.6367 $\pm$ 0.0945 \\
+EfficientNet-B0 & PlantVillage $\rightarrow$ PlantDoc Core & 3 & 1951 & 0.2653 $\pm$ 0.0102 & 0.2300 $\pm$ 0.0065 & 0.2528 $\pm$ 0.0078 & 0.2475 $\pm$ 0.0110 & 0.3455 $\pm$ 0.0257 & 0.2475 $\pm$ 0.0110 & 21 & 0.6595 $\pm$ 0.0086 \\
+MobileNetV3-Small & PlantVillage $\rightarrow$ PlantDoc Core & 3 & 1951 & 0.2238 $\pm$ 0.0162 & 0.1869 $\pm$ 0.0109 & 0.2013 $\pm$ 0.0160 & 0.2141 $\pm$ 0.0135 & 0.3090 $\pm$ 0.0248 & 0.2141 $\pm$ 0.0135 & 21 & 0.5662 $\pm$ 0.0477 \\
+\bottomrule
+\end{tabular}
+\end{table}
