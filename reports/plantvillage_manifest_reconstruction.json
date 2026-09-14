@@ -1,0 +1,30 @@
+{
+  "all_pixels_materialized": true,
+  "config": "color",
+  "duplicated_identities": 0,
+  "equal": true,
+  "expected_records": 54305,
+  "expected_test": 10709,
+  "expected_train": 43596,
+  "extra_records": 0,
+  "immutable_revision": "9e97599868962bd0079b8db4b7f1efa9185fa1e7",
+  "leaf_map_entries": 40328,
+  "manifest_sha256": "b9acc43637ef2e930bd9e5e8a09b1d5025c720d65f9dd3fc9aabdfbd7e399591",
+  "missing_records": 0,
+  "order_matches": true,
+  "persisted_records": 54305,
+  "pixel_verification": {
+    "checked": true,
+    "problems": 0,
+    "verified": 54305
+  },
+  "problems": [],
+  "reconstructed": true,
+  "schema": "ica26.plantvillage.manifest_reconstruction/1",
+  "source_components": [
+    "leaf_grouping/leaf-map.json",
+    "splits/color_test.txt",
+    "splits/color_train.txt"
+  ],
+  "value_mismatches": 0
+}

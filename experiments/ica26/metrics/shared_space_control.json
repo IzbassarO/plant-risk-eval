@@ -1,0 +1,144 @@
+{
+  "created_at_utc": "2026-08-06T15:20:34+00:00",
+  "description": "PlantVillage in-domain test performance restricted to the shared cross-domain label space, scored through the identical grouping and renormalisation used cross-domain. Holds task difficulty fixed at 21 classes so the remaining gap is domain shift alone.",
+  "per_run": {
+    "pv_efficientnet_b0_s1337": {
+      "accuracy": 0.9981419546636938,
+      "balanced_accuracy": 0.9978318841875742,
+      "macro_f1": 0.9979262065912418,
+      "mean_retained_probability_mass_before_renormalisation": 0.948651,
+      "n_classes_present": 21,
+      "n_evaluated": 5382,
+      "n_in_domain_test_total": 10709,
+      "n_shared_classes": 21,
+      "run_id": "pv_efficientnet_b0_s1337",
+      "weighted_f1": 0.998141215941367
+    },
+    "pv_efficientnet_b0_s2026": {
+      "accuracy": 0.9972129319955407,
+      "balanced_accuracy": 0.9965618749145949,
+      "macro_f1": 0.9971727089400546,
+      "mean_retained_probability_mass_before_renormalisation": 0.9553,
+      "n_classes_present": 21,
+      "n_evaluated": 5382,
+      "n_in_domain_test_total": 10709,
+      "n_shared_classes": 21,
+      "run_id": "pv_efficientnet_b0_s2026",
+      "weighted_f1": 0.9972107848067725
+    },
+    "pv_efficientnet_b0_s42": {
+      "accuracy": 0.9986993682645856,
+      "balanced_accuracy": 0.9984947974280234,
+      "macro_f1": 0.9987533239972259,
+      "mean_retained_probability_mass_before_renormalisation": 0.953474,
+      "n_classes_present": 21,
+      "n_evaluated": 5382,
+      "n_in_domain_test_total": 10709,
+      "n_shared_classes": 21,
+      "run_id": "pv_efficientnet_b0_s42",
+      "weighted_f1": 0.9986986848153088
+    },
+    "pv_mobilenet_v3_small_s1337": {
+      "accuracy": 0.9973987365291713,
+      "balanced_accuracy": 0.9970865083558764,
+      "macro_f1": 0.9975272894915573,
+      "mean_retained_probability_mass_before_renormalisation": 0.949502,
+      "n_classes_present": 21,
+      "n_evaluated": 5382,
+      "n_in_domain_test_total": 10709,
+      "n_shared_classes": 21,
+      "run_id": "pv_mobilenet_v3_small_s1337",
+      "weighted_f1": 0.9973987016145569
+    },
+    "pv_mobilenet_v3_small_s2026": {
+      "accuracy": 0.9966555183946488,
+      "balanced_accuracy": 0.9962058460126938,
+      "macro_f1": 0.9966075338060879,
+      "mean_retained_probability_mass_before_renormalisation": 0.949535,
+      "n_classes_present": 21,
+      "n_evaluated": 5382,
+      "n_in_domain_test_total": 10709,
+      "n_shared_classes": 21,
+      "run_id": "pv_mobilenet_v3_small_s2026",
+      "weighted_f1": 0.9966544211127276
+    },
+    "pv_mobilenet_v3_small_s42": {
+      "accuracy": 0.9966555183946488,
+      "balanced_accuracy": 0.9955509317131757,
+      "macro_f1": 0.9957829429709464,
+      "mean_retained_probability_mass_before_renormalisation": 0.952409,
+      "n_classes_present": 21,
+      "n_evaluated": 5382,
+      "n_in_domain_test_total": 10709,
+      "n_shared_classes": 21,
+      "run_id": "pv_mobilenet_v3_small_s42",
+      "weighted_f1": 0.9966532002997927
+    },
+    "pv_resnet50_s1337": {
+      "accuracy": 0.9949832775919732,
+      "balanced_accuracy": 0.9945700698627393,
+      "macro_f1": 0.9951368112568764,
+      "mean_retained_probability_mass_before_renormalisation": 0.945224,
+      "n_classes_present": 21,
+      "n_evaluated": 5382,
+      "n_in_domain_test_total": 10709,
+      "n_shared_classes": 21,
+      "run_id": "pv_resnet50_s1337",
+      "weighted_f1": 0.9949755059733857
+    },
+    "pv_resnet50_s2026": {
+      "accuracy": 0.9979561501300632,
+      "balanced_accuracy": 0.9971470852043951,
+      "macro_f1": 0.9977992884196741,
+      "mean_retained_probability_mass_before_renormalisation": 0.954924,
+      "n_classes_present": 21,
+      "n_evaluated": 5382,
+      "n_in_domain_test_total": 10709,
+      "n_shared_classes": 21,
+      "run_id": "pv_resnet50_s2026",
+      "weighted_f1": 0.9979547873824358
+    },
+    "pv_resnet50_s42": {
+      "accuracy": 0.9916387959866221,
+      "balanced_accuracy": 0.9907733821588703,
+      "macro_f1": 0.9910715643560593,
+      "mean_retained_probability_mass_before_renormalisation": 0.957545,
+      "n_classes_present": 21,
+      "n_evaluated": 5382,
+      "n_in_domain_test_total": 10709,
+      "n_shared_classes": 21,
+      "run_id": "pv_resnet50_s42",
+      "weighted_f1": 0.991651444658917
+    }
+  },
+  "schema": "ica26.shared_space_control/1",
+  "summary": {
+    "efficientnet_b0": {
+      "macro_f1_cross_domain_mean": 0.229999408180616,
+      "macro_f1_in_domain_shared_mean": 0.9979507465095074,
+      "macro_f1_in_domain_shared_sd": 0.0007905932237443898,
+      "model": "EfficientNet-B0",
+      "n_seeds": 3,
+      "relative_drop_percent_mean": 76.95315986127146,
+      "relative_drop_percent_sd": 0.6365048782249599
+    },
+    "mobilenet_v3_small": {
+      "macro_f1_cross_domain_mean": 0.1869399210094623,
+      "macro_f1_in_domain_shared_mean": 0.9966392554228638,
+      "macro_f1_in_domain_shared_sd": 0.0008726058054585952,
+      "model": "MobileNetV3-Small",
+      "n_seeds": 3,
+      "relative_drop_percent_mean": 81.24232269677196,
+      "relative_drop_percent_sd": 1.1137355439189147
+    },
+    "resnet50": {
+      "macro_f1_cross_domain_mean": 0.22912286578472793,
+      "macro_f1_in_domain_shared_mean": 0.9946692213442033,
+      "macro_f1_in_domain_shared_sd": 0.0033881481688174324,
+      "model": "ResNet-50",
+      "n_seeds": 3,
+      "relative_drop_percent_mean": 76.96261103471996,
+      "relative_drop_percent_sd": 1.147715032343988
+    }
+  }
+}

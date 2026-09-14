@@ -282,7 +282,7 @@ def test_effective_record_count_is_derived_not_asserted(repo_root):
     assert len(_rows(repo_root / EFFECTIVE_CSV)) == len(source) - removed
 
 
-def test_persisted_and_freshly_reconstructed_identity_sets_are_equal(repo_root):
+def test_persisted_and_freshly_reconstructed_identity_sets_are_equal(repo_root, plantdoc_pixels):
     """A full rebuild from the authoritative manifest, compared by identity."""
     source = _rows(repo_root / MANIFEST_CSV)
     groups = find_duplicate_groups(
@@ -329,7 +329,7 @@ def test_gate_has_no_wall_clock_field(gate):
     assert "generated_at" not in gate
 
 
-def test_remediation_is_idempotent(repo_root):
+def test_remediation_is_idempotent(repo_root, plantdoc_pixels):
     """A second execution must change nothing at all."""
     before = {p: (repo_root / p).read_bytes()
               for p in (EFFECTIVE_CSV, RESOLUTION_CSV, GATE_JSON)}

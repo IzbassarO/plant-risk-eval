@@ -193,13 +193,27 @@ def step_plantvillage(data_dir: Path, config: str = "color", do_download: bool =
             raise PV.SourcePinError(
                 f"local data.zip digest {observed} != pinned {expected}; the cached "
                 "archive is not the frozen revision's")
-        components.append({"component": "data.zip", "repo": PLANTVILLAGE_REPO,
-                           "revision": PLANTVILLAGE_REV, "requested_path": "data.zip",
-                           "resolved_url": f"https://huggingface.co/datasets/{PLANTVILLAGE_REPO}"
-                                           f"/resolve/{PLANTVILLAGE_REV}/data.zip",
-                           "expected_sha256": expected or "", "observed_sha256": observed,
-                           "digest_verified": bool(expected) and observed == expected,
-                           "source": "local cache"})
+        locator = (f"https://huggingface.co/datasets/{PLANTVILLAGE_REPO}"
+                   f"/resolve/{PLANTVILLAGE_REV}/data.zip")
+        verified = bool(expected) and observed == expected
+        components.append({
+            "component": "data.zip",
+            "source_repository": PLANTVILLAGE_REPO,
+            "immutable_revision": PLANTVILLAGE_REV,
+            "source_path": "data.zip",
+            "resolved_locator": locator,
+            "expected_sha256": expected or "",
+            "observed_sha256": observed,
+            "byte_count": int(Path(zip_path).stat().st_size),
+            "digest_verified": verified,
+            "verification_status": "verified" if verified else "unverified",
+            # Compatibility aliases for existing operational logs.
+            "repo": PLANTVILLAGE_REPO,
+            "revision": PLANTVILLAGE_REV,
+            "requested_path": "data.zip",
+            "resolved_url": locator,
+            "source": "local cache",
+        })
 
     # Determine the color relpaths from the authoritative split files (pinned).
     tr, tr_prov = PV.fetch_pinned(f"splits/{config}_train.txt", revision=PLANTVILLAGE_REV,
@@ -221,11 +235,34 @@ def step_plantvillage(data_dir: Path, config: str = "color", do_download: bool =
         raise RuntimeError(f"could not locate images root for sample '{sample_rel}' under {extract_dir}")
     log(f"PlantVillage: images_root={images_root}")
 
+    # The per-record acquisition stamp describes when these local pixels entered
+    # the workspace, not when their provenance is re-checked.  Preserve a
+    # consistent existing stamp on an idempotent verification run so byte-identical
+    # source data does not churn all 54k manifest rows (and falsely stale every
+    # downstream bound gate).
+    existing_stamp = None
+    existing_manifest = man_dir / "plantvillage_manifest.csv"
+    if existing_manifest.exists():
+        import csv
+        with open(existing_manifest, newline="", encoding="utf-8") as fh:
+            stamps = {str(r.get("acquired_at_utc") or "").strip()
+                      for r in csv.DictReader(fh)}
+        if len(stamps) == 1 and next(iter(stamps)):
+            existing_stamp = next(iter(stamps))
+            log(f"PlantVillage: preserving existing acquisition stamp {existing_stamp}")
+        elif stamps:
+            log("PlantVillage: existing manifest has inconsistent acquisition stamps; "
+                "recording a new stamp rather than choosing one")
+
     out = PV.acquire_from_repo(
         config=config, images_root=images_root,
         manifest_csv=man_dir / "plantvillage_manifest.csv",
         summary_json=man_dir / "plantvillage_summary.json",
         snapshot_json=man_dir / "plantvillage_source_snapshot.json",
+        # The manifest builder refuses pixel materialization without this record:
+        # it is the verified identity of the archive those pixels came from.
+        archive_component=components[0],
+        acquired_at_utc=existing_stamp,
     )
     df = out["manifest"]
     secs = time.perf_counter() - t0
@@ -286,9 +323,14 @@ def step_plantvillage(data_dir: Path, config: str = "color", do_download: bool =
     # provenance the module recorded, keyed by component so neither is lost.
     merged = {c["component"]: c for c in
               (out["snapshot"].get("components") or []) + components}
-    summary["source_components"] = [merged[k] for k in sorted(merged)]
-    summary["all_components_pinned"] = all(
-        c["revision"] == PLANTVILLAGE_REV for c in merged.values())
+    # `acquire_from_repo` has already emitted a strict persisted provenance
+    # record.  Refuse a partial driver/standalone disagreement rather than
+    # replacing that record with a weaker summary-only assertion.
+    merged_components = [merged[k] for k in sorted(merged)]
+    if merged_components != out["snapshot"].get("source_components"):
+        raise RuntimeError(
+            "PlantVillage provenance disagreement after acquisition; refusing to "
+            "write a summary that is not identical to its persisted source snapshot")
     M.write_summary(summary, man_dir / "plantvillage_summary.json")
     log(f"PlantVillage: rows={n} pixels={n_pixels} corrupt={n_corrupt} "
         f"decode {decode_ok}/{len(sample_idx)} sha {sha_ok}/{sha_checked} "
@@ -302,7 +344,11 @@ def step_plantvillage(data_dir: Path, config: str = "color", do_download: bool =
 def step_leakage(data_dir: Path, repo_dir: Path, pv_images_root: Path,
                  threshold: int = PHASH_THRESHOLD) -> dict:
     import pandas as pd
-    from ica26.leakage.phash import index_from_manifest, find_duplicates
+    from ica26.leakage.phash import (
+        candidate_search_audit_fields,
+        find_duplicates,
+        index_from_manifest,
+    )
 
     man_dir = data_dir / "manifests"
     reports = repo_dir / "reports"
@@ -313,6 +359,29 @@ def step_leakage(data_dir: Path, repo_dir: Path, pv_images_root: Path,
     pv_man = man_dir / "plantvillage_manifest.csv"
     pd_man = man_dir / "plantdoc_manifest.csv"
     pd_root = data_dir / "raw" / "plantdoc"
+
+    # Pair and exclusion artifacts are control-plane inputs to the leakage gate.
+    # Refuse to replace them unless each endpoint can carry the current manifest
+    # identity.  The legacy path wrote an older path-only shape here, which made
+    # a normal `--steps leakage` invocation downgrade already-canonical files.
+    tr_sha, tr_cls = _manifest_identity_index(pv_man, side="training")
+    ev_sha, ev_cls = _manifest_identity_index(pd_man, side="evaluation")
+
+    from ica26.leakage.gate import CANONICAL_PAIR_SCHEMA, PairIdentity
+
+    def identity(t_rel: str, e_rel: str, distance: int, classification: str) -> PairIdentity:
+        try:
+            return PairIdentity(
+                training_dataset="PlantVillage", training_relpath=t_rel,
+                training_class=tr_cls[t_rel], training_sha256=tr_sha[t_rel],
+                evaluation_dataset="PlantDoc", evaluation_relpath=e_rel,
+                evaluation_class=ev_cls[e_rel], evaluation_sha256=ev_sha[e_rel],
+                phash_distance=int(distance), classification=classification,
+            )
+        except KeyError as exc:
+            raise RuntimeError(
+                "refusing to write leakage control-plane artifacts: detected "
+                f"endpoint {exc.args[0]!r} is absent from its manifest") from exc
 
     log("leakage: indexing PlantVillage (color, training source)")
     idx_train, skip_train = index_from_manifest(pv_man, pv_images_root, "PlantVillage")
@@ -333,11 +402,16 @@ def step_leakage(data_dir: Path, repo_dir: Path, pv_images_root: Path,
         out = []
         for _, r in df.iterrows():
             pending = classification == "near"
+            ident = identity(r["path_a"], r["path_b"], r["distance"], classification)
             out.append({
+                "canonical_pair_id": ident.canonical_pair_id,
+                "pair_schema": CANONICAL_PAIR_SCHEMA,
                 "training_relpath": r["path_a"],
                 "evaluation_relpath": r["path_b"],
-                "training_class": r["class_a"],
-                "evaluation_class": r["class_b"],
+                "training_class": ident.training_class,
+                "evaluation_class": ident.evaluation_class,
+                "training_sha256": ident.training_sha256,
+                "evaluation_sha256": ident.evaluation_sha256,
                 "training_phash": hmap_a.get(r["path_a"], ""),
                 "evaluation_phash": hmap_b.get(r["path_b"], ""),
                 "hamming_distance": int(r["distance"]),
@@ -352,7 +426,9 @@ def step_leakage(data_dir: Path, repo_dir: Path, pv_images_root: Path,
         return out
 
     all_rows = rows(res["exact"], "exact") + rows(res["near"], "near")
-    cols = ["training_relpath", "evaluation_relpath", "training_class", "evaluation_class",
+    cols = ["canonical_pair_id", "pair_schema",
+            "training_relpath", "evaluation_relpath", "training_class", "evaluation_class",
+            "training_sha256", "evaluation_sha256",
             "training_phash", "evaluation_phash", "hamming_distance", "classification",
             "review_status", "proposed_disposition", "notes"]
     pairs_df = pd.DataFrame(all_rows, columns=cols)
@@ -374,6 +450,10 @@ def step_leakage(data_dir: Path, repo_dir: Path, pv_images_root: Path,
         "phash_algorithm": res["summary"]["phash_algorithm"],
         "hash_size_bits": res["summary"]["hash_size_bits"],
         "threshold": threshold,
+        # Persist the candidate-search contract and its scalability telemetry,
+        # not only the duplicate counts.  In this cross-dataset report side A is
+        # training (PlantVillage) and side B is evaluation (PlantDoc).
+        **candidate_search_audit_fields(res["summary"]),
         "n_training_indexed": int(len(idx_train)),
         "n_evaluation_indexed": int(len(idx_eval)),
         "skipped_training": len(skip_train),
@@ -394,13 +474,18 @@ def step_leakage(data_dir: Path, repo_dir: Path, pv_images_root: Path,
     # Exact cross-dataset duplicates -> proposed exclusion of the EVALUATION image.
     excl_rows = []
     for _, r in res["exact"].iterrows():
+        ident = identity(r["path_a"], r["path_b"], r["distance"], "exact")
         excl_rows.append({
+            "canonical_pair_id": ident.canonical_pair_id,
+            "pair_schema": CANONICAL_PAIR_SCHEMA,
             "evaluation_dataset": "PlantDoc",
             "evaluation_relpath": r["path_b"],
-            "evaluation_class": r["class_b"],
+            "evaluation_class": ident.evaluation_class,
+            "evaluation_sha256": ident.evaluation_sha256,
             "training_dataset": "PlantVillage",
             "training_relpath": r["path_a"],
-            "training_class": r["class_a"],
+            "training_class": ident.training_class,
+            "training_sha256": ident.training_sha256,
             "hamming_distance": int(r["distance"]),
             "reason": "exact cross-dataset perceptual-hash duplicate with a training image",
             "provenance": f"{res['summary']['phash_algorithm']} d=0 vs PlantVillage color @ {PLANTVILLAGE_REV[:8]}",
@@ -408,8 +493,9 @@ def step_leakage(data_dir: Path, repo_dir: Path, pv_images_root: Path,
             "status": "proposed",
         })
     excl_df = pd.DataFrame(excl_rows, columns=[
-        "evaluation_dataset", "evaluation_relpath", "evaluation_class",
-        "training_dataset", "training_relpath", "training_class",
+        "canonical_pair_id", "pair_schema",
+        "evaluation_dataset", "evaluation_relpath", "evaluation_class", "evaluation_sha256",
+        "training_dataset", "training_relpath", "training_class", "training_sha256",
         "hamming_distance", "reason", "provenance", "action", "status"])
     if len(excl_df):
         excl_df = excl_df.sort_values(["evaluation_relpath", "training_relpath"]).reset_index(drop=True)
@@ -448,6 +534,54 @@ def step_leakage(data_dir: Path, repo_dir: Path, pv_images_root: Path,
             "n_pending": n_pending, "n_excluded": len(excl_df),
             "skipped": len(skip_train) + len(skip_eval),
             "pv_images_root": str(pv_images_root)}
+
+
+def _manifest_identity_index(manifest_csv: Path, *, side: str) -> tuple[dict[str, str], dict[str, str]]:
+    """Return authoritative endpoint digests/classes or fail before artifact rewrite.
+
+    The leakage gate binds a canonical identity that includes each endpoint's
+    digest and class.  A legacy producer must never silently fall back to a
+    path-only record if a manifest is malformed or lacks that identity data.
+    """
+    import csv
+
+    try:
+        with open(manifest_csv, newline="", encoding="utf-8") as fh:
+            reader = csv.DictReader(fh)
+            fields = set(reader.fieldnames or ())
+            required = {"relpath", "class_label", "sha256"}
+            missing = sorted(required - fields)
+            if missing:
+                raise RuntimeError(
+                    "refusing to write leakage control-plane artifacts: "
+                    f"{side} manifest {manifest_csv} lacks required column(s) {missing}")
+
+            hashes: dict[str, str] = {}
+            classes: dict[str, str] = {}
+            for row_number, row in enumerate(reader, start=2):
+                relpath = (row.get("relpath") or "").strip()
+                class_label = (row.get("class_label") or "").strip()
+                digest = (row.get("sha256") or "").strip()
+                if not relpath or not class_label or not _is_sha256(digest):
+                    raise RuntimeError(
+                        "refusing to write leakage control-plane artifacts: "
+                        f"{side} manifest row {row_number} lacks a canonical endpoint "
+                        "identity (relpath, class_label, or sha256)")
+                if relpath in hashes:
+                    raise RuntimeError(
+                        "refusing to write leakage control-plane artifacts: "
+                        f"{side} manifest has duplicate relpath {relpath!r}")
+                hashes[relpath] = digest
+                classes[relpath] = class_label
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "refusing to write leakage control-plane artifacts: "
+            f"{side} manifest is absent: {manifest_csv}") from exc
+    return hashes, classes
+
+
+def _is_sha256(value: str) -> bool:
+    return len(value) == 64 and all(ch in "0123456789abcdefABCDEF" for ch in value)
 
 
 def step_gate(data_dir: Path, repo_dir: Path, pv_images_root: Path,

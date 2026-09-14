@@ -1,4 +1,4 @@
-"""Scalable pHash index: parity with brute force, no reversed/self pairs, BK-tree."""
+"""Scalable pHash index: parity, identity fields and deterministic pairs."""
 from __future__ import annotations
 
 import numpy as np
@@ -56,12 +56,18 @@ def test_no_self_pairs_and_no_reversed_pairs():
     assert pairs == [("a", "b")]           # exactly one, a<b, no (a,a)/(b,b)/(b,a)
 
 
-def test_bktree_query_correct():
-    tree = phash.BKTree()
+def test_recursive_hamming_search_query_correct():
     vals = [0x0, 0x1, 0x3, 0xFF, 0xFFFF]
-    for v in vals:
-        tree.add(v, v)
-    got = {payload for (_k, payload, d) in tree.query(0x0, 2)}
+    idx = phash.build_index([
+        {"dataset": "d", "path": str(v), "phash": format(v, "016x")}
+        for v in vals
+    ])
+    query = phash.build_index([
+        {"dataset": "q", "path": "zero", "phash": "0000000000000000"}
+    ])
+    result = phash.find_duplicates(query, idx, threshold=2)
+    got = {int(value) for value in result["exact"]["path_b"]}
+    got.update(int(value) for value in result["near"]["path_b"])
     # within Hamming 2 of 0: 0 (0 bits), 1 (1 bit), 3 (2 bits)
     assert got == {0x0, 0x1, 0x3}
 

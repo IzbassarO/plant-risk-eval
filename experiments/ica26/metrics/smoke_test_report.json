@@ -1,0 +1,64 @@
+{
+  "all_passed": true,
+  "gates": [
+    {
+      "detail": "lock_digest=83449f6013691855\u2026",
+      "gate": 1,
+      "passed": true,
+      "seconds": 0.5,
+      "title": "experiment dataset lock validates"
+    },
+    {
+      "detail": "plantvillage=54305 plantdoc_core=2561 (all Core pixels present)",
+      "gate": 2,
+      "passed": true,
+      "seconds": 0.22,
+      "title": "both datasets load from their manifests"
+    },
+    {
+      "detail": "PlantVillage 38 classes / 54,305; PlantDoc Core 28 classes / 2,561; indices match the lock",
+      "gate": 3,
+      "passed": true,
+      "seconds": 0.2,
+      "title": "class indices and sample counts match the lock"
+    },
+    {
+      "detail": "device=mps: resnet50(params=23,585,894, loss=3.668), efficientnet_b0(params=4,056,226, loss=3.592), mobilenet_v3_small(params=1,556,806, loss=3.632)",
+      "gate": 4,
+      "passed": true,
+      "seconds": 3.79,
+      "title": "mini-batch forward/backward for all three models"
+    },
+    {
+      "detail": "completed smoke_pdc_resnet50, smoke_pdc_efficientnet_b0, smoke_pdc_mobilenet_v3_small, smoke_pv_mobilenet_v3_small",
+      "gate": 5,
+      "passed": true,
+      "seconds": 233.06,
+      "title": "one-epoch run on a deterministic subset (all three models)"
+    },
+    {
+      "detail": "smoke_pdc_resnet50(ckpt=92342KB), smoke_pdc_efficientnet_b0(ckpt=16064KB), smoke_pdc_mobilenet_v3_small(ckpt=6159KB), smoke_pv_mobilenet_v3_small(ckpt=6200KB)",
+      "gate": 6,
+      "passed": true,
+      "seconds": 0.01,
+      "title": "checkpoint saving and metric generation"
+    },
+    {
+      "detail": "21 shared classes, 1951 evaluated, 610 excluded as unmapped (total 2561)",
+      "gate": 7,
+      "passed": true,
+      "seconds": 0.01,
+      "title": "cross-domain evaluation over the frozen shared classes"
+    }
+  ],
+  "hardware": {
+    "backend": "mps",
+    "cuda_device_name": null,
+    "device": "mps",
+    "machine": "arm64",
+    "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "torch_version": "2.13.0",
+    "torchvision_version": "0.28.0"
+  },
+  "schema": "ica26.smoke_test_report/1"
+}

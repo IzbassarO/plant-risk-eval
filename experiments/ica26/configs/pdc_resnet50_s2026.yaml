@@ -1,0 +1,28 @@
+# Derived from pdc_resnet50_s42.yaml by scripts/ica26_make_seed_configs.py.
+# Seed repetition: `seed` and `experiment_id` differ from the source; every
+# other protocol value is identical and is verified to be so by --check.
+# ICA 2026 experiment configuration.
+# One common protocol across all six runs; only `dataset`, `model`, and the two
+# documented PlantDoc exceptions vary. See reports/ICA26_EXPERIMENT_PROTOCOL.md.
+experiment_id: pdc_resnet50_s2026
+dataset: plantdoc_core
+model: resnet50
+seed: 2026
+image_size: 224
+batch_size: 64
+eval_batch_size: 128
+epochs: 15
+early_stopping_patience: 3
+lr: 3.0e-4
+weight_decay: 1.0e-4
+label_smoothing: 0.1
+val_fraction: 0.1
+scheduler: cosine
+optimizer: adamw
+amp: true
+num_workers: 6
+pretrained: true
+class_weighting: inverse_frequency
+cross_domain_eval: false
+calibrate: true
+notes: "PlantDoc Core in-domain training. class_weighting=inverse_frequency is a documented dataset exception: PlantDoc Core train is imbalanced 90:1 (Corn leaf blight 180 images vs the arthropod-pest class at 2). A balanced sampler would oversample that 2-image class ~90x and overfit it, so the gentler class-weighted loss is used instead."

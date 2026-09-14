@@ -22,8 +22,9 @@ Outputs under reports/plantdoc_exact_duplicate_review/:
     plantdoc_exact_duplicate_groups.csv     one row per group, decisions blank
     plantdoc_exact_duplicate_members.csv    two immutable rows per group
     PLANTDOC_EXACT_DUPLICATE_HUMAN_REVIEW.md
-    contact_sheet_*.png                     both members, full and uncropped
-    packet_manifest.json                    SHA-256 of every packet artifact
+    packet_manifest.json                    SHA-256 of every TRACKED artifact
+    contact_sheet_*.png                     derived review aids, regenerated
+                                            locally from the untracked pixels
     README.md                               how to review the packet
 
 Deterministic: identical inputs produce byte-identical outputs, so the packet can
@@ -113,6 +114,70 @@ def render_csv(columns, rows) -> str:
     return buf.getvalue()
 
 
+#: Groups per rendered contact sheet. The ONLY input to how many sheets exist,
+#: so their names are a function of the data rather than of the filesystem.
+GROUPS_PER_SHEET = 3
+
+#: How the sheets are rendered, recorded in the packet manifest so a reader
+#: knows what the reviewer looked at and can regenerate an equivalent view.
+#:
+#: Deliberately a *configuration*, not a digest. The renderer resolves system
+#: fonts by absolute macOS paths and falls back silently to a bitmap face
+#: elsewhere, PNG bytes depend on the Pillow and zlib versions, and the source
+#: pixels live under the untracked `data/raw/`. Pinning PNG digests in a tracked
+#: contract therefore made the packet unverifiable anywhere but one workstation
+#: -- which is exactly the failure this replaces. The repository already treats
+#: sheet identity as cosmetic; see `prepare_human_review.py`'s pair-identity
+#: fields and `test_contact_sheet_repaging_is_not_identity_drift`.
+CONTACT_SHEET_RENDERING = {
+    "format": "PNG",
+    "groups_per_sheet": GROUPS_PER_SHEET,
+    "panel_pixels": [660, 440],
+    "thumbnail_box_pixels": 300,
+    "fit": "contain-full-image-no-crop",
+    "regenerate_with": "python scripts/build_plantdoc_duplicate_packet.py",
+    "note": "Derived review aids regenerated from the untracked raw pixels. "
+            "They carry no decision and no evidence that is not already in the "
+            "tracked CSV and Markdown artifacts, so they are not digest-bound.",
+}
+
+
+def contact_sheet_names(n_groups: int) -> list[str]:
+    """The sheet filenames implied by the group count. No filesystem access."""
+    pages = (n_groups + GROUPS_PER_SHEET - 1) // GROUPS_PER_SHEET
+    return [f"contact_sheet_{page + 1:02d}.png" for page in range(pages)]
+
+
+def render_manifest(agg, artifacts: dict, sheets) -> str:
+    """Digest the rendered text of every tracked artifact.
+
+    Digests are taken from the in-memory text, never from files on disk, so an
+    artifact that cannot be re-derived from tracked inputs cannot enter the
+    manifest by construction. The manifest cannot digest itself, but it is
+    itself a rendered artifact and `--check` compares it like any other, so a
+    hand-edited manifest is still caught.
+    """
+    entries = {name: hashlib.sha256(text.encode("utf-8")).hexdigest()
+               for name, text in sorted(artifacts.items())}
+    return json.dumps({
+        "_note": "SHA-256 of every TRACKED packet artifact, taken from its "
+                 "rendered text. No wall-clock field, so the packet is "
+                 "byte-deterministic and can be re-derived and compared on any "
+                 "machine, including a fresh clone with no raw pixels.",
+        "dataset": "PlantDoc",
+        "source_revision": SOURCE_REVISION,
+        "group_schema": DUPLICATE_GROUP_SCHEMA,
+        "aggregate": agg,
+        "artifacts": entries,
+        "rendered_derivatives": {
+            "contact_sheets": list(sheets),
+            "rendering": CONTACT_SHEET_RENDERING,
+            "tracked": False,
+            "required_for_validation": False,
+        },
+    }, indent=2, sort_keys=True) + "\n"
+
+
 # --------------------------------------------------------------------------- #
 # Contact sheets
 # --------------------------------------------------------------------------- #
@@ -141,7 +206,8 @@ def _contain(im, box: int, bg=(235, 235, 235)):
     return canvas
 
 
-def build_contact_sheets(groups, display, out_dir: Path, per_page: int = 3) -> list[str]:
+def build_contact_sheets(groups, display, out_dir: Path,
+                         per_page: int = GROUPS_PER_SHEET) -> list[str]:
     from PIL import Image, ImageDraw
 
     BOX = 300
@@ -279,8 +345,8 @@ def render_readme(agg, sheets) -> str:
         "| `PLANTDOC_EXACT_DUPLICATE_HUMAN_REVIEW.md` | The checklist. Read this first. |",
         "| `plantdoc_exact_duplicate_groups.csv` | One row per group. **Write decisions here.** |",
         "| `plantdoc_exact_duplicate_members.csv` | Two immutable evidence rows per group. Do not edit. |",
-        "| `contact_sheet_*.png` | Full uncropped images of both members of each group. |",
-        "| `packet_manifest.json` | SHA-256 of every artifact above, for integrity checking. |", "",
+        "| `contact_sheet_*.png` | Full uncropped images of both members. Derived review aids, regenerated locally; not tracked. |",
+        "| `packet_manifest.json` | SHA-256 of every tracked artifact above, for integrity checking. |", "",
         "## Steps", "",
         "1. Open the contact sheets and look at each pair. The bytes are already proved "
         "identical; you are judging what that means scientifically.",
@@ -313,6 +379,9 @@ def main(argv=None) -> int:
     ap.add_argument("--check", action="store_true",
                     help="verify the packet matches current data; write nothing")
     ap.add_argument("--packet-dir", default=str(PACKET_DIR))
+    ap.add_argument("--no-contact-sheets", action="store_true",
+                    help="skip rendering the derived PNG review aids "
+                         "(they need the untracked raw pixels)")
     args = ap.parse_args(argv)
 
     manifest_path = REPO / MANIFEST
@@ -385,10 +454,12 @@ def main(argv=None) -> int:
                 "member_id": ids[m.active_relative_path], **m.as_dict(),
             })
 
-    sheets = ([] if args.check
-              else build_contact_sheets(ordered, display, packet))
-    if args.check:
-        sheets = sorted(p.name for p in packet.glob("contact_sheet_*.png"))
+    # Sheet names come from the DATA -- how many groups, how many per page --
+    # not from whatever PNGs happen to be lying in the directory. Globbing made
+    # the Markdown depend on local, gitignored files, so a fresh clone rendered
+    # a different document and `--check` failed on a checkout that was in fact
+    # perfectly current.
+    sheets = contact_sheet_names(len(ordered))
 
     artifacts = {
         "plantdoc_exact_duplicate_groups.csv": render_csv(GROUP_COLUMNS, group_rows),
@@ -396,6 +467,10 @@ def main(argv=None) -> int:
         "PLANTDOC_EXACT_DUPLICATE_HUMAN_REVIEW.md": render_markdown(ordered, display, agg, sheets),
         "README.md": render_readme(agg, sheets),
     }
+    # The manifest digests the rendered TEXT rather than files on disk, so
+    # nothing that cannot be re-derived from tracked inputs can enter it. This
+    # is how the second-review packet was built from the start.
+    artifacts["packet_manifest.json"] = render_manifest(agg, artifacts, sheets)
 
     if args.check:
         stale = [n for n, text in artifacts.items()
@@ -409,21 +484,19 @@ def main(argv=None) -> int:
     for name, text in artifacts.items():
         atomic_write_text(packet / name, text)
 
-    manifest_entries = {}
-    for name in sorted(list(artifacts) + sheets):
-        manifest_entries[name] = sha256_of(packet / name)
-    atomic_write_text(packet / "packet_manifest.json", json.dumps({
-        "_note": "SHA-256 of every packet artifact. No wall-clock field, so the "
-                 "packet is byte-deterministic and can be re-derived and compared.",
-        "dataset": "PlantDoc",
-        "source_revision": SOURCE_REVISION,
-        "group_schema": DUPLICATE_GROUP_SCHEMA,
-        "aggregate": agg,
-        "artifacts": manifest_entries,
-    }, indent=2, sort_keys=True) + "\n")
+    rendered: list[str] = []
+    if not args.no_contact_sheets:
+        try:
+            rendered = build_contact_sheets(ordered, display, packet)
+        except Exception as exc:  # noqa: BLE001
+            # The sheets need the raw pixels, which are deliberately untracked.
+            # Their absence must not stop the packet's tracked evidence being
+            # written, and it must not be silent either.
+            print(f"[dup-packet] contact sheets not rendered ({type(exc).__name__}: "
+                  f"{exc}); the packet's tracked evidence is unaffected")
 
-    print(f"[dup-packet] wrote {len(artifacts) + len(sheets) + 1} artifact(s) to "
-          f"{args.packet_dir}")
+    print(f"[dup-packet] wrote {len(artifacts)} tracked artifact(s) and "
+          f"{len(rendered)} rendered sheet(s) to {args.packet_dir}")
     # Report what the decision columns actually hold. A hard-coded "no decision
     # was made" would keep printing after a human had decided, which is exactly
     # the kind of stale reassurance this packet exists to avoid.

@@ -19,16 +19,16 @@
       "title": "PlantDoc is acquired to the frozen upstream snapshot"
     },
     {
-      "detail": "pixels_materialized=True; 54305 image(s)",
-      "evidence": "data/manifests/plantvillage_summary.json",
-      "evidence_digest": "ac2dd31b16a66787e29066ee816937347aa97e208ffab142a8227bab81ba8014",
+      "detail": "54305 image(s); archive, split files, and leaf map all revision- and digest-verified",
+      "evidence": "data/manifests/plantvillage_source_snapshot.json",
+      "evidence_digest": "62105e4f2cf53ae23f19f2111d5077df7c92d0fbb5b59b09c3d1af0af493fd23",
       "id": "plantvillage_materialized",
       "kind": "machine",
       "status": "satisfied",
-      "title": "PlantVillage pixels are materialized"
+      "title": "PlantVillage pixels are materialized from one pinned, verified source chain"
     },
     {
-      "detail": "schema 2.1, exact 0, near 16 all resolved, 0 unresolved, 0 violations, every bound input digest current",
+      "detail": "schema 2.1, exact 0, near 16 all resolved, 0 unresolved, 0 violations, every required bound input digest current",
       "evidence": "reports/leakage_gate.json",
       "evidence_digest": "d5c720192dbe109c22e60ff07f4c23714b83df7302d48bcadb94c78bbcdb1b3c",
       "id": "cross_dataset_leakage_gate",
@@ -111,7 +111,7 @@
     {
       "detail": "matrix 'harm_v0_template' review_status='pending', is_example=False",
       "evidence": "configs/harm_matrix_template.yaml",
-      "evidence_digest": "ebf3a196e34bb523de75238491fc344eac16b2aa69bcb11b65a99886c1f520f5",
+      "evidence_digest": "61ad4d816ddd377877a6f2ce216c4d42a14ef1fe78cd4f2fcbb84b1607712503",
       "id": "harm_matrix_approved",
       "kind": "human_scientific",
       "status": "blocked",
@@ -149,18 +149,28 @@
   "frozen": false,
   "input_digests": {
     "action_mapping_review": "4efb48a4a5aac5c61bf80ce42ad7821d6772c7994313ba9c1bb38cde08588b06",
+    "audit_signoff": "<absent>",
     "duplicate_resolution": "88976a8846ec1ae37cb318e30d02d57bd9a78bea8fde49e4367bf60f9a90cc6c",
     "effective_manifest": "36ee9ece519d11dd0f38aed53d6177fe19728349025665ebd843b2ab9c4cb3fc",
+    "evaluation_scope": "7f8b2a9ce72bf8709a3fa413f81ee6788a751f5e78606b002251bd6ad6c79272",
+    "freeze_approval": "<absent>",
+    "harm_matrix": "61ad4d816ddd377877a6f2ce216c4d42a14ef1fe78cd4f2fcbb84b1607712503",
     "human_review_evidence": "bff37d8c76b3ebcccb7f028afe57286c30896a6583afcfb80f1cabfb87f4453f",
     "internal_duplicate_gate": "e022c99a40424f1bc12ebcf4339be7a14e038028b88ff4a7b05dc51c2e53f6c8",
     "leakage_gate": "d5c720192dbe109c22e60ff07f4c23714b83df7302d48bcadb94c78bbcdb1b3c",
+    "leakage_search_summary": "47ae7c5cf2ae2b0bb51f2f3bc56b42d5fd370a197543b615f42c9903fa1d14de",
     "plantdoc_manifest": "548b815197c51bc26ea6adb2080b93cd670426623ca13d6eee8a43d49fb4ba55",
-    "second_review_packet": "1dab59f4dd7c26137e16707068a0950b676fa79e8a15e210bb4a25fbcefbe525"
+    "plantdoc_summary": "7d660aafdedbd8ef554ab531250b84651522edc7a15d8a15b12771a0efeb6a52",
+    "plantvillage_manifest": "b9acc43637ef2e930bd9e5e8a09b1d5025c720d65f9dd3fc9aabdfbd7e399591",
+    "plantvillage_source_snapshot": "62105e4f2cf53ae23f19f2111d5077df7c92d0fbb5b59b09c3d1af0af493fd23",
+    "plantvillage_summary": "7429cc2cd8731a759050b1b5012701d74b6baa54e6b571275be06defc8136a41",
+    "second_review": "<absent>",
+    "second_review_packet": "e3ac78aa5f5028a36dc7415a59caa14861ff6662debf51d08f515ca2569ec5f1"
   },
   "provenance": {
-    "approval_schema": "ica26.governance.approval/1",
+    "approval_schema": "ica26.governance.approval/2",
     "command": "build_dataset_v1_freeze_readiness.py",
-    "commit_binding": "validated against live HEAD at run time",
+    "commit_binding": "reviewed state and approval-record ancestry validated from Git objects at run time",
     "condition_kinds": [
       "machine",
       "human_scientific",

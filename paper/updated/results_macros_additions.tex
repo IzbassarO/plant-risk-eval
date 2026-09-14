@@ -1,0 +1,80 @@
+% ICA 2026 -- macros required by the corrected draft that
+% scripts/ica26_build_paper_macros.py does not yet emit.
+%
+% This file is a TEMPORARY BRIDGE. Fold each definition into the generator and
+% delete this file. Everything here that carries a value is DERIVED from numbers
+% already in results_macros.tex by arithmetic, not measured afresh; the two
+% \ResultPending entries need a short evaluation script (see below).
+%
+% \providecommand is used throughout, so once the generator emits a macro of the
+% same name, the generator's definition (loaded first) wins and this file
+% becomes a no-op.
+
+% --------------------------------------------------------------------------- %
+% 1. Calibration degradation ratio.
+%
+% Replaces the hand-typed claim "between 1.5 and 1.9 times", which was wrong at
+% both ends: the actual ratios of the seed-mean cross-domain ECE are 1.48, 1.55
+% and 1.94.
+%
+% Generator line (ratio of the seed-mean ECE, matching how ECE is reported):
+%   ece_ratio[m] = mean_ece[m]["xd_T"] / mean_ece[m]["xd"]
+%
+% Preferred, stricter version: compute the ratio per seed and emit
+%   \EceRatioMin / \EceRatioMax over all nine model-seed cases. If you do that,
+%   change the sentence in Section 7 to quote the range instead of three values.
+% --------------------------------------------------------------------------- %
+\providecommand{\EceRatioRn}{1.48}
+\providecommand{\EceRatioEb}{1.55}
+\providecommand{\EceRatioMn}{1.94}
+
+% --------------------------------------------------------------------------- %
+% 2. Largest across-seed standard deviation of the fitted in-domain temperature.
+%
+% Replaces the hand-typed "never exceeds 0.008".
+% Generator line:
+%   temp_sd_max = max(sd_of_fitted_T[m] for m in backbones)   # PlantVillage
+% --------------------------------------------------------------------------- %
+\providecommand{\TempSdMax}{0.0076}
+
+% --------------------------------------------------------------------------- %
+% 3. Trivial-baseline reference for the cross-domain evaluation set.
+%
+% NEEDED: a reader cannot tell whether 0.26 accuracy over 21 classes is good,
+% bad or trivial without one. This is the single cheapest addition in the paper
+% and requires no training at all.
+%
+% Generator sketch (operates on the frozen cross-domain manifest only):
+%   y = labels of the 1951 shared-class images
+%   maj = most frequent label
+%   acc  = (y == maj).mean()
+%   f1   = sklearn.metrics.f1_score(y, np.full_like(y, maj),
+%                                   average="macro", labels=present_classes)
+%
+% Report the majority-class predictor rather than uniform random: it is the
+% stronger and therefore more honest floor under a skewed label distribution.
+% --------------------------------------------------------------------------- %
+\providecommand{\AccXdMajority}{\ResultPending}
+\providecommand{\MacroFXdMajority}{\ResultPending}
+
+% --------------------------------------------------------------------------- %
+% 4. OPTIONAL but high value: in-domain performance restricted to the 21 shared
+%    classes.
+%
+% This is the direct answer to Limitation 1 (label spaces differ). It needs no
+% new training: take the SAVED PlantVillage test logits, apply the same
+% canonical-class summation and renormalisation used cross-domain, and score
+% only the PlantVillage test images whose class falls in the shared space.
+% The resulting drop is then 21-way to 21-way, i.e. domain shift with task
+% difficulty held fixed.
+%
+% If you generate these, add one paragraph to Section 6 and downgrade
+% Limitation 1 from a threat to a quantified decomposition. Reviewers ask for
+% exactly this.
+% --------------------------------------------------------------------------- %
+\providecommand{\MacroFPvInSharedRn}{\ResultPending}
+\providecommand{\MacroFPvInSharedEb}{\ResultPending}
+\providecommand{\MacroFPvInSharedMn}{\ResultPending}
+\providecommand{\RelDropFSharedRn}{\ResultPending}
+\providecommand{\RelDropFSharedEb}{\ResultPending}
+\providecommand{\RelDropFSharedMn}{\ResultPending}

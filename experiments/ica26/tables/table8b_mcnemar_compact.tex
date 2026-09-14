@@ -1,0 +1,22 @@
+\begin{table}[htbp]
+\caption{Pairwise McNemar exact tests on per-item correctness, seed 42. Two models scored on one evaluation set are not independent samples, so the paired test is the correct instrument. `Disc.' is the number of items the two models disagree on, which is what the test is computed from. Holm adjustment controls the family-wise error rate across all nine tests.}
+\label{tab:mcnemar-compact}
+\scriptsize
+\centering
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llllll}
+\toprule
+Setting & Comparison & $\Delta$ acc. & Disc. & $p$ & $p$ (Holm) \\
+\midrule
+PV in-domain & ResNet-50 vs EfficientNet-B0 & -0.0043 & 82 & <0.0001 & <0.0001 \\
+PV in-domain & ResNet-50 vs MobileNetV3-Small & -0.0024 & 94 & 0.0095 & 0.0363 \\
+PV in-domain & EfficientNet-B0 vs MobileNetV3-Small & +0.0019 & 54 & 0.0091 & 0.0363 \\
+PDC in-domain & ResNet-50 vs EfficientNet-B0 & +0.0133 & 37 & 0.7428 & 1.0000 \\
+PDC in-domain & ResNet-50 vs MobileNetV3-Small & +0.1378 & 65 & 0.0002 & 0.0012 \\
+PDC in-domain & EfficientNet-B0 vs MobileNetV3-Small & +0.1244 & 66 & 0.0008 & 0.0045 \\
+PV $\rightarrow$ PDC & ResNet-50 vs EfficientNet-B0 & +0.0036 & 351 & 0.7488 & 1.0000 \\
+PV $\rightarrow$ PDC & ResNet-50 vs MobileNetV3-Small & +0.0359 & 344 & 0.0002 & 0.0013 \\
+PV $\rightarrow$ PDC & EfficientNet-B0 vs MobileNetV3-Small & +0.0323 & 347 & 0.0008 & 0.0045 \\
+\bottomrule
+\end{tabular}
+\end{table}

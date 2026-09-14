@@ -33,6 +33,8 @@ changes after the assessment cannot keep its verdict.
 from __future__ import annotations
 
 import hashlib
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Optional, Sequence
@@ -87,6 +89,63 @@ def is_placeholder(value) -> bool:
     if not text:
         return True
     return text.casefold() in PLACEHOLDER_TOKENS
+
+
+#: Tokens that void a field even when they are *embedded* in longer prose.
+#: ``is_placeholder`` only catches a cell that is nothing but a placeholder, so
+#: "source TBD" and "citation: unknown" both passed it. These are matched on
+#: word boundaries against an NFKC-normalised, case-folded copy of the value.
+#:
+#: Deliberately narrower than :data:`PLACEHOLDER_TOKENS`: a token is listed here
+#: only when its presence anywhere in a sentence means the field carries no
+#: evidence. Generic words that legitimately occur inside real prose (``test``,
+#: ``sample``, ``example``, ``foo``) are NOT listed -- "the latest sample was
+#: tested" is a real sentence, and a substring rule would reject it.
+EMBEDDED_PLACEHOLDER_TOKENS = frozenset({
+    "tbd", "tba", "todo", "to do", "fixme", "changeme",
+    "unknown", "unspecified", "unstructured", "placeholder", "pending",
+    "n/a", "n.a.", "not applicable", "not available",
+    "to be supplied", "to be determined", "to be confirmed", "to be added",
+    "source to be supplied", "lorem ipsum", "xxx",
+})
+
+
+def normalize_identity(value) -> str:
+    """NFKC-normalised, case-folded, whitespace-collapsed comparison key.
+
+    Identity comparisons (is this the same reviewer?) must not turn on Unicode
+    spelling or letter case. ``HUMAN_REVIEWER_1``, ``human_reviewer_1``, and a
+    full-width variant of either are the same person, and a conflict-of-interest
+    check that treats them as different people does not check anything.
+    """
+    if value is None:
+        return ""
+    text = unicodedata.normalize("NFKC", str(value))
+    return " ".join(text.split()).casefold()
+
+
+def contains_placeholder_token(
+    value, tokens: Iterable[str] = EMBEDDED_PLACEHOLDER_TOKENS,
+) -> Optional[str]:
+    """Return the first embedded placeholder token found, or ``None``.
+
+    Matching is on word boundaries over the normalised text, so ``unknown``
+    matches "aetiology unknown" but ``test`` would not match "latest" (and is
+    not listed for that reason). Tokens containing non-word characters such as
+    ``n/a`` are matched with boundaries appropriate to their own edges.
+    """
+    text = normalize_identity(value)
+    if not text:
+        return None
+    for token in sorted(tokens, key=len, reverse=True):
+        needle = normalize_identity(token)
+        if not needle:
+            continue
+        left = r"(?<!\w)" if needle[0].isalnum() else r"(?<!\S)"
+        right = r"(?!\w)" if needle[-1].isalnum() else r"(?!\S)"
+        if re.search(left + re.escape(needle) + right, text):
+            return token
+    return None
 
 
 def _get(row: dict, *names: str) -> str:
@@ -235,6 +294,7 @@ def evaluate_mapping_readiness(
     artifact_digest: str = "",
     allowed_extra_classes: Iterable[str] = (),
     out_of_action_scope_classes: Iterable[str] = (),
+    control_plane_errors: Iterable[str] = (),
 ) -> MappingReadiness:
     """Decide whether ``dataset``'s mapping rows terminally cover every class.
 
@@ -249,6 +309,11 @@ def evaluate_mapping_readiness(
     removed from action evaluation. They still require a terminal decision, but
     that decision must be ``excluded``: approving one into an action would
     re-admit it through the back door.
+
+    ``control_plane_errors`` carries a failure to load an authority the mapping
+    decision depends on (for example the evaluation-scope policy).  A broken
+    policy must block readiness; treating it as an empty policy would silently
+    widen the action-evaluation scope.
     """
     expected = {str(c) for c in expected_classes}
     allowed_extra = {str(c) for c in allowed_extra_classes}
@@ -260,7 +325,8 @@ def evaluate_mapping_readiness(
     unexpected: set[str] = set()
     duplicated: set[str] = set()
     nonterminal: list[str] = []
-    invalid: list[str] = []
+    invalid: list[str] = [f"control-plane: {str(error)}" for error in control_plane_errors
+                          if str(error).strip()]
 
     for i, row in enumerate(rows, start=2):
         if str(row.get("dataset", "")).strip() != dataset:

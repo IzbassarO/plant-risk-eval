@@ -1,0 +1,10 @@
+Setting,Comparison,Acc. A,Acc. B,Diff.,A only,B only,Discordant,p (exact),p (Holm)
+PlantVillage in-domain,ResNet-50 vs EfficientNet-B0,0.9925,0.9968,-0.0043,18,64,82,<0.0001,<0.0001
+PlantVillage in-domain,ResNet-50 vs MobileNetV3-Small,0.9925,0.9950,-0.0024,34,60,94,0.0095,0.0363
+PlantVillage in-domain,EfficientNet-B0 vs MobileNetV3-Small,0.9968,0.9950,+0.0019,37,17,54,0.0091,0.0363
+PlantDoc Core in-domain,ResNet-50 vs EfficientNet-B0,0.6933,0.6800,+0.0133,20,17,37,0.7428,1.0000
+PlantDoc Core in-domain,ResNet-50 vs MobileNetV3-Small,0.6933,0.5556,+0.1378,48,17,65,0.0002,0.0012
+PlantDoc Core in-domain,EfficientNet-B0 vs MobileNetV3-Small,0.6800,0.5556,+0.1244,47,19,66,0.0008,0.0045
+PlantVillage -> PlantDoc Core,ResNet-50 vs EfficientNet-B0,0.2778,0.2742,+0.0036,179,172,351,0.7488,1.0000
+PlantVillage -> PlantDoc Core,ResNet-50 vs MobileNetV3-Small,0.2778,0.2419,+0.0359,207,137,344,0.0002,0.0013
+PlantVillage -> PlantDoc Core,EfficientNet-B0 vs MobileNetV3-Small,0.2742,0.2419,+0.0323,205,142,347,0.0008,0.0045

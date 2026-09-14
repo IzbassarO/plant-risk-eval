@@ -66,6 +66,7 @@ LEAKAGE_GATE = Path("reports/leakage_gate.json")
 INTERNAL_GATE = Path("reports/plantdoc_internal_duplicate_gate.json")
 MAPPING_REVIEW = Path("data/mapping/action_mapping_review.csv")
 PLANTVILLAGE_MANIFEST = Path("data/manifests/plantvillage_manifest.csv")
+PLANTVILLAGE_SNAPSHOT = Path("data/manifests/plantvillage_source_snapshot.json")
 HARM_TEMPLATE = Path("configs/harm_matrix_template.yaml")
 EVIDENCE_MANIFEST = Path("human_review/evidence_manifest.json")
 
@@ -76,7 +77,6 @@ AUDIT_SIGNOFF = Path("reports/DATASET_V1_AUDIT_SIGNOFF.json")
 FREEZE_APPROVAL = Path("data/manifests/dataset_v1_freeze_approval.json")
 SECOND_REVIEW = Path("human_review/plantdoc_label_second_review/second_review.json")
 SECOND_REVIEW_PACKET = Path("reports/plantdoc_label_second_review")
-FREEZE_ARTIFACT = Path("data/manifests/dataset_v1_freeze.json")
 
 OUT_JSON = Path("reports/dataset_v1_freeze_readiness.json")
 OUT_MD = Path("reports/DATASET_V1_FREEZE_READINESS.md")
@@ -198,13 +198,46 @@ def evaluate(repo: Path, *, verify_pixels: bool,
                   if pd_sum else "plantdoc_summary.json is absent",
                   str(PLANTDOC_SUMMARY)))
 
+    # A true-looking ``pixels_materialized`` flag is not provenance.  Dataset V1
+    # uses PlantVillage as its training source, so the archive, membership split
+    # files, and leaf map must all be demonstrably from the one frozen revision.
+    # This deliberately verifies the *recorded component chain*, not only a
+    # summary boolean that any hand-written JSON could assert.
     pv_sum = read_json(repo / PLANTVILLAGE_SUMMARY)
-    pv_ok = bool((pv_sum or {}).get("pixels_materialized"))
-    out.append(_c("plantvillage_materialized", "PlantVillage pixels are materialized",
-                  "machine", pv_ok,
-                  f"pixels_materialized={pv_ok}; {(pv_sum or {}).get('n_images')} image(s)"
-                  if pv_sum else "plantvillage_summary.json is absent",
-                  str(PLANTVILLAGE_SUMMARY)))
+    pv_snapshot = read_json(repo / PLANTVILLAGE_SNAPSHOT)
+    pv_problems: list[str] = []
+    if not pv_sum:
+        pv_problems.append("plantvillage_summary.json is absent")
+    if not pv_snapshot:
+        pv_problems.append("plantvillage_source_snapshot.json is absent")
+    else:
+        from ica26.datasets.plantvillage import (
+            PERSISTED_PROVENANCE_FIELDS, validate_persisted_provenance,
+        )
+        pv_problems.extend(validate_persisted_provenance(
+            pv_snapshot, manifest_path=repo / PLANTVILLAGE_MANIFEST))
+        if not isinstance(pv_sum, dict):
+            pv_problems.append("PlantVillage summary is not a JSON object")
+        else:
+            # The summary is another persisted acquisition artifact.  Compare
+            # the complete machine-readable provenance projection, rather than
+            # only a revision and a component list, so a stale manifest digest
+            # or an optimistic true boolean cannot be smuggled into readiness.
+            pv_problems.extend(validate_persisted_provenance(
+                pv_sum, manifest_path=repo / PLANTVILLAGE_MANIFEST))
+            mismatched = [field for field in PERSISTED_PROVENANCE_FIELDS
+                          if pv_sum.get(field) != pv_snapshot.get(field)]
+            if mismatched:
+                pv_problems.append(
+                    "PlantVillage summary and standalone source snapshot disagree "
+                    f"on persisted provenance field(s): {mismatched}")
+    out.append(_c("plantvillage_materialized",
+                  "PlantVillage pixels are materialized from one pinned, verified source chain",
+                  "machine", not pv_problems,
+                  "; ".join(pv_problems[:3]) or
+                  f"{(pv_sum or {}).get('n_images')} image(s); archive, split files, and "
+                  "leaf map all revision- and digest-verified",
+                  str(PLANTVILLAGE_SNAPSHOT), repo))
 
     # --- cross-dataset leakage gate (R2A) ---------------------------------- #
     lg = read_json(repo / LEAKAGE_GATE)
@@ -213,28 +246,32 @@ def evaluate(repo: Path, *, verify_pixels: bool,
                       "machine", False, "reports/leakage_gate.json is absent",
                       str(LEAKAGE_GATE)))
     else:
-        from ica26.leakage.gate import SCHEMA_VERSION as LEAK_SCHEMA
-        problems = []
-        if lg.get("schema_version") != LEAK_SCHEMA:
-            problems.append(f"schema {lg.get('schema_version')} != {LEAK_SCHEMA}")
-        if lg.get("status") != "pass":
-            problems.append(f"status={lg.get('status')}")
-        if lg.get("unresolved_pair_count"):
-            problems.append(f"{lg['unresolved_pair_count']} unresolved pair(s)")
-        if lg.get("authorization_violations"):
-            problems.append(f"{len(lg['authorization_violations'])} violation(s)")
-        stale = [n for n, d in (lg.get("input_digests") or {}).items()
-                 if n != "leakage_config"
-                 and (not (repo / _leak_input_path(n)).exists()
-                      or sha256_of(repo / _leak_input_path(n)) != d)]
-        if stale:
-            problems.append(f"stale bound input(s): {stale}")
+        # Never reimplement the leakage gate's security predicate here.  The
+        # old hand-written shorthand checked only whatever input digests happened
+        # to be present, so a gate with *no* bindings could look current.  Route
+        # through the canonical fail-closed validator, which requires every
+        # input (including the threshold/configuration digest) by name.
+        from ica26.leakage.gate import GateInputs, LeakageGate, validate_gate
+        try:
+            gate = LeakageGate.from_dict(lg)
+            inputs = GateInputs(
+                training_manifest=repo / "data/manifests/plantvillage_manifest.csv",
+                evaluation_manifest=repo / "data/manifests/plantdoc_manifest.csv",
+                pair_table=repo / "reports/leakage_plantvillage_vs_plantdoc_pairs.csv",
+                near_review=repo / "data/exclusions/cross_dataset_near_duplicate_review.csv",
+                reviewed_exclusions=repo / "data/exclusions/cross_dataset_reviewed_exclusions.csv",
+                exact_exclusions=repo / "data/exclusions/cross_dataset_exact_exclusions.csv",
+            )
+            validation = validate_gate(gate, inputs)
+            problems = [f"{issue.where}: {issue.message}" for issue in validation.errors]
+        except Exception as exc:                              # noqa: BLE001
+            problems = [f"could not validate leakage gate: {type(exc).__name__}: {exc}"]
         out.append(_c("cross_dataset_leakage_gate", "Cross-dataset leakage gate passes",
                       "machine", not problems,
                       "; ".join(problems) or
                       f"schema {lg['schema_version']}, exact {lg['exact_duplicate_count']}, "
                       f"near {lg['near_duplicate_count']} all resolved, 0 unresolved, "
-                      f"0 violations, every bound input digest current",
+                      f"0 violations, every required bound input digest current",
                       str(LEAKAGE_GATE)))
 
     # --- internal duplicate gate (R2B) ------------------------------------- #
@@ -271,9 +308,23 @@ def evaluate(repo: Path, *, verify_pixels: bool,
                       "machine", False, "human_review/evidence_manifest.json is absent",
                       str(EVIDENCE_MANIFEST)))
     else:
-        bad = [n for n, d in em["artifacts"].items()
-               if not (repo / "human_review" / n).exists()
-               or sha256_of(repo / "human_review" / n) != d]
+        artifacts = em.get("artifacts")
+        bad: list[str] = []
+        if not isinstance(artifacts, dict) or not artifacts:
+            bad.append("manifest has no non-empty artifacts map")
+            artifacts = {}
+        if not isinstance(em.get("file_count"), int) or em.get("file_count") != len(artifacts):
+            bad.append("file_count does not equal the number of recorded artifacts")
+        evidence_root = (repo / "human_review").resolve()
+        for n, d in artifacts.items():
+            relative = Path(str(n))
+            target = (evidence_root / relative).resolve()
+            if relative.is_absolute() or evidence_root not in target.parents:
+                bad.append(f"unsafe evidence path '{n}'")
+            elif not isinstance(d, str) or len(d) != 64 or any(c not in "0123456789abcdef" for c in d):
+                bad.append(f"'{n}' has no SHA-256 digest")
+            elif not target.is_file() or sha256_of(target) != d:
+                bad.append(str(n))
         out.append(_c("human_review_evidence_intact", "Preserved human-review evidence is unaltered",
                       "machine", not bad,
                       f"{len(bad)} artifact(s) differ from their recorded digest: {bad}" if bad
@@ -305,18 +356,22 @@ def evaluate(repo: Path, *, verify_pixels: bool,
 
     mapping_rows = read_csv(repo / MAPPING_REVIEW) if (repo / MAPPING_REVIEW).exists() else []
     mapping_digest = sha256_of(repo / MAPPING_REVIEW) if (repo / MAPPING_REVIEW).exists() else "<absent>"
+    scope_errors: list[str] = []
     try:
         scope = load_scope(repo / "configs/evaluation_scope.yaml")
         out_of_action = {k[1] for k in scope.out_of_scope("include_action_evaluation")}
-    except Exception:                                          # noqa: BLE001
+    except Exception as exc:                                   # noqa: BLE001
         out_of_action = set()
+        scope_errors.append(
+            "could not load configs/evaluation_scope.yaml; refusing to treat an "
+            f"unreadable scope policy as empty ({type(exc).__name__}: {exc})")
 
     effective = read_csv(repo / EFFECTIVE) if (repo / EFFECTIVE).exists() else []
     plantdoc_classes = {r["class_label"] for r in effective}
     pd_ready = evaluate_mapping_readiness(
         mapping_rows, dataset="PlantDoc", expected_classes=plantdoc_classes,
         artifact=str(MAPPING_REVIEW), artifact_digest=mapping_digest,
-        out_of_action_scope_classes=out_of_action)
+        out_of_action_scope_classes=out_of_action, control_plane_errors=scope_errors)
     out.append(_c("disease_action_mapping_reviewed",
                   "Every PlantDoc class carries a terminal, evidence-gated mapping decision",
                   "human_scientific", pd_ready.satisfied, pd_ready.detail(),
@@ -327,7 +382,7 @@ def evaluate(repo: Path, *, verify_pixels: bool,
     pv_ready = evaluate_mapping_readiness(
         mapping_rows, dataset="PlantVillage", expected_classes=pv_classes,
         artifact=str(MAPPING_REVIEW), artifact_digest=mapping_digest,
-        out_of_action_scope_classes=out_of_action)
+        out_of_action_scope_classes=out_of_action, control_plane_errors=scope_errors)
     out.append(_c("plantvillage_action_mapping_coverage",
                   "Every PlantVillage class carries a terminal, evidence-gated mapping decision",
                   "human_scientific", pv_ready.satisfied, pv_ready.detail(),
@@ -489,7 +544,8 @@ def render_markdown(r: Readiness) -> str:
          "record. `ready` means only that every precondition below is satisfied and a human "
          "may then consider the decision._", "",
          f"**Status: `{r.status.upper()}`** — {r.satisfied} satisfied, {r.blocked} blocked.",
-         f"**Dataset V1 frozen: {'yes' if r.frozen else 'NO'}.**", ""]
+         "**Dataset V1 frozen: NO — this is a pre-decision assessment, not the "
+         "technical freeze record.**", ""]
     if r.blockers:
         L += ["## Blocking conditions", ""]
         for b in r.blockers:
@@ -516,27 +572,55 @@ def render_markdown(r: Readiness) -> str:
           "| Artifact | Satisfies | Must carry |", "|---|---|---|",
           f"| `{AUDIT_SIGNOFF}` | `open_audit_findings_closed` | schema version, artifact "
           f"type `dataset_v1_audit_signoff`, scope `phase1_audit_findings`, decision, "
-          f"reviewer id **and role**, ISO-8601 timestamp with offset, the repository "
-          f"commit, SHA-256 bindings for the gate and effective manifest, a rationale, "
+          f"reviewer id **and role**, ISO-8601 timestamp with offset, the immutable "
+          f"`reviewed_repository_commit`, SHA-256 bindings for the gate and effective "
+          f"manifest, a rationale, "
           f"`closed_findings` covering {list(REQUIRED_CLOSED_FINDINGS)}, "
           "`auditor_independent_of_implementer: true`, and an explicit `not_approved` |",
           f"| `{SECOND_REVIEW}` | `relabel_second_scientific_review` | the same core fields "
-          "with artifact type `plantdoc_label_second_review`, plus `group_verdicts` and "
-          f"`diagnostic_citations`. The pending packet is at `{SECOND_REVIEW_PACKET}` |",
+          "with artifact type `plantdoc_label_second_review`, review schema version 2, and "
+          "exactly one self-contained, packet-digest-bound review object for each of G07, "
+          "G08, and G10. Only three independently valid `agree` decisions satisfy this "
+          f"condition. The pending packet is at `{SECOND_REVIEW_PACKET}` |",
           f"| `{FREEZE_APPROVAL}` | `freeze_approval_recorded` | the same core fields with "
-          "artifact type `dataset_v1_freeze_approval` and scope `dataset_v1`, binding the "
-          "effective manifest, resolution table, and both gates |",
+          "artifact type `dataset_v1_freeze_approval` and scope `dataset_v1`, binding every "
+          "effective-data, mapping, provenance, evidence, review, and audit input |",
           f"| `{MAPPING_REVIEW}` | both mapping conditions | one row per dataset class, each "
           "with a terminal status (`approved` or `excluded`), the full evidence set, a "
           "target from the approved action vocabulary, and reviewer attribution |",
           f"| `{HARM_TEMPLATE}` | `harm_matrix_approved` | a non-example matrix, approved, "
           "with complete weights |", "",
           "An approval is refused for: a missing or placeholder field, an unknown decision "
-          "value, an invalid or naive timestamp, an empty reviewer, a commit that is not "
-          "HEAD, a digest that no longer matches the file it binds, the wrong artifact type "
-          "or scope, a duplicate approval for the same scope, or a timestamp predating the "
-          "commit it claims to have reviewed. A bare `{\"approved\": true}` fails on all "
+          "value, an invalid or naive timestamp, an empty reviewer, a reviewed commit that "
+          "is not an ancestor of the approval-record state, an artifact whose SHA-256 does "
+          "not match its Git blob at the reviewed state or current state, an approval record "
+          "that existed in the state it claims to review, a rewritten approval record, the "
+          "wrong artifact type or scope, a duplicate approval for the same scope, or a "
+          "timestamp predating the commit it claims to have reviewed. A bare "
+          "`{\"approved\": true}` fails on all "
           "counts and is pinned as a test.", "",
+          "## Two-state approval workflow", "",
+          "1. Commit the complete artifacts to be reviewed. This is the **reviewed "
+          "state**; its full SHA becomes `reviewed_repository_commit`.",
+          "2. The accountable human reviews those exact Git blobs and records their "
+          "SHA-256 values in `approved_artifacts`. The approval file itself must not exist "
+          "in the reviewed state.",
+          "3. Persist the human-authored approval in a later commit: the **approval-record "
+          "state**. Do not revise that record in place.",
+          "4. The validator proves reviewed-state ancestry, reconciles every declared digest "
+          "against both Git states and the checkout, and invalidates the approval if any "
+          "approved artifact changes.", "",
+          "## Technical freeze workflow", "",
+          "This assessment is intentionally **not** the freeze. After every condition is "
+          "ready and the human approval is committed, run:", "",
+          "```", "python scripts/materialize_dataset_v1_freeze.py --write", "# commit only data/manifests/dataset_v1_freeze.json",
+          "python scripts/materialize_dataset_v1_freeze.py --check", "```", "",
+          "The materializer refuses a dirty tree, a missing/invalid approval, a non-ready or "
+          "stale assessment, a changed bound input, and an attempt to overwrite a prior "
+          "record. Its deterministic record binds the approval's reviewed and record commits, "
+          "the exact frozen-input commit, this ready assessment, every frozen artifact Git "
+          "blob, and a freshly reconstructed composite dataset fingerprint. Only its `--check` "
+          "can establish that Dataset V1 is technically frozen.", "",
           "## Re-deriving this assessment", "",
           "```", "python scripts/build_dataset_v1_freeze_readiness.py",
           "python scripts/build_dataset_v1_freeze_readiness.py --check", "```", "",
@@ -564,22 +648,21 @@ def main(argv=None) -> int:
                           head_commit=head)
     blockers = [c.id for c in conditions if not c.ok]
 
+    # Keep the entire control-plane input set explicit and digest-bound.  The
+    # technical-freeze validator imports this map too, so it cannot accept a
+    # 'ready' report that silently omitted a human artifact or policy file.
+    from ica26.governance.freeze import READINESS_INPUT_PATHS
     digests = {}
-    for name, p in (("plantdoc_manifest", PLANTDOC_MANIFEST),
-                    ("effective_manifest", EFFECTIVE),
-                    ("duplicate_resolution", RESOLUTION),
-                    ("leakage_gate", LEAKAGE_GATE),
-                    ("internal_duplicate_gate", INTERNAL_GATE),
-                    ("action_mapping_review", MAPPING_REVIEW),
-                    ("human_review_evidence", EVIDENCE_MANIFEST),
-                    ("second_review_packet", SECOND_REVIEW_PACKET / "packet_manifest.json")):
+    for name, p in READINESS_INPUT_PATHS.items():
         digests[name] = sha256_of(REPO / p) if (REPO / p).exists() else "<absent>"
 
     readiness = Readiness(
         schema_version=SCHEMA_VERSION,
         dataset="Dataset V1",
         status="ready" if not blockers else "not_ready",
-        frozen=(REPO / FREEZE_ARTIFACT).exists(),
+        # This script never determines frozen state.  A raw JSON file is not a
+        # freeze; only the dedicated technical validator may establish it.
+        frozen=False,
         satisfied=sum(1 for c in conditions if c.ok),
         blocked=len(blockers),
         blockers=blockers,
@@ -596,7 +679,9 @@ def main(argv=None) -> int:
                     # would make this artifact stale on every commit -- including
                     # the one that stores it -- and a `--check` that can never
                     # pass teaches a reader to ignore it.
-                    "commit_binding": "validated against live HEAD at run time",
+                    "commit_binding": (
+                        "reviewed state and approval-record ancestry validated from Git "
+                        "objects at run time"),
                     "pixel_verification": not args.skip_pixel_verification},
     )
 

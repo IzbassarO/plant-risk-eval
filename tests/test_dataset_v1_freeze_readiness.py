@@ -9,6 +9,7 @@ by default.
 from __future__ import annotations
 
 import json
+import importlib.util
 import subprocess
 import sys
 
@@ -130,7 +131,7 @@ def test_dataset_v1_is_not_ready_and_not_frozen(readiness):
 
 def test_the_assessment_records_the_schemas_it_validated_against(readiness):
     prov = readiness["provenance"]
-    assert prov["approval_schema"] == "ica26.governance.approval/1"
+    assert prov["approval_schema"] == "ica26.governance.approval/2"
     assert prov["mapping_readiness_schema"] == "ica26.governance.mapping_readiness/1"
     assert prov["condition_kinds"] == ["machine", "human_scientific",
                                        "governance_approval", "independent_audit"]
@@ -141,8 +142,8 @@ def test_the_assessment_does_not_embed_the_current_commit(readiness):
     the one that stores it -- a --check that can never pass teaches a reader to
     ignore it. Approvals are still bound to live HEAD at validation time."""
     text = json.dumps(readiness)
-    assert "repository_commit" not in readiness["provenance"]
-    assert "live HEAD at run time" in readiness["provenance"]["commit_binding"]
+    assert "reviewed_repository_commit" not in readiness["provenance"]
+    assert "Git objects at run time" in readiness["provenance"]["commit_binding"]
     import re
     assert not re.search(r"\b[0-9a-f]{40}\b", text), "a raw commit SHA is embedded"
 
@@ -168,7 +169,7 @@ def test_it_has_no_wall_clock_field(readiness):
     assert "timestamp" not in readiness
 
 
-def test_rebuild_is_byte_identical_and_reports_not_ready(repo_root):
+def test_rebuild_is_byte_identical_and_reports_not_ready(repo_root, plantdoc_pixels):
     before = {p: (repo_root / p).read_bytes() for p in (READINESS_JSON, READINESS_MD)}
     r = subprocess.run([sys.executable, str(repo_root / SCRIPT), "--check"],
                        cwd=str(repo_root), capture_output=True, text=True)
@@ -193,3 +194,47 @@ def test_skipping_pixel_verification_blocks_rather_than_passes(repo_root, tmp_pa
         cwd=str(repo_root), capture_output=True, text=True)
     assert "effective_dataset_pixels_verified" in r.stdout
     assert r.returncode != 0
+
+
+def _load_readiness_builder(repo_root):
+    spec = importlib.util.spec_from_file_location(
+        "dataset_v1_readiness_persisted_provenance_test",
+        repo_root / SCRIPT,
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("mutate, fragment", [
+    (lambda snapshot: snapshot.pop("source_components"), "omits required field"),
+    (lambda snapshot: snapshot.update({"source_components": [], "pixels_materialized": True}),
+     "missing required pinned component"),
+    (lambda snapshot: snapshot.__setitem__("manifest_digest", "0" * 64),
+     "manifest_digest is stale"),
+])
+def test_plantvillage_readiness_validates_persisted_provenance_not_a_pixel_flag(
+    repo_root, monkeypatch, mutate, fragment,
+):
+    """The source snapshot is a freeze input; a hand-written true flag cannot
+    substitute for its complete component chain and manifest binding."""
+    builder = _load_readiness_builder(repo_root)
+    snapshot_path = repo_root / builder.PLANTVILLAGE_SNAPSHOT
+    snapshot = json.loads(snapshot_path.read_text())
+    mutate(snapshot)
+    original = builder.read_json
+
+    def fake_read_json(path):
+        if path == snapshot_path:
+            return snapshot
+        return original(path)
+
+    monkeypatch.setattr(builder, "read_json", fake_read_json)
+    condition = next(
+        c for c in builder.evaluate(repo_root, verify_pixels=True)
+        if c.id == "plantvillage_materialized"
+    )
+    assert condition.status == "blocked"
+    assert fragment in condition.detail

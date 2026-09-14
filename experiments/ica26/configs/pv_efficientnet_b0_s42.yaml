@@ -1,0 +1,25 @@
+# ICA 2026 experiment configuration.
+# One common protocol across all six runs; only `dataset`, `model`, and the two
+# documented PlantDoc exceptions vary. See reports/ICA26_EXPERIMENT_PROTOCOL.md.
+experiment_id: pv_efficientnet_b0_s42
+dataset: plantvillage
+model: efficientnet_b0
+seed: 42
+image_size: 224
+batch_size: 64
+eval_batch_size: 128
+epochs: 15
+early_stopping_patience: 3
+lr: 3.0e-4
+weight_decay: 1.0e-4
+label_smoothing: 0.1
+val_fraction: 0.1
+scheduler: cosine
+optimizer: adamw
+amp: true
+num_workers: 6
+pretrained: true
+class_weighting: none
+cross_domain_eval: true
+calibrate: true
+notes: "PlantVillage in-domain training. The same checkpoint is also evaluated cross-domain on the frozen shared-class PlantDoc Core subset, so no separate cross-domain model is trained."

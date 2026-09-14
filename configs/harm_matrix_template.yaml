@@ -3,8 +3,10 @@
 # review_status is `pending`, so this matrix can NEVER be used by a paper-result
 # command (require_production_matrix() rejects anything not `approved`). A human
 # fills every weight from a documented rationale, records sources in
-# source_notes, and only then sets review_status: approved.  There is NO
-# scientific default anywhere in the code.
+# source_notes, identifies the accountable reviewer and their role, records
+# timezone-qualified timestamps, and only then sets review_status: approved.
+# There is NO scientific default anywhere in the code.  In particular, merely
+# changing ``review_status`` cannot approve this template.
 #
 # weights[true_action][predicted_action] = cost of taking predicted_action when
 # the correct action was true_action.  Diagonal = 0.  Leave off-diagonal as null
@@ -16,9 +18,15 @@
 
 matrix_id: harm_v0_template
 version: "0.0"
-created_at: ""            # set on approval (ISO 8601)
+created_at: ""            # set on approval (ISO 8601 timestamp with UTC offset)
 review_status: pending    # -> not usable until a human sets `approved`
 is_example: false
+reviewer_id: ""           # stable accountable reviewer identifier; required when approved
+reviewer_role: ""         # qualification/role supporting that decision; required when approved
+reviewed_at: ""           # ISO 8601 timestamp with explicit UTC offset; required when approved
+review_rationale: >-
+  UNFILLED TEMPLATE. Explain why these weights are scientifically appropriate
+  and what the reviewer checked before setting review_status: approved.
 source_notes: >-
   UNFILLED TEMPLATE. Populate each weight with its rationale and citable source
   (UC IPM / CABI / EPPO / agronomic reasoning) before requesting approval.

@@ -1,0 +1,59 @@
+{
+  "blocked": 4,
+  "blockers": [
+    "disease_action_mapping_reviewed",
+    "plantvillage_action_mapping_coverage",
+    "harm_matrix_approved",
+    "relabel_second_scientific_review"
+  ],
+  "conditions": [
+    {
+      "detail": "coverage 11/28; 17 non-terminal: [\"Apple Scab Leaf: status 'needs_review' is not terminal (terminal: ['approved', 'excluded'])\", \"Apple rust leaf: status 'needs_review' is not terminal (terminal: ['approved', 'excluded'])\", \"Bell_pepper leaf spot: status 'needs_review' is not terminal (terminal: ['approved', 'excluded'])\"] (+14 more)",
+      "evidence": "data/mapping/action_mapping_review.csv",
+      "evidence_digest": "4efb48a4a5aac5c61bf80ce42ad7821d6772c7994313ba9c1bb38cde08588b06",
+      "id": "disease_action_mapping_reviewed",
+      "kind": "human_scientific",
+      "status": "blocked",
+      "title": "Every PlantDoc class carries a terminal, evidence-gated mapping decision"
+    },
+    {
+      "detail": "coverage 0/38; 38 missing: ['Apple___Apple_scab', 'Apple___Black_rot', 'Apple___Cedar_apple_rust'] (+35 more)",
+      "evidence": "data/mapping/action_mapping_review.csv",
+      "evidence_digest": "4efb48a4a5aac5c61bf80ce42ad7821d6772c7994313ba9c1bb38cde08588b06",
+      "id": "plantvillage_action_mapping_coverage",
+      "kind": "human_scientific",
+      "status": "blocked",
+      "title": "Every PlantVillage class carries a terminal, evidence-gated mapping decision"
+    },
+    {
+      "detail": "matrix 'harm_v0_template' review_status='pending', is_example=False",
+      "evidence": "configs/harm_matrix_template.yaml",
+      "evidence_digest": "61ad4d816ddd377877a6f2ce216c4d42a14ef1fe78cd4f2fcbb84b1607712503",
+      "id": "harm_matrix_approved",
+      "kind": "human_scientific",
+      "status": "blocked",
+      "title": "A human-approved harm matrix exists"
+    },
+    {
+      "detail": "no plantdoc_label_second_review artifact at human_review/plantdoc_label_second_review/second_review.json; the decision has not been taken; packet pending at reports/plantdoc_label_second_review",
+      "evidence": "human_review/plantdoc_label_second_review/second_review.json",
+      "evidence_digest": "<absent>",
+      "id": "relabel_second_scientific_review",
+      "kind": "human_scientific",
+      "status": "blocked",
+      "title": "The canonical relabels ['G07', 'G08', 'G10'] carry an independent second review"
+    }
+  ],
+  "dataset": "Risk Evaluation Layer V1",
+  "frozen": false,
+  "layer": "Risk Evaluation Layer V1",
+  "provenance": {
+    "command": "build_core_and_risk_readiness.py",
+    "freezes_nothing": true,
+    "note": "This layer being unfinished does not imply the Core dataset is invalid. They are separate questions with separate evidence."
+  },
+  "satisfied": 0,
+  "schema_version": "1.0",
+  "scientific_second_review_performed": false,
+  "status": "not_ready"
+}

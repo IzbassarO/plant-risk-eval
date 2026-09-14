@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\caption{Model efficiency, mean $\pm$ sample standard deviation over three seeds. Epoch counts vary between seeds because early stopping fires at different points, so training time is reported alongside seconds per epoch. Latency and throughput are measured after warm-up on the accelerator reported in the run metadata.}
+\label{tab:efficiency}
+\tiny
+\centering
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llllllllll}
+\toprule
+Model & Dataset & Seeds & Params (M) & Epochs & Train time (min) & s / epoch & Latency b1 (ms) & Throughput (img/s) & Peak mem (MB) \\
+\midrule
+ResNet-50 & PlantVillage & 3 & 23.59 & 12.0 $\pm$ 2.6 & 143.9 $\pm$ 35.1 & 718.7 $\pm$ 53.1 & 8.82 $\pm$ 0.36 & 216.5 $\pm$ 5.7 & 9472.5 $\pm$ 18.5 \\
+EfficientNet-B0 & PlantVillage & 3 & 4.06 & 13.0 $\pm$ 1.7 & 127.8 $\pm$ 16.1 & 590.4 $\pm$ 21.2 & 9.26 $\pm$ 0.22 & 271.7 $\pm$ 5.7 & 9241.6 $\pm$ 6.9 \\
+MobileNetV3-Small & PlantVillage & 3 & 1.56 & 13.0 $\pm$ 3.5 & 30.4 $\pm$ 7.1 & 141.2 $\pm$ 7.1 & 6.42 $\pm$ 0.31 & 1286.8 $\pm$ 22.8 & 2150.0 $\pm$ 9.2 \\
+ResNet-50 & PlantDoc Core & 3 & 23.57 & 10.7 $\pm$ 2.1 & 11.3 $\pm$ 2.2 & 63.9 $\pm$ 7.6 & 8.58 $\pm$ 0.21 & 209.9 $\pm$ 5.7 & 11849.1 $\pm$ 591.2 \\
+EfficientNet-B0 & PlantDoc Core & 3 & 4.04 & 9.3 $\pm$ 0.6 & 10.6 $\pm$ 1.9 & 67.8 $\pm$ 11.4 & 9.75 $\pm$ 0.17 & 192.6 $\pm$ 131.2 & 11829.6 $\pm$ 339.5 \\
+MobileNetV3-Small & PlantDoc Core & 3 & 1.55 & 13.0 $\pm$ 2.0 & 2.7 $\pm$ 0.4 & 12.6 $\pm$ 0.3 & 6.28 $\pm$ 0.23 & 1268.4 $\pm$ 5.1 & 2150.7 $\pm$ 5.3 \\
+\bottomrule
+\end{tabular}
+\end{table}

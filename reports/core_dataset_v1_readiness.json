@@ -1,0 +1,189 @@
+{
+  "blocked": 2,
+  "blockers": [
+    "open_audit_findings_closed",
+    "freeze_approval_recorded"
+  ],
+  "conditions": [
+    {
+      "detail": "complete=True; manifest 2578 of upstream 2578",
+      "evidence": "data/manifests/plantdoc_summary.json",
+      "evidence_digest": "7d660aafdedbd8ef554ab531250b84651522edc7a15d8a15b12771a0efeb6a52",
+      "id": "plantdoc_acquired",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "PlantDoc is acquired to the frozen upstream snapshot"
+    },
+    {
+      "detail": "54305 image(s); archive, split files, and leaf map all revision- and digest-verified",
+      "evidence": "data/manifests/plantvillage_source_snapshot.json",
+      "evidence_digest": "62105e4f2cf53ae23f19f2111d5077df7c92d0fbb5b59b09c3d1af0af493fd23",
+      "id": "plantvillage_materialized",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "PlantVillage pixels are materialized from one pinned, verified source chain"
+    },
+    {
+      "detail": "schema 2.1, exact 0, near 16 all resolved, 0 unresolved, 0 violations, every required bound input digest current",
+      "evidence": "reports/leakage_gate.json",
+      "evidence_digest": "d5c720192dbe109c22e60ff07f4c23714b83df7302d48bcadb94c78bbcdb1b3c",
+      "id": "cross_dataset_leakage_gate",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "Cross-dataset leakage gate passes"
+    },
+    {
+      "detail": "schema 2.0, 12/12 groups adjudicated and applied, 10 retained, 14 excluded, fresh==persisted",
+      "evidence": "reports/plantdoc_internal_duplicate_gate.json",
+      "evidence_digest": "e022c99a40424f1bc12ebcf4339be7a14e038028b88ff4a7b05dc51c2e53f6c8",
+      "id": "internal_duplicate_gate",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "PlantDoc internal duplicate gate passes"
+    },
+    {
+      "detail": "fresh 2564 == persisted 2564, identity digest 2c258bc766bef7da\u2026, byte-identical",
+      "evidence": "data/manifests/plantdoc_effective_manifest.csv",
+      "evidence_digest": "36ee9ece519d11dd0f38aed53d6177fe19728349025665ebd843b2ab9c4cb3fc",
+      "id": "effective_dataset_current",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "The effective dataset matches a fresh rebuild from the decisions"
+    },
+    {
+      "detail": "2564 record(s), 2564 distinct digest(s), 0 exact duplicates, unique relpaths and identities, 28 class(es)",
+      "evidence": "data/manifests/plantdoc_effective_manifest.csv",
+      "evidence_digest": "36ee9ece519d11dd0f38aed53d6177fe19728349025665ebd843b2ab9c4cb3fc",
+      "id": "effective_dataset_integrity",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "The effective dataset is internally sound"
+    },
+    {
+      "detail": "all 2564 record(s) re-hashed from disk and matching",
+      "evidence": "data/manifests/plantdoc_effective_manifest.csv",
+      "evidence_digest": "36ee9ece519d11dd0f38aed53d6177fe19728349025665ebd843b2ab9c4cb3fc",
+      "id": "effective_dataset_pixels_verified",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "Every effective record's bytes match its recorded digest"
+    },
+    {
+      "detail": "8 preserved artifact(s), all digests current",
+      "evidence": "human_review/evidence_manifest.json",
+      "evidence_digest": "bff37d8c76b3ebcccb7f028afe57286c30896a6583afcfb80f1cabfb87f4453f",
+      "id": "human_review_evidence_intact",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "Preserved human-review evidence is unaltered"
+    },
+    {
+      "detail": "0 error(s), 0 warning(s)",
+      "evidence": "src/ica26/portability.py",
+      "evidence_digest": "6c9a477a6c3a39f9b088a2696abe455f4a672e7c19daf95e23260ed385c598ea",
+      "id": "anonymity",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "No machine-specific or personal identifier in paper artifacts"
+    },
+    {
+      "detail": "no dataset_v1_audit_signoff artifact at reports/DATASET_V1_AUDIT_SIGNOFF.json; the decision has not been taken",
+      "evidence": "reports/DATASET_V1_AUDIT_SIGNOFF.json",
+      "evidence_digest": "<absent>",
+      "id": "open_audit_findings_closed",
+      "kind": "independent_audit",
+      "status": "blocked",
+      "title": "An independent re-audit closes ['AUD-EC-005', 'AUD-EC-006', 'AUD-EC-007', 'R2B-REMEDIATION']"
+    },
+    {
+      "detail": "no dataset_v1_freeze_approval artifact at data/manifests/dataset_v1_freeze_approval.json; the decision has not been taken",
+      "evidence": "data/manifests/dataset_v1_freeze_approval.json",
+      "evidence_digest": "<absent>",
+      "id": "freeze_approval_recorded",
+      "kind": "governance_approval",
+      "status": "blocked",
+      "title": "A human has recorded a valid, bound Dataset V1 freeze approval"
+    },
+    {
+      "detail": "54305 record(s) re-derived from the pinned sources (43596 train / 10709 test); 0 missing, 0 extra, 0 duplicated, 0 value mismatch(es), order matches",
+      "evidence": "reports/plantvillage_manifest_reconstruction.json",
+      "evidence_digest": "0e20c056284464f390687605348a29e31271e52e2c1621d55252646b6d788855",
+      "id": "plantvillage_manifest_reconstructed",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "The PlantVillage manifest is exactly reconstructed from pinned sources"
+    },
+    {
+      "detail": "3 authenticated exclusion(s) for ['G07', 'G08', 'G10']; each bound to the R2B outcome it removes",
+      "evidence": "data/exclusions/core_dataset_v1_conservative_exclusions.csv",
+      "evidence_digest": "0e647abbf656b30ed2adf79b517fb14fc02cbee541c54328522b6f54b6b580ee",
+      "id": "conservative_exclusions_recorded",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "A recorded operator decision defines the Core exclusions"
+    },
+    {
+      "detail": "fresh 2561 == persisted 2561, identity digest 070f8f7a6471e9e5..., byte-identical",
+      "evidence": "data/manifests/plantdoc_core_effective_manifest.csv",
+      "evidence_digest": "92de5a4f5b2e254ca2dd5370951bdba1a2fdac4046310399dc2201eaaf0eaa11",
+      "id": "core_dataset_current",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "The Core dataset matches a fresh rebuild from the decisions"
+    },
+    {
+      "detail": "2561 record(s), splits {'test': 225, 'train': 2336}, 28 class(es), 0 exact duplicates, 2554 non-reviewed record(s) unchanged",
+      "evidence": "data/manifests/plantdoc_core_effective_manifest.csv",
+      "evidence_digest": "92de5a4f5b2e254ca2dd5370951bdba1a2fdac4046310399dc2201eaaf0eaa11",
+      "id": "core_dataset_integrity",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "The Core dataset is internally sound"
+    },
+    {
+      "detail": "independently computed over PlantVillage 54305 x Core PlantDoc 2561: 0 exact, 16 near, all resolved, 0 unresolved (acquired corpus separately: 0 exact, 16 near)",
+      "evidence": "reports/leakage_two_population_report.json",
+      "evidence_digest": "0acf68ce00af23e39a23e64f78e5e6adb60308155fe11d7862cc54f9a7ebc1b0",
+      "id": "core_cross_dataset_leakage",
+      "kind": "machine",
+      "status": "satisfied",
+      "title": "Core-corpus cross-dataset leakage is cleared"
+    }
+  ],
+  "dataset": "Core Dataset V1",
+  "depends_on_risk_layer": false,
+  "frozen": false,
+  "layer": "Core Dataset V1",
+  "machine_blockers": [],
+  "open_decisions": [
+    "open_audit_findings_closed",
+    "freeze_approval_recorded"
+  ],
+  "provenance": {
+    "authorizes_no_training": true,
+    "command": "build_core_and_risk_readiness.py",
+    "freezes_nothing": true,
+    "note": "Core readiness is independent of action mappings, the harm matrix, risk weights, treatment recommendations, and risk-aware evaluation approval."
+  },
+  "satisfied": 14,
+  "schema_version": "1.0",
+  "status": "ready_for_independent_audit",
+  "training_authorized": false,
+  "training_boundary": {
+    "blocked_until_risk_layer_frozen": [
+      "harm_weighted_model_selection",
+      "action_aware_training",
+      "treatment_recommendation",
+      "risk_weighted_conclusions",
+      "final_risk_aware_evaluation_tables"
+    ],
+    "permitted_after_core_freeze": [
+      "plantvillage_in_domain_classification_baseline",
+      "plantdoc_core_in_domain_classification_baseline",
+      "model_calibration_experiments",
+      "ordinary_classification_metrics",
+      "dataset_loading_and_training_pipeline_validation"
+    ]
+  },
+  "unassigned_conditions": []
+}

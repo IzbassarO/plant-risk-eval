@@ -113,7 +113,7 @@ Fill `plantdoc_label_second_review.csv`, then record the signed verdict as JSON 
 
     human_review/plantdoc_label_second_review/second_review.json
 
-It must satisfy `ica26.governance.approvals.SECOND_REVIEW_SPEC`: schema version, artifact type, decision, scope, reviewer id and role, an ISO-8601 timestamp with offset, the repository commit, SHA-256 bindings for the resolution table and this packet's CSV, a rationale, per-group verdicts, diagnostic citations, and an explicit statement of what is **not** being approved. Anything missing, stale, or placeholder is refused.
+It must satisfy `ica26.governance.approvals.SECOND_REVIEW_SPEC`: generic approval authorship and reviewed-state fields plus `review_schema_version` and a `groups` list containing exactly one self-contained object for each of G07, G08, and G10. Every group object binds this packet manifest's SHA-256 and repeats its exact member ids and byte SHA-256 values, current effective record id and label, decision (`agree`, `disagree`, or `uncertain`), strict confidence, independent reviewer id and qualification, offset timestamp, rationale, structured citations, and a decision-consistent recommended action. Missing, duplicate, extra, stale, contradictory, or placeholder content is refused. Only three valid `agree` records can satisfy readiness; `uncertain` always remains blocked.
 
 ## What this packet does NOT do
 

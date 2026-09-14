@@ -27,8 +27,12 @@ data/interim/*
 reports/near_duplicate_contact_sheets/
 # Same policy for the PlantDoc duplicate packet: the CSV/JSON/Markdown evidence
 # and decision forms ARE tracked, but the ~1.7 MB of rendered collages are
-# regenerable via `python scripts/build_plantdoc_duplicate_packet.py`. Their
-# SHA-256 values stay recorded in packet_manifest.json.
+# regenerable via `python scripts/build_plantdoc_duplicate_packet.py`.
+# packet_manifest.json records their NAMES and renderer configuration, NOT their
+# SHA-256 values. Binding PNG digests in a tracked contract made the packet
+# verifiable on exactly one workstation: the renderer needs the untracked raw
+# pixels and resolves fonts by absolute macOS paths. The tracked text artifacts
+# carry the evidence and are digest-bound; the collages are a derived aid.
 reports/plantdoc_exact_duplicate_review/*.png
 # Legacy CPU smoke-run figures, superseded and not referenced by any report.
 reports/_legacy_smoke_figures/
@@ -87,6 +91,20 @@ lightning_logs/
 logs/
 *.log
 
+# --- ICA 2026 paper experiments ------------------------------------------------
+# `runs/` and `logs/` above are generic patterns that would swallow the whole
+# experiment tree. Git cannot re-include a file whose parent directory is
+# excluded, so the directory itself is re-included first and the heavy artifacts
+# are then excluded individually.
+#
+# Committed: configs, resolved configs, compact training histories, JSON/CSV
+# metrics, figures, LaTeX tables, environment metadata.
+# Not committed: checkpoints (*.pt, already covered above), raw prediction
+# tensor dumps, and run logs.
+!experiments/ica26/runs/
+experiments/ica26/runs/**/*.npz
+experiments/ica26/logs/
+
 # --- model / dataset caches ---------------------------------------------------
 .cache/
 hf_cache/
@@ -143,3 +161,17 @@ htmlcov/
 Thumbs.db
 ehthumbs.db
 desktop.ini
+
+# ICA 2026 smoke-run scratch tree (evidence lives in metrics/smoke_test_report.json)
+experiments/ica26/_smoke/
+
+# --- ICA 2026 paper build byproducts -------------------------------------------
+# The .tex sources, the generated macros, and the built PDF are tracked; LaTeX's
+# scratch files are not. (*.log is already excluded above.)
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.out
+paper/*.toc
+paper/*.xdv
+paper/*.synctex.gz

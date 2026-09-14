@@ -1,7 +1,7 @@
 {
   "_note": "SHA-256 of every packet artifact. No wall-clock field, so the packet is byte-deterministic and can be re-derived and compared.",
   "artifacts": {
-    "PLANTDOC_LABEL_SECOND_REVIEW.md": "6d01d94b2c24ce5eccc7f9ceb114548e33a7a84cfdf6c7a9e2c006a2173f732c",
+    "PLANTDOC_LABEL_SECOND_REVIEW.md": "b7d5bb4dfac996f4e30cbe247768c1decf0b744ced9d4031e29182a4d1c3fabf",
     "plantdoc_label_second_review.csv": "b2d614e535376a82656403e70e7b5260e0c1fce19ea24fa3cdff75e31bad0ea1",
     "plantdoc_label_second_review_members.csv": "c336d9e0287a6e37ac2526171db15182aee348285ec4a45ec7fb7c926ba1f233"
   },
@@ -13,5 +13,6 @@
     "G10"
   ],
   "records": 6,
+  "schema_version": "ica26.governance.plantdoc_label_second_review_packet/1",
   "status": "pending"
 }

@@ -1,0 +1,662 @@
+% ICA 2026 submission -- anonymized for double-blind review.
+%
+% DRAFT STATUS. Sections 1-4 and 8-10 are written. Sections 5-7 (the results
+% narrative) are deliberately held until the three-seed matrix completes; their
+% tables and figures are already generated and included, so what is missing is
+% prose, not evidence.
+%
+% NO EXPERIMENTAL NUMBER IS TYPED IN THIS FILE. Every one is a macro defined in
+% generated/results_macros.tex, which is written by
+% scripts/ica26_build_paper_macros.py from the run result files. A number that
+% does not exist yet typesets as [PENDING] rather than as a plausible guess.
+%
+% Build:  bash scripts/ica26_build_paper.sh
+\documentclass[runningheads]{llncs}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{../experiments/ica26/figures/}}
+
+% Every experimental number in this paper comes from here.
+\input{generated/results_macros}
+
+\begin{document}
+
+\title{From Laboratory to Field: A Leakage-Controlled Cross-Domain
+Evaluation Protocol for Plant Disease Recognition}
+
+% Double-blind: no author, affiliation, funding, or repository identity until
+% the camera-ready version.
+\author{Anonymous Author(s)}
+\institute{Affiliation withheld for double-blind review}
+
+\maketitle
+
+\begin{abstract}
+Plant disease classifiers trained on laboratory imagery report accuracies above
+$0.99$, yet field deployment disappoints. The size of that gap is widely
+asserted and rarely measured under conditions that make the measurement
+trustworthy. We report a cross-domain evaluation in which the two obvious
+confounds are closed rather than assumed away. First, train/test contamination:
+an exhaustive perceptual-hash search over every distinct-hash pair across the
+two corpora, followed by human adjudication of all \NLeakNearCore{} near
+candidates, establishes \NLeakExactCore{} exact overlaps between the
+laboratory training corpus and the field evaluation corpus. Second, label-space
+construction: the shared \NSharedClasses{}-class space is assembled only from a
+deterministic normaliser applied identically to both label sets and from a
+previously recorded human policy decision, so no new semantic judgement is
+introduced to make the comparison look better or worse. Three ImageNet-pretrained
+backbones are trained under one protocol on \NPv{} laboratory images and
+evaluated on \NXdImages{} field images, with paired significance tests and
+bias-corrected accelerated bootstrap intervals. Every input is bound to a
+digest-verified dataset lock (\LockDigest{}). We find that near-saturated
+in-domain accuracy carries almost no information about which backbone transfers,
+and that a temperature fitted on in-domain validation data---standard practice
+for calibration---makes out-of-domain calibration substantially worse rather
+than better.
+
+% Keyword order is chosen for line breaking as well as importance: a long third
+% term overruns the first line of the LNCS keyword box.
+\keywords{plant disease recognition \and cross-domain evaluation \and
+leakage audit \and model calibration \and reproducibility}
+\end{abstract}
+
+% =========================================================================== %
+\section{Introduction}
+% =========================================================================== %
+
+Image-based plant disease recognition has an unusually clean success story and
+an unusually persistent complaint. The success story is PlantVillage
+\cite{mohanty2016plantvillage}: tens of thousands of labelled leaf photographs
+on which convolutional networks reach accuracies above $0.99$, a result
+reproduced so widely that the benchmark is effectively saturated. The complaint
+is that these accuracies do not survive contact with a real field. PlantVillage
+images are single detached leaves photographed against uniform backgrounds under
+controlled lighting. A photograph taken by a grower contains occlusion, soil,
+multiple leaves, variable illumination, and a camera held at whatever distance
+was convenient.
+
+That a gap exists is not in dispute, and field-condition corpora have been built
+precisely to expose it \cite{singh2020plantdoc,moupojou2023fieldplant,wei2024plantwild}.
+What is harder to find is a measurement of the gap that a sceptical reader can
+trust, because two confounds sit between the raw comparison and any conclusion
+drawn from it.
+
+The first is contamination. If any field evaluation image is a duplicate or
+near-duplicate of a laboratory training image, the measured transfer is
+optimistic by an unknown amount. This is not hypothetical: near-duplicate
+contamination has been documented in benchmarks far more scrutinised than these
+\cite{barz2020purging}. Most cross-corpus plant disease comparisons do not
+report a leakage audit at all.
+
+The second is the label space. The two corpora do not share a taxonomy, so any
+cross-corpus evaluation must construct a correspondence between them. That
+construction is a research degree of freedom. A generous mapping that pairs
+biologically similar classes will report a smaller gap than a conservative one,
+and the reader usually cannot tell which was used or what was excluded.
+
+This paper closes both. Our contributions are:
+
+\begin{enumerate}
+\item \textbf{A leakage-controlled evaluation protocol.} Candidate duplicate
+pairs are generated by exhaustive perceptual-hash comparison over every
+distinct-hash pair across the two corpora---not by an approximate index---and
+every candidate is adjudicated by a human. Perceptual hashing generates
+candidates; it never decides. The result is \NLeakExactCore{} exact and
+\NLeakNearCore{} adjudicated-distinct near pairs between the corpora, so the
+measured degradation is a generalisation measurement rather than an artefact.
+
+\item \textbf{An evidence-based shared label space.} The
+\NSharedClasses{}-class cross-domain space is assembled from exactly two
+sources: a deterministic normaliser applied unchanged to both label sets, and a
+human policy decision recorded before this evaluation was designed. Every
+excluded class carries a written reason, including biologically plausible
+near-misses that we decline to assert. The mapping is conservative by
+construction and we say what a more generous one would change.
+
+\item \textbf{A controlled multi-seed comparison with paired statistics.} Three
+backbones spanning a \ParamRatio{}$\times$ parameter range are trained under one protocol
+across independent seeds, evaluated in-domain and cross-domain, and compared
+with McNemar's exact test on per-item correctness \cite{mcnemar1947,dietterich1998tests}
+and bias-corrected accelerated bootstrap intervals \cite{efron1987bca}, with
+family-wise error control \cite{holm1979}.
+
+\item \textbf{Two findings that matter for practice.} The in-domain ordering of
+backbones does not merely compress under the domain shift---it \emph{crosses},
+and the crossing between the largest and smallest backbone is statistically
+significant in both directions. Separately, a temperature fitted on in-domain
+validation data and carried across the shift degrades calibration below the
+uncalibrated baseline, which is the opposite of the standard recommendation.
+\end{enumerate}
+
+We are careful throughout to separate what the evidence supports from what it
+merely suggests. Where two backbones are not statistically distinguishable we
+say so rather than reporting their order; where a difference is smaller than the
+variation induced by the random seed alone, we do not claim it. Every input is
+bound to a digest-verified dataset lock, every reported number is generated from
+run artefacts by script, and no number in this document was typed by hand.
+
+% =========================================================================== %
+\section{Related Work}
+% =========================================================================== %
+
+\subsubsection{Laboratory corpora and their saturation.}
+PlantVillage \cite{mohanty2016plantvillage} established the standard benchmark
+and, with it, the standard result: accuracies above $0.99$ across dozens of
+crop--disease classes. The corpus's construction---detached leaves, uniform
+backgrounds---is stated plainly in the original work. What followed was a long
+sequence of papers reporting incremental gains on a benchmark with very little
+headroom, a pattern that makes in-domain comparison progressively less
+informative.
+
+\subsubsection{Field-condition corpora.}
+PlantDoc \cite{singh2020plantdoc} was assembled specifically to test whether
+laboratory-trained models transfer, and reported that they largely do not.
+FieldPlant \cite{moupojou2023fieldplant} and PlantWild \cite{wei2024plantwild}
+extend the field-condition setting to larger and more varied imagery, and
+PlantSeg \cite{wei2025plantseg} adds segmentation supervision. Our work is
+complementary: rather than proposing a new corpus or a stronger model, we ask
+what conditions a cross-corpus comparison must satisfy before its number means
+anything.
+
+\subsubsection{Generalisation and dataset bias.}
+The observation that models absorb corpus-specific regularities rather than the
+intended concept predates deep learning \cite{torralba2011bias} and has been
+quantified repeatedly since \cite{recht2019imagenet,geirhos2020shortcut}. For
+plant disease, the uniform background of laboratory imagery is an obvious
+shortcut candidate: it is perfectly correlated with the corpus and trivially
+easy to represent. Near-duplicate leakage is the adjacent failure, and
+\cite{barz2020purging} showed it survives in benchmarks that had been studied
+for a decade. We treat both as things to measure, not to assume.
+
+\subsubsection{Calibration and selective prediction.}
+Modern networks are systematically over-confident, and temperature scaling is
+the standard single-parameter remedy \cite{guo2017calibration}. Under
+distribution shift, uncertainty estimates degrade further and the ranking of
+calibration methods changes \cite{ovadia2019trust}. Selective prediction
+\cite{geifman2017selective} offers the deployment-relevant view: not how
+accurate a model is, but how accurate it is on the subset it is willing to act
+on. All three matter for an agricultural decision system, where an unreliable
+confident prediction can cost a season.
+
+\subsubsection{Positioning within this venue.}
+LeADS \cite{das2025leads} carries a leaf-image pipeline through stress and
+disease detection to severity estimation, establishing the applied trajectory
+this community is on. AgroBench \cite{shinoda2025agrobench} shows how far
+general-purpose vision--language models remain from reliable agricultural
+judgement. Our contribution sits underneath both: whatever the downstream stage,
+its evaluation inherits whatever contamination and label-space slack exist in
+the cross-domain measurement it rests on. We aim to make that foundation
+auditable.
+
+% =========================================================================== %
+\section{Datasets and Leakage-Controlled Preparation}
+% =========================================================================== %
+
+\subsection{Corpora}
+
+\textbf{PlantVillage} supplies the laboratory domain: \NPv{} colour images over
+\NPvClasses{} crop--disease classes, split \NPvTrain{} train / \NPvTest{} test.
+The corpus is pinned to an immutable upstream revision and the manifest is
+reconstructed exactly from the pinned split files, with every image verified
+against its recorded digest.
+
+\textbf{PlantDoc} \cite{singh2020plantdoc} supplies the field domain.
+\NPdcAcquired{} records were acquired at a pinned source revision. Two
+reductions follow, both recorded with reasons:
+\NPdcExcludedDup{} images are removed by human adjudication of byte-exact
+duplicate groups, and \NPdcExcludedReview{} further images are \emph{excluded,
+not relabelled}, because the diagnostic evidence for a relabel was judged
+insufficient and the second scientific review that would settle it has not been
+performed. The exclusion records no diagnosis and asserts nothing about what
+those images depict. The resulting \emph{PlantDoc Core} holds \NPdc{} images
+over \NPdcClasses{} classes, split \NPdcTrain{} train / \NPdcTest{} test. No
+source image was deleted and no image byte was modified.
+
+Class support in PlantDoc Core is severely uneven---the largest training class
+holds \PdcImbalance{} times the smallest---and one arthropod-pest class has two training
+images and no test images at all. It cannot be learned or measured, and is
+retained only because removing it would alter the locked corpus. Table
+\ref{tab:dataset-stats} gives the composition; the full provenance and leakage
+counts are in the supplementary material.
+
+\input{../experiments/ica26/tables/table1_dataset_statistics.tex}
+
+\subsection{Cross-Corpus Leakage}
+
+If a field evaluation image duplicates a laboratory training image, the
+cross-domain number is contaminated. We therefore search for such pairs
+exhaustively.
+
+Candidate generation uses a \PhashBits{}-bit perceptual hash with exact chunked
+brute-force Hamming evaluation over \emph{every} distinct-hash pair, which for
+the acquired population is \NPhashComparisonsSci{} distance evaluations. The search
+is exhaustive by construction rather than index-approximate: an approximate
+nearest-neighbour index would make the absence of a match an artefact of the
+index's recall, which is exactly the property this audit must not have. Pairs at
+Hamming distance $\leq \LeakThreshold{}$ are surfaced as candidates.
+
+\textbf{Perceptual hashing generates candidates; it never decides.} All
+\NLeakNearCore{} surfaced near pairs were adjudicated by a human as clearly
+different, and the great majority are cross-class collisions on plain green
+foliage---the failure mode a perceptual hash is expected to have. The audit
+finds \NLeakExactCore{} exact overlaps and \NLeakUnresolved{} unresolved pairs.
+No laboratory training image is a byte- or pixel-duplicate of any field
+evaluation image, so the cross-domain measurement in Section \ref{sec:xdomain}
+is a genuine generalisation measurement.
+
+\textbf{Within-corpus leakage} is controlled separately. PlantVillage records
+which physical leaf each image photographs, and several images can show one
+leaf. The upstream train/test split is leaf-grouped; the validation split we
+carve from train is \emph{also} leaf-grouped, so no physical leaf appears on
+both sides of model selection. Ignoring this would let a model be selected on a
+near-copy of something it trained on.
+
+\subsection{Why the Two Evaluation Sets Differ in Size}
+\label{sec:two-eval-sets}
+
+Two field-corpus evaluation sets appear in this paper and they are deliberately
+different sizes: cross-domain evaluation uses \NXdImages{} images, while
+in-domain PlantDoc testing uses \NPdcTest{}. This is not an inconsistency, and
+the reason is worth stating plainly because it determines what each number
+means.
+
+The constraint that sets the size of an evaluation set is \emph{what the model
+under test has already seen}.
+
+A PlantVillage-trained model has seen \emph{no} PlantDoc image, of either split.
+PlantDoc's train/test boundary is a fact about PlantDoc-trained models and
+carries no information about a model trained on a different corpus. For such a
+model the entire shared-class subset is legitimately held out, so restricting it
+to PlantDoc's own test split would discard \NPdcTest{}-image-scale evidence for
+no methodological gain --- and would leave per-class supports far too thin to
+support the class-wise reporting in Section \ref{sec:xdomain}.
+
+A PlantDoc-trained model, by contrast, has seen the PlantDoc training split.
+Only the \NPdcTest{} held-out images are admissible for it, and every in-domain
+PlantDoc figure in this paper uses exactly those.
+
+The two numbers therefore answer different questions --- ``how well does a
+laboratory-trained model transfer to field imagery?'' and ``how well does a
+field-trained model do on held-out field imagery?'' --- and neither evaluation
+set contains an image the model being evaluated has trained on. The composition
+of the cross-domain set by PlantDoc split is recorded in every result file, so a
+reader who prefers the more restrictive choice can see exactly which images it
+would remove.
+
+% =========================================================================== %
+\section{Experimental Methodology}
+% =========================================================================== %
+
+\subsection{The Shared Label Space}
+\label{sec:mapping}
+
+The two corpora use different taxonomies, so cross-domain evaluation requires a
+correspondence. Because that correspondence is a research degree of freedom, we
+constrain it to evidence that existed before this evaluation was designed, from
+exactly two sources.
+
+\emph{Source 1: deterministic key collision.} The project's crop and disease
+normalisation functions are applied \emph{unchanged and identically} to both
+label sets. Eleven pairs collide on the resulting canonical key. The same
+function runs on both sides, so no human judgement enters the pairing.
+
+\emph{Source 2: a recorded human policy.} A previously approved policy assigns
+every PlantDoc class of the form ``\textit{Crop} leaf'' a canonical disease of
+\textit{healthy}; on the PlantVillage side the token is literal in the label.
+Ten crops appear on both sides under this policy.
+
+The result is \NSharedClasses{} shared canonical classes covering \NXdImages{}
+PlantDoc Core images. Everything else is excluded \emph{with a written reason}.
+The excluded set deliberately includes biologically plausible near-misses that
+the normaliser does not align---for instance a gray-leaf-spot class against a
+Cercospora gray-leaf-spot class, and two differently-named pepper leaf-spot
+classes. Asserting those pairs would be a new semantic judgement made by the
+authors of the evaluation, in a direction that would improve the headline
+number. We decline, and record what a more generous mapping would change. The
+mapping is conservative by construction, and Section \ref{sec:limitations}
+states the consequence.
+
+\subsection{Cross-Domain Evaluation Procedure}
+
+A laboratory-trained model predicts over its own \NPvClasses{}-way space. To
+evaluate it on the shared space, source-class probabilities are summed within
+each canonical class and renormalised over the \NSharedClasses{} shared classes
+only. Field images outside the mapping are \emph{excluded from the evaluation
+set} rather than counted as errors, since a model cannot be faulted for a class
+the protocol never asked it about.
+
+Renormalisation discards probability mass, and how much is discarded is itself
+informative, so the mean retained mass before renormalisation is recorded for
+every run and reported in Section \ref{sec:xdomain}.
+
+All \NXdImages{} shared-class Core images are used, including those PlantDoc
+assigns to its training split, because a laboratory-trained model has never seen
+any of them. The split composition is recorded in every result file.
+
+\subsection{Models and Training}
+
+Three ImageNet-pretrained \cite{deng2009imagenet} backbones span an order of
+magnitude in capacity: ResNet-50 \cite{he2016resnet} (\ParamsRn{}\,M
+parameters), EfficientNet-B0 \cite{tan2019efficientnet} (\ParamsEb{}\,M), and
+MobileNetV3-Small \cite{howard2019mobilenetv3} (\ParamsMn{}\,M). Only the final
+classifier layer is replaced. Backbone choice is the sole architectural
+variable.
+
+One protocol governs every run: $224 \times 224$ inputs, AdamW at learning rate
+$3\times10^{-4}$ with weight decay $10^{-4}$, cosine decay stepped per batch,
+mixed precision, batch size 64, label smoothing $0.1$, at most 15 epochs with
+early stopping on validation macro-F1 at patience 3, and selection of the single
+best-validation checkpoint. Training augmentation is deliberately mild:
+random resized crop, horizontal flip, rotation within $\pm15^{\circ}$, and
+colour jitter with \emph{near-zero hue} perturbation. Chlorosis and necrosis are
+diagnosed by colour; a hue shift would destroy the signal the task depends on.
+
+Two deviations from the common protocol are dataset-driven rather than
+architectural, and both are reported rather than tuned. PlantVillage validation
+is grouped by leaf identity, as described above. PlantDoc Core training uses
+inverse-frequency class weighting normalised to mean one, so the effective
+learning rate is unchanged; with $\PdcImbalance{}{:}1$ imbalance, a class-balanced sampler
+would replay the two-image arthropod-pest class roughly \PdcImbalance{} times per epoch
+and overfit it, and weighted loss is the gentler instrument.
+
+\subsection{Metrics}
+
+Classification is reported as accuracy, macro-F1, weighted-F1, balanced
+accuracy, and macro precision and recall. Macro averages run over the classes
+\emph{present in the evaluation split}, with the full declared label space
+reported alongside: averaging in a zero-support class as a hard $0.0$ would
+describe the split rather than the model. Predictions landing on zero-support
+classes are still errors and are counted explicitly.
+
+Probabilistic quality is reported as negative log-likelihood, Brier score, and
+expected and maximum calibration error over 15 equal-width bins
+\cite{naeini2015ece}. The scalar calibration error and the reliability diagram
+are computed from the same bin table, so they cannot disagree. Selective
+prediction \cite{geifman2017selective} is reported as a confidence--abstention
+curve and the area under the risk--coverage curve.
+
+Calibration uses a single temperature fitted by L-BFGS on validation
+negative log-likelihood and applied unchanged to test and cross-domain logits.
+It is never refitted on evaluation data. Temperature does not move the argmax,
+so accuracy and F1 are identical before and after; only confidence moves. Both
+the scaled and unscaled variants are reported, which is what makes it possible
+to ask whether an in-domain calibration fix survives a domain shift.
+
+\subsection{Statistical Methodology}
+\label{sec:stats}
+
+Two models evaluated on one dataset are not independent samples, so accuracies
+are compared with \textbf{McNemar's exact test} on per-item correctness
+\cite{mcnemar1947,dietterich1998tests}. The exact binomial form is used rather
+than the chi-square approximation because the discordant counts here are small.
+Because we report every pairwise comparison, $p$-values are additionally
+reported with Holm step-down adjustment \cite{holm1979} controlling the
+family-wise error rate across the whole family of tests.
+
+Interval estimates use the \textbf{bias-corrected and accelerated (BCa)
+bootstrap} \cite{efron1987bca,efron1993bootstrap} at the $95\%$ level with
+\NBootstrap{} resamples. Both the bias correction and the acceleration are
+computed; where either is undefined---as it is for a statistic that does not
+vary across resamples---the interval degrades to a percentile interval and is
+labelled as such rather than silently reported as BCa. The evaluated label space
+is held fixed at the classes present in the original evaluation, so the
+statistic keeps one definition across all replicates.
+
+These two instruments answer different questions and are reported separately.
+The bootstrap interval describes sampling variability of a fixed evaluation set
+for one trained checkpoint; the across-seed standard deviation describes
+variability of the training process itself. Neither substitutes for the other,
+and a difference smaller than the seed spread is not claimed as a finding
+regardless of its $p$-value.
+
+\subsection{Reproducibility}
+
+Every run revalidates the dataset lock (\LockDigestFull{}) before training
+begins, so a checkpoint can always be traced to an exact, digest-bound corpus.
+Runs are sequential on a single Apple-silicon host with a unified-memory
+accelerator; timings are therefore Apple-silicon numbers and will not transfer
+to server GPUs, though relative ordering between backbones should. Seeds are
+set for Python, NumPy, and the framework at the start of every run, and the
+validation carve-out depends only on the frame, the fraction, and the seed---not
+on row order or platform.
+
+\textbf{A mixed-precision failure mode worth reporting.} Training uses fp16
+autocast. On CUDA, the framework's gradient scaler inspects gradients for
+non-finite values and skips the optimiser step when it finds them; the
+Metal backend used here has no equivalent, so a single overflowing gradient
+reached the optimiser, whose $m/\sqrt{v}$ update evaluated to $\infty/\infty$
+and left the parameter permanently NaN. The failure was silent rather than
+loud: training loss and training accuracy are computed from batch statistics
+and stayed indistinguishable from a healthy run, and because a NaN model emits
+one constant class it scored near the majority-class rate rather than zero ---
+an implausible validation number, not an error. We added the same
+non-finite-gradient step skip on the Metal path, and record the count of
+skipped steps in every result file. Seed \SigSeed{} was verified unaffected,
+and the guard was confirmed to be a no-op by re-training a completed run and
+reproducing a byte-identical checkpoint. Any run that does skip a step is
+identified rather than pooled silently: \SkippedStepsNote{}.
+
+\textbf{Draft status.} This version reports \NRunsDone{} of \NRunsPlanned{}
+planned runs, covering seeds \SeedList{}. All statistical tests in Section
+\ref{sec:stats} are computed on seed \SigSeed{}. Sections \ref{sec:indomain}
+through \ref{sec:calibration} are completed once the full matrix finishes; no
+value in this document is extrapolated from a run that has not happened.
+
+% =========================================================================== %
+\section{In-Domain Results}
+\label{sec:indomain}
+% =========================================================================== %
+
+\noindent\emph{[Draft: narrative pending completion of the three-seed matrix.
+The generated tables below are current for the runs that have finished.]}
+
+\input{../experiments/ica26/tables/table2_in_domain_performance_compact.tex}
+
+% =========================================================================== %
+\section{Cross-Domain Generalisation}
+\label{sec:xdomain}
+% =========================================================================== %
+
+\noindent\emph{[Draft: narrative pending completion of the three-seed matrix.]}
+
+\input{../experiments/ica26/tables/table3_cross_domain_performance_compact.tex}
+\input{../experiments/ica26/tables/table5_domain_shift_degradation_compact.tex}
+
+% =========================================================================== %
+\section{Calibration and Selective Prediction}
+\label{sec:calibration}
+% =========================================================================== %
+
+\noindent\emph{[Draft: narrative pending completion of the three-seed matrix.]}
+
+\input{../experiments/ica26/tables/table6_calibration_compact.tex}
+
+% =========================================================================== %
+\section{Discussion}
+% =========================================================================== %
+
+\subsection{A Saturated Benchmark Carries Little Ranking Information}
+
+The three backbones separate cleanly on the laboratory test split, and the
+separations are statistically real: on seed \SigSeed{}, every pairwise
+comparison there is significant under Holm adjustment. But the spread that
+separates them is tiny in absolute terms, and it does not survive the domain
+shift. Under the shift, the backbone that places \emph{last} in domain is
+statistically indistinguishable from the one that places \emph{first} in domain
+($p = \PMcXdRnEb{}$ unadjusted, $\PMcHolmXdRnEb{}$ after Holm), while the
+ordering against MobileNetV3-Small reverses outright and is significant in both
+directions.
+
+That reversal is the substantive result, and it is worth stating precisely
+because the loose version of the claim is weaker than the true one.
+MobileNetV3-Small is significantly \emph{better} than ResNet-50 on the
+laboratory test split and significantly \emph{worse} than it under the shift.
+Both legs are significant after family-wise correction. This is not a
+re-ordering within noise; it is a genuine crossing.
+
+Because a paired test computed on one training run is a statement about that
+run, each verdict is recomputed independently per seed and reported as holding
+in all seeds, in none, or in some. We do not pool $p$-values across seeds: three
+runs is far too few to justify a meta-analytic combination, and the question
+that matters is whether a verdict is stable, not what its combined $p$-value
+would be.
+
+The practical reading is uncomfortable for a literature organised around
+in-domain leaderboards. Choosing a backbone by its laboratory accuracy---the
+only signal available if one does not build a cross-domain evaluation---would
+have selected against the architecture that transfers best. A benchmark with no
+headroom cannot rank models on a property it does not measure, and by the time
+accuracies exceed $0.99$, the remaining differences reflect fit to corpus-specific
+regularities at least as much as disease recognition
+\cite{torralba2011bias,geirhos2020shortcut}.
+
+\subsection{In-Domain Calibration Does Not Transport}
+
+Temperature scaling \cite{guo2017calibration} is close to free and close to
+universal advice: fit one scalar on held-out validation data, apply it, obtain
+better-calibrated confidences without touching accuracy. In domain, it works
+here exactly as advertised.
+
+Across the domain shift it does not merely fail to help---it actively hurts,
+raising calibration error above the uncalibrated baseline for all three
+backbones. The mechanism is legible rather than mysterious. Label smoothing
+leaves the models mildly \emph{under}-confident in domain, so the fitted
+temperature falls below $1$ and \emph{sharpens} the predictive distribution.
+Sharpening is precisely right in domain, where the model is usually correct.
+Out of domain the model is already over-confident relative to its much lower
+accuracy, and sharpening amplifies the error it was supposed to correct.
+
+The deployment consequence inverts the usual recommendation: a temperature
+fitted on in-domain validation data should not be transported across a domain
+shift, and transporting it is worse than shipping the model uncalibrated. This
+is consistent with the broader finding that uncertainty quantification degrades
+under shift \cite{ovadia2019trust}, but it is a sharper statement---the standard
+fix does not merely lose effectiveness, it changes sign. Because temperature
+does not move the argmax, a practitioner monitoring only accuracy would never
+see this happen. We report both variants side by side so the comparison is
+visible rather than implied.
+
+\subsection{Why the Controls Change What Can Be Concluded}
+
+Without the leakage audit, the honest form of our cross-domain result would have
+to be ``degradation of at least this much, assuming no contamination.'' With
+\NLeakExactCore{} exact overlaps established by exhaustive search and human
+adjudication of every near candidate, the assumption becomes a measurement.
+
+Similarly, without a constrained label space, a reader could reasonably suspect
+the mapping had been tuned. Restricting it to a deterministic normaliser and a
+pre-existing policy decision means the shared space was not chosen to produce
+any particular number---and because it is conservative, its bias is in the
+direction that makes our headline gap \emph{larger} than a generous mapping
+would. We state that rather than leaving it for a reviewer to infer.
+
+% =========================================================================== %
+\section{Limitations and Threats to Validity}
+\label{sec:limitations}
+% =========================================================================== %
+
+\begin{enumerate}
+\item \textbf{The two label spaces differ.} In-domain evaluation is
+\NPvClasses{}-way; cross-domain is \NSharedClasses{}-way over a restricted
+space. The measured drop therefore combines domain shift with a change in task
+difficulty, and should be read as a paired trend across models rather than as an
+isolated quantity. The trend is the claim; the absolute magnitude is not.
+
+\item \textbf{The shared mapping is conservative by construction.} Excluded
+near-misses are listed with reasons. A human-authored correspondence would
+likely enlarge the shared space and change the cross-domain numbers, most
+plausibly upward. Our numbers should be read as a lower bound on transfer under
+a mapping that refuses to guess.
+
+\item \textbf{The field corpus carries documented label noise.} Images whose
+filenames contradict their assigned class are known to exist in PlantDoc. This
+bounds achievable accuracy on it and is not corrected here, because correcting
+it would alter the locked corpus and make the evaluation unreproducible against
+the published lock.
+
+\item \textbf{The field test split is small.} With \NPdcTest{} images across
+\NPdcTestClasses{} evaluable classes, per-class metrics have wide intervals; this is why we
+report bootstrap intervals rather than point estimates alone, and why per-class
+claims are avoided.
+
+\item \textbf{One class cannot be evaluated.} The arthropod-pest class has two
+training images and no test images. It is neither learnable nor measurable and
+is retained only for corpus integrity.
+
+\item \textbf{Statistical scope.} McNemar tests and bootstrap intervals are
+computed on seed \SigSeed{}. They characterise a fixed evaluation set for one
+trained checkpoint per backbone; they do not incorporate training-process
+variability, which is reported separately as across-seed spread. With three
+seeds, that spread is a descriptive quantity and we do not attach significance
+claims to it.
+
+\item \textbf{Hardware.} Timing and throughput figures come from an
+Apple-silicon unified-memory accelerator and do not transfer to server GPUs in
+absolute terms.
+
+\item \textbf{Cross-domain evaluation includes field-corpus training images.}
+All \NXdImages{} shared-class images are used, since a laboratory-trained model
+has seen none of them; the reasoning is set out in Section
+\ref{sec:two-eval-sets}. A reader preferring the more restrictive choice ---
+scoring only PlantDoc's own \NPdcTest{}-image test split --- would obtain a
+much smaller evaluation set with correspondingly wider intervals. The split
+composition is recorded in every result file so that alternative can be
+reconstructed.
+
+\item \textbf{Mixed precision required a numerical guard.} fp16 training on the
+Metal backend overflowed a gradient and permanently corrupted a model, silently
+(Section \ref{sec:stats}). The remedy skips only steps whose gradients are
+non-finite, which leaves a run that never overflows numerically identical, so
+runs before and after the change remain comparable. The count of skipped steps
+is reported per run rather than aggregated away, and any run with a non-zero
+count is identified as such. Reproductions on other accelerators may see a
+different overflow pattern, or none.
+
+\item \textbf{Governance status.} These results rest on a scientific experiment
+lock that binds digests, counts, taxonomy, and splits. It is not a completed
+formal dataset-governance freeze, and we do not claim otherwise.
+\end{enumerate}
+
+% =========================================================================== %
+\section{Conclusion}
+% =========================================================================== %
+
+We set out to measure how much of a laboratory-trained plant disease
+classifier's accuracy survives contact with field imagery, under conditions
+where the measurement can be trusted. Closing the two confounds that usually sit
+between such a comparison and its interpretation---train/test contamination, and
+a label correspondence chosen by the people reporting the result---turns out to
+change what can be concluded, not merely how carefully it must be hedged.
+
+Two findings survive that scrutiny. First, a near-saturated in-domain benchmark
+carries almost no information about which backbone transfers: the in-domain
+ordering does not merely compress under the shift, it crosses, significantly and
+in both directions, between the largest and smallest backbones we tested.
+Selecting an architecture on laboratory accuracy is therefore not a conservative
+default---it is an active bet on a property the benchmark does not measure.
+Second, temperature scaling fitted on in-domain validation data degrades
+out-of-domain calibration below the uncalibrated baseline, because label
+smoothing drives the fitted temperature to sharpen a distribution that is
+already over-confident where it matters. A practitioner watching accuracy alone
+cannot observe this, since temperature never moves the argmax.
+
+Neither finding requires a new architecture or a new corpus. Both required an
+evaluation built so that the alternative explanations could be ruled out rather
+than assumed away, and both point the same direction: for agricultural decision
+support, the evaluation protocol deserves at least as much scrutiny as the
+model. The full protocol, the dataset lock, the leakage audit, the mapping
+provenance, and the generation scripts for every table and figure in this paper
+are released with it.
+
+\bibliographystyle{splncs04}
+\bibliography{references}
+
+\end{document}

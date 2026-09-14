@@ -1,0 +1,24 @@
+\begin{sidewaystable}[htbp]
+\caption{Backbone ranking by macro-F1 under each evaluation setting, per seed. A setting is STABLE when all seeds agree on the ordering. This is the direct test of whether the in-domain ranking predicts the cross-domain ranking, or whether an apparent reordering is within seed noise.}
+\label{tab:ranking-stability}
+\scriptsize
+\centering
+\begin{tabular}{llllll}
+\toprule
+Setting & Seed & Ranking (macro-F1; best first) & ResNet-50 macro-F1 & EfficientNet-B0 macro-F1 & MobileNetV3-Small macro-F1 \\
+\midrule
+PlantVillage in-domain & 42 & EfficientNet-B0 > MobileNetV3-Small > ResNet-50 & 0.9899 & 0.9956 & 0.9927 \\
+PlantVillage in-domain & 1337 & EfficientNet-B0 > MobileNetV3-Small > ResNet-50 & 0.9925 & 0.9944 & 0.9931 \\
+PlantVillage in-domain & 2026 & ResNet-50 > EfficientNet-B0 > MobileNetV3-Small & 0.9957 & 0.9951 & 0.9923 \\
+PlantVillage in-domain & all & UNSTABLE: 2/3 seeds give EfficientNet-B0 > MobileNetV3-Small > ResNet-50 & 0.9927 & 0.9950 & 0.9927 \\
+PlantVillage $\rightarrow$ PlantDoc Core & 42 & ResNet-50 > EfficientNet-B0 > MobileNetV3-Small & 0.2414 & 0.2359 & 0.1982 \\
+PlantVillage $\rightarrow$ PlantDoc Core & 1337 & EfficientNet-B0 > ResNet-50 > MobileNetV3-Small & 0.2218 & 0.2312 & 0.1764 \\
+PlantVillage $\rightarrow$ PlantDoc Core & 2026 & ResNet-50 > EfficientNet-B0 > MobileNetV3-Small & 0.2242 & 0.2230 & 0.1862 \\
+PlantVillage $\rightarrow$ PlantDoc Core & all & UNSTABLE: 2/3 seeds give ResNet-50 > EfficientNet-B0 > MobileNetV3-Small & 0.2291 & 0.2300 & 0.1869 \\
+PlantDoc Core in-domain & 42 & ResNet-50 > EfficientNet-B0 > MobileNetV3-Small & 0.6994 & 0.6927 & 0.5841 \\
+PlantDoc Core in-domain & 1337 & ResNet-50 > EfficientNet-B0 > MobileNetV3-Small & 0.7094 & 0.6663 & 0.5946 \\
+PlantDoc Core in-domain & 2026 & EfficientNet-B0 > ResNet-50 > MobileNetV3-Small & 0.6381 & 0.6716 & 0.5840 \\
+PlantDoc Core in-domain & all & UNSTABLE: 2/3 seeds give ResNet-50 > EfficientNet-B0 > MobileNetV3-Small & 0.6823 & 0.6768 & 0.5876 \\
+\bottomrule
+\end{tabular}
+\end{sidewaystable}

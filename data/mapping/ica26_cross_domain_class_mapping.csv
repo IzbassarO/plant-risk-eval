@@ -1,0 +1,46 @@
+canonical_class_id,plantvillage_label,plantdoc_label,crop,disease_state,mapping_evidence,evidence_source,inclusion_status,exclusion_reason
+apple__healthy,Apple___healthy,Apple leaf,apple,healthy,"policy:healthy-monitor-v1: data/mapping/action_mapping_review.csv records canonical_disease=healthy, review_status=approved for 'Apple leaf'; the PlantVillage label 'Apple___healthy' carries the literal 'healthy' token",human_approved_healthy_policy,included,
+apple__scab,Apple___Apple_scab,Apple Scab Leaf,apple,scab,"ica26.mapping.crosswalk.normalize_crop/normalize_disease applied unchanged to both labels yields the identical key ('apple', 'scab')",deterministic_normalizer_key_collision,included,
+blueberry__healthy,Blueberry___healthy,Blueberry leaf,blueberry,healthy,"policy:healthy-monitor-v1: data/mapping/action_mapping_review.csv records canonical_disease=healthy, review_status=approved for 'Blueberry leaf'; the PlantVillage label 'Blueberry___healthy' carries the literal 'healthy' token",human_approved_healthy_policy,included,
+cherry__healthy,Cherry_(including_sour)___healthy,Cherry leaf,cherry,healthy,"policy:healthy-monitor-v1: data/mapping/action_mapping_review.csv records canonical_disease=healthy, review_status=approved for 'Cherry leaf'; the PlantVillage label 'Cherry_(including_sour)___healthy' carries the literal 'healthy' token",human_approved_healthy_policy,included,
+grape__black_rot,Grape___Black_rot,grape leaf black rot,grape,black rot,"ica26.mapping.crosswalk.normalize_crop/normalize_disease applied unchanged to both labels yields the identical key ('grape', 'black rot')",deterministic_normalizer_key_collision,included,
+grape__healthy,Grape___healthy,grape leaf,grape,healthy,"policy:healthy-monitor-v1: data/mapping/action_mapping_review.csv records canonical_disease=healthy, review_status=approved for 'grape leaf'; the PlantVillage label 'Grape___healthy' carries the literal 'healthy' token",human_approved_healthy_policy,included,
+peach__healthy,Peach___healthy,Peach leaf,peach,healthy,"policy:healthy-monitor-v1: data/mapping/action_mapping_review.csv records canonical_disease=healthy, review_status=approved for 'Peach leaf'; the PlantVillage label 'Peach___healthy' carries the literal 'healthy' token",human_approved_healthy_policy,included,
+pepper__healthy,"Pepper,_bell___healthy",Bell_pepper leaf,pepper,healthy,"policy:healthy-monitor-v1: data/mapping/action_mapping_review.csv records canonical_disease=healthy, review_status=approved for 'Bell_pepper leaf'; the PlantVillage label 'Pepper,_bell___healthy' carries the literal 'healthy' token",human_approved_healthy_policy,included,
+potato__early_blight,Potato___Early_blight,Potato leaf early blight,potato,early blight,"ica26.mapping.crosswalk.normalize_crop/normalize_disease applied unchanged to both labels yields the identical key ('potato', 'early blight')",deterministic_normalizer_key_collision,included,
+potato__late_blight,Potato___Late_blight,Potato leaf late blight,potato,late blight,"ica26.mapping.crosswalk.normalize_crop/normalize_disease applied unchanged to both labels yields the identical key ('potato', 'late blight')",deterministic_normalizer_key_collision,included,
+raspberry__healthy,Raspberry___healthy,Raspberry leaf,raspberry,healthy,"policy:healthy-monitor-v1: data/mapping/action_mapping_review.csv records canonical_disease=healthy, review_status=approved for 'Raspberry leaf'; the PlantVillage label 'Raspberry___healthy' carries the literal 'healthy' token",human_approved_healthy_policy,included,
+soybean__healthy,Soybean___healthy,Soyabean leaf,soybean,healthy,"policy:healthy-monitor-v1: data/mapping/action_mapping_review.csv records canonical_disease=healthy, review_status=approved for 'Soyabean leaf'; the PlantVillage label 'Soybean___healthy' carries the literal 'healthy' token",human_approved_healthy_policy,included,
+squash__powdery_mildew,Squash___Powdery_mildew,Squash Powdery mildew leaf,squash,powdery mildew,"ica26.mapping.crosswalk.normalize_crop/normalize_disease applied unchanged to both labels yields the identical key ('squash', 'powdery mildew')",deterministic_normalizer_key_collision,included,
+strawberry__healthy,Strawberry___healthy,Strawberry leaf,strawberry,healthy,"policy:healthy-monitor-v1: data/mapping/action_mapping_review.csv records canonical_disease=healthy, review_status=approved for 'Strawberry leaf'; the PlantVillage label 'Strawberry___healthy' carries the literal 'healthy' token",human_approved_healthy_policy,included,
+tomato__bacterial_spot,Tomato___Bacterial_spot,Tomato leaf bacterial spot,tomato,bacterial spot,"ica26.mapping.crosswalk.normalize_crop/normalize_disease applied unchanged to both labels yields the identical key ('tomato', 'bacterial spot')",deterministic_normalizer_key_collision,included,
+tomato__early_blight,Tomato___Early_blight,Tomato Early blight leaf,tomato,early blight,"ica26.mapping.crosswalk.normalize_crop/normalize_disease applied unchanged to both labels yields the identical key ('tomato', 'early blight')",deterministic_normalizer_key_collision,included,
+tomato__healthy,Tomato___healthy,Tomato leaf,tomato,healthy,"policy:healthy-monitor-v1: data/mapping/action_mapping_review.csv records canonical_disease=healthy, review_status=approved for 'Tomato leaf'; the PlantVillage label 'Tomato___healthy' carries the literal 'healthy' token",human_approved_healthy_policy,included,
+tomato__late_blight,Tomato___Late_blight,Tomato leaf late blight,tomato,late blight,"ica26.mapping.crosswalk.normalize_crop/normalize_disease applied unchanged to both labels yields the identical key ('tomato', 'late blight')",deterministic_normalizer_key_collision,included,
+tomato__mold,Tomato___Leaf_Mold,Tomato mold leaf,tomato,mold,"ica26.mapping.crosswalk.normalize_crop/normalize_disease applied unchanged to both labels yields the identical key ('tomato', 'mold')",deterministic_normalizer_key_collision,included,
+tomato__mosaic_virus,Tomato___Tomato_mosaic_virus,Tomato leaf mosaic virus,tomato,mosaic virus,"ica26.mapping.crosswalk.normalize_crop/normalize_disease applied unchanged to both labels yields the identical key ('tomato', 'mosaic virus')",deterministic_normalizer_key_collision,included,
+tomato__septoria_spot,Tomato___Septoria_leaf_spot,Tomato Septoria leaf spot,tomato,septoria spot,"ica26.mapping.crosswalk.normalize_crop/normalize_disease applied unchanged to both labels yields the identical key ('tomato', 'septoria spot')",deterministic_normalizer_key_collision,included,
+,,Apple rust leaf,apple,rust,,,excluded,no_equivalent_plantvillage_class_under_available_evidence
+,,Bell_pepper leaf spot,pepper,spot,,,excluded,no_equivalent_plantvillage_class_under_available_evidence
+,,Corn Gray leaf spot,corn,gray spot,,,excluded,no_equivalent_plantvillage_class_under_available_evidence
+,,Corn leaf blight,corn,blight,,,excluded,no_equivalent_plantvillage_class_under_available_evidence
+,,Corn rust leaf,corn,rust,,,excluded,no_equivalent_plantvillage_class_under_available_evidence
+,,Tomato leaf yellow virus,tomato,yellow virus,,,excluded,no_equivalent_plantvillage_class_under_available_evidence
+,,Tomato two spotted spider mites leaf,tomato,two spotted spider mites,,,excluded,arthropod_pest_out_of_disease_scope
+,Apple___Black_rot,,apple,black rot,,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,Apple___Cedar_apple_rust,,apple,cedar rust,,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,Cherry_(including_sour)___Powdery_mildew,,cherry,(including sour) powdery mildew,,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot,,corn,(maize) cercospora spot gray spot,,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,Corn_(maize)___Common_rust_,,corn,(maize) common rust,,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,Corn_(maize)___Northern_Leaf_Blight,,corn,(maize) northern blight,,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,Corn_(maize)___healthy,,corn,healthy,,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,Grape___Esca_(Black_Measles),,grape,esca (black measles),,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,Grape___Leaf_blight_(Isariopsis_Leaf_Spot),,grape,blight (isariopsis spot),,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,Orange___Haunglongbing_(Citrus_greening),,orange,haunglongbing (citrus greening),,,excluded,crop_absent_from_plantdoc
+,Peach___Bacterial_spot,,peach,bacterial spot,,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,"Pepper,_bell___Bacterial_spot",,pepper,"pepper, bacterial spot",,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,Potato___healthy,,potato,healthy,,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,Strawberry___Leaf_scorch,,strawberry,scorch,,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,Tomato___Spider_mites Two-spotted_spider_mite,,tomato,spider mites two spotted spider mite,,,excluded,arthropod_pest_out_of_disease_scope
+,Tomato___Target_Spot,,tomato,target spot,,,excluded,no_equivalent_plantdoc_class_under_available_evidence
+,Tomato___Tomato_Yellow_Leaf_Curl_Virus,,tomato,yellow curl virus,,,excluded,no_equivalent_plantdoc_class_under_available_evidence

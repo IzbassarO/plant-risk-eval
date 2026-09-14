@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\caption{Model efficiency, mean $\pm$ sample standard deviation over three seeds. Epoch counts vary between seeds because early stopping fires at different points. Latency is single-image, batch 1, after warm-up. Throughput and peak memory are in the supplementary table.}
+\label{tab:efficiency-compact}
+\footnotesize
+\centering
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llllll}
+\toprule
+Model & Corpus & Params (M) & Epochs & Train (min) & Latency (ms) \\
+\midrule
+ResNet-50 & PV & 23.59 & 12.0 $\pm$ 2.6 & 143.9 $\pm$ 35.1 & 8.82 $\pm$ 0.36 \\
+EfficientNet-B0 & PV & 4.06 & 13.0 $\pm$ 1.7 & 127.8 $\pm$ 16.1 & 9.26 $\pm$ 0.22 \\
+MobileNetV3-Small & PV & 1.56 & 13.0 $\pm$ 3.5 & 30.4 $\pm$ 7.1 & 6.42 $\pm$ 0.31 \\
+ResNet-50 & PDC & 23.57 & 10.7 $\pm$ 2.1 & 11.3 $\pm$ 2.2 & 8.58 $\pm$ 0.21 \\
+EfficientNet-B0 & PDC & 4.04 & 9.3 $\pm$ 0.6 & 10.6 $\pm$ 1.9 & 9.75 $\pm$ 0.17 \\
+MobileNetV3-Small & PDC & 1.55 & 13.0 $\pm$ 2.0 & 2.7 $\pm$ 0.4 & 6.28 $\pm$ 0.23 \\
+\bottomrule
+\end{tabular}
+\end{table}

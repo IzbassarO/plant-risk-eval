@@ -9,8 +9,8 @@ _This directory is a decision-neutral review packet for the byte-exact duplicate
 | `PLANTDOC_EXACT_DUPLICATE_HUMAN_REVIEW.md` | The checklist. Read this first. |
 | `plantdoc_exact_duplicate_groups.csv` | One row per group. **Write decisions here.** |
 | `plantdoc_exact_duplicate_members.csv` | Two immutable evidence rows per group. Do not edit. |
-| `contact_sheet_*.png` | Full uncropped images of both members of each group. |
-| `packet_manifest.json` | SHA-256 of every artifact above, for integrity checking. |
+| `contact_sheet_*.png` | Full uncropped images of both members. Derived review aids, regenerated locally; not tracked. |
+| `packet_manifest.json` | SHA-256 of every tracked artifact above, for integrity checking. |
 
 ## Steps
 
