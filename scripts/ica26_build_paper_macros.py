@@ -418,22 +418,49 @@ def build() -> tuple[str, dict]:
     # PlantVillage test scored through the identical shared-space pipeline, so
     # the comparison is 21-way to 21-way and the label-space change is removed
     # from the drop. Written by scripts/ica26_shared_space_control.py.
+    #
+    # Aggregated here from the per-run entries, with the same helpers and the
+    # same within-seed pairing as every other cell, rather than copied from the
+    # file's own summary block. The summary is then required to agree, so a
+    # summary edited out of step with its runs stops the build instead of
+    # reaching the paper.
     control_path = METRICS / "shared_space_control.json"
     control = json.loads(control_path.read_text()) if control_path.exists() else None
+    per_run_control = (control or {}).get("per_run", {})
+    section = "21-class in-domain control"
     for model, mtag in MODEL_TAG.items():
+        f1_shared, drops, masses = [], [], []
+        for seed in SEEDS:
+            rid = f"pv_{model}_s{seed}"
+            entry = per_run_control.get(rid)
+            xd = (runs.get(rid) or {}).get("evaluations", {}).get("cross_domain_plantdoc_core")
+            if not entry:
+                continue
+            f1_shared.append(entry["macro_f1"])
+            masses.append(entry["mean_retained_probability_mass_before_renormalisation"])
+            if xd:
+                drops.append((entry["macro_f1"] - xd["macro_f1"]) / entry["macro_f1"] * 100)
         s = (control or {}).get("summary", {}).get(model)
-        m.add(f"MacroFPvInShared{mtag}",
-              None if not s else agg_from(s["macro_f1_in_domain_shared_mean"],
-                                          s["macro_f1_in_domain_shared_sd"]),
-              "21-class in-domain control")
-        m.add(f"RelDropFShared{mtag}",
-              None if not s else agg_from(s["relative_drop_percent_mean"],
-                                          s["relative_drop_percent_sd"], places=1),
-              "21-class in-domain control")
-    m.add("NPvTestShared",
-          None if not control else integer(
-              next(iter(control["per_run"].values()))["n_evaluated"]),
-          "21-class in-domain control")
+        if s and len(f1_shared) == len(SEEDS) and len(drops) == len(SEEDS):
+            for key, value in (
+                ("macro_f1_in_domain_shared_mean", float(np.mean(f1_shared))),
+                ("macro_f1_in_domain_shared_sd", float(np.std(f1_shared, ddof=1))),
+                ("relative_drop_percent_mean", float(np.mean(drops))),
+                ("relative_drop_percent_sd", float(np.std(drops, ddof=1))),
+            ):
+                if abs(s[key] - value) > 1e-9:
+                    raise RuntimeError(
+                        f"shared_space_control.json summary.{model}.{key} = {s[key]} "
+                        f"disagrees with its per_run entries ({value})")
+        m.add(f"MacroFPvInShared{mtag}", agg(f1_shared), section)
+        m.add(f"MacroFMeanPvInShared{mtag}", mean_only(f1_shared), section)
+        m.add(f"RelDropFShared{mtag}", agg(drops, 1), section)
+        m.add(f"RelDropFSharedMean{mtag}", mean_only(drops, 1), section)
+        m.add(f"RetainedMassPvInShared{mtag}", agg(masses, 3), section)
+    n_scored = {e["n_evaluated"] for e in per_run_control.values()}
+    if len(n_scored) > 1:
+        raise RuntimeError(f"shared-space control scored differing image counts: {n_scored}")
+    m.add("NPvTestShared", integer(n_scored.pop()) if n_scored else None, section)
 
     # ---- retained probability mass ------------------------------------------ #
     for model, mtag in MODEL_TAG.items():
@@ -502,6 +529,7 @@ def build() -> tuple[str, dict]:
         "%   data/manifests/ica26_core_experiment_lock.json",
         "%   experiments/ica26/metrics/*.json",
         "%   experiments/ica26/metrics/significance.json",
+        "%   experiments/ica26/metrics/shared_space_control.json",
         "%",
         "% Regenerate after any run completes:",
         "%   python scripts/ica26_build_paper_macros.py",
@@ -533,24 +561,27 @@ def _fmt_p(p) -> str | None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="rebuild and compare, write nothing")
+    ap.add_argument("--out", type=Path, default=OUT,
+                    help="macro file to write or check (default: %(default)s)")
     args = ap.parse_args()
+    out = args.out if args.out.is_absolute() else REPO / args.out
 
     text, summary = build()
 
     if args.check:
-        if not OUT.exists():
-            print(f"MISSING {OUT}", file=sys.stderr)
+        if not out.exists():
+            print(f"MISSING {out}", file=sys.stderr)
             return 1
-        if OUT.read_text() != text:
+        if out.read_text() != text:
             print("CHECK FAILED: generated macros differ from the committed file",
                   file=sys.stderr)
             return 1
         print("check OK: macros are identical to the committed file")
         return 0
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(text)
-    print(f"wrote          : {OUT.relative_to(REPO)}")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text)
+    print(f"wrote          : {out.relative_to(REPO) if out.is_relative_to(REPO) else out}")
     print(f"macros         : {summary['n_macros']}")
     print(f"pending        : {summary['n_pending']}")
     print(f"seeds complete : {summary['seeds_done']}")
