@@ -4,6 +4,7 @@
 %   data/manifests/ica26_core_experiment_lock.json
 %   experiments/ica26/metrics/*.json
 %   experiments/ica26/metrics/significance.json
+%   experiments/ica26/metrics/shared_space_control.json
 %
 % Regenerate after any run completes:
 %   python scripts/ica26_build_paper_macros.py
@@ -278,11 +279,20 @@
 
 % --- 21-class in-domain control ------------------------------------------
 \newcommand{\MacroFPvInSharedRn}{\ensuremath{0.9947 \pm 0.0034}}
+\newcommand{\MacroFMeanPvInSharedRn}{0.9947}
 \newcommand{\RelDropFSharedRn}{\ensuremath{77.0 \pm 1.1}}
+\newcommand{\RelDropFSharedMeanRn}{77.0}
+\newcommand{\RetainedMassPvInSharedRn}{\ensuremath{0.953 \pm 0.006}}
 \newcommand{\MacroFPvInSharedEb}{\ensuremath{0.9980 \pm 0.0008}}
+\newcommand{\MacroFMeanPvInSharedEb}{0.9980}
 \newcommand{\RelDropFSharedEb}{\ensuremath{77.0 \pm 0.6}}
+\newcommand{\RelDropFSharedMeanEb}{77.0}
+\newcommand{\RetainedMassPvInSharedEb}{\ensuremath{0.952 \pm 0.003}}
 \newcommand{\MacroFPvInSharedMn}{\ensuremath{0.9966 \pm 0.0009}}
+\newcommand{\MacroFMeanPvInSharedMn}{0.9966}
 \newcommand{\RelDropFSharedMn}{\ensuremath{81.2 \pm 1.1}}
+\newcommand{\RelDropFSharedMeanMn}{81.2}
+\newcommand{\RetainedMassPvInSharedMn}{\ensuremath{0.950 \pm 0.002}}
 \newcommand{\NPvTestShared}{5\,382}
 
 % --- cross-domain protocol -----------------------------------------------

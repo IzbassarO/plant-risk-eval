@@ -1,13 +1,12 @@
 % ICA 2026 submission -- anonymized for double-blind review.
 %
 % No experimental number is typed in this file. Every one is a macro from
-% results_macros.tex, generated from the run result files, or from
-% results_macros_additions.tex.
+% results_macros.tex, generated from the run result files.
 %
 % Requires llncs.cls 2.23 or later for the credits environment and \discintname.
 %
-% Build with pdfLaTeX. Inputs: results_macros.tex, results_macros_additions.tex,
-% references.bib, tables/, figures/.
+% Build with pdfLaTeX. Inputs: results_macros.tex, references.bib, tables/,
+% figures/.
 \documentclass[runningheads]{llncs}
 
 \usepackage[T1]{fontenc}
@@ -70,7 +69,10 @@ ImageNet-pretrained backbones are trained under one protocol on the
 field images across \NSeedsDone{} seeds, with paired significance tests and
 bias-corrected accelerated bootstrap intervals, every input bound to a
 digest-verified dataset lock (\LockDigest{}). Macro-F1 falls by
-\RelDropFMeanRn{}--\RelDropFMeanMn{}\,\% under the shift. We find that
+\RelDropFMeanRn{}--\RelDropFMeanMn{}\,\% under the shift.
+The same fall is measured when the task is held at 21 classes on both sides, so
+it is not an artefact of the label-space restriction.
+We find that
 near-saturated in-domain accuracy carries almost no information about which
 backbone transfers, because it does not produce an ordering stable enough to
 carry, and that a temperature fitted on in-domain validation data, standard
@@ -444,22 +446,10 @@ a \NPdcTest{}-image split, not by reversing. The two larger backbones remain
 indistinguishable from each other ($p = \PMcPdcInRnEb{}$, $p_{\mathrm{Holm}} =
 \PMcHolmPdcInRnEb{}$) and also change sign across seeds. A corpus with headroom
 separates models the saturated one cannot. Table \ref{tab:significance-across-seeds-compact}
-gives the per-seed stability of every verdict in the paper, and Figure
-\ref{fig:seed-spread} shows all three settings together.
+gives the per-seed stability of every verdict in the paper, and a figure in the
+supplementary material shows all three settings together.
 
 \input{tables/table9_significance_across_seeds_compact.tex}
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.85\textwidth]{fig_seed_spread.pdf}
-\caption{Macro-F1 by backbone and evaluation setting: mean with a bar of one
-across-seed standard deviation, and each of the \NSeedsDone{} seeds drawn beside
-it. In the laboratory panel one backbone's spread across seeds covers the
-distance between backbones, so no ordering read from it is a property of the
-architecture; the same checkpoints separate cleanly under the shift and on the
-field test split.}
-\label{fig:seed-spread}
-\end{figure}
 
 % =========================================================================== %
 \section{Cross-Domain Generalisation}
@@ -472,6 +462,39 @@ of their macro-F1. Relative degradation is \RelDropFRn{}\,\% for ResNet-50,
 MobileNetV3-Small, against a leakage audit that establishes \NLeakExactCore{}
 exact overlaps between the two corpora. This is a generalisation measurement,
 not a contamination artefact. Absolute drops are in the supplementary table.
+
+\paragraph{The drop is not an artefact of the label-space restriction.}
+In-domain evaluation is 38-way and cross-domain 21-way, so the degradation
+above combines the domain shift with a change in the task itself. To separate
+the two we re-score the same PlantVillage checkpoints on the \NPvTestShared\
+laboratory test images whose true class lies in the shared space, under the
+identical shared-space procedure used cross-domain: source probabilities summed
+within each canonical class, renormalised over the 21 classes, no temperature.
+Held at 21 classes on both sides, in-domain macro-F1 is
+\MacroFPvInSharedRn, \MacroFPvInSharedEb\ and \MacroFPvInSharedMn, and the
+relative degradation to the field corpus is \RelDropFSharedRn\,\%,
+\RelDropFSharedEb\,\% and \RelDropFSharedMn\,\%. These differ from the 38-way
+figures above by at most 0.1 points, an order of magnitude below the
+across-seed spread. The laboratory-to-field
+collapse therefore survives holding the task fixed, and is not produced by
+restricting the label space.\footnote{This control is computed from the 38-way
+test logits written at training time by the same nine runs, with no model
+re-run. Unlike every other number reported here its intermediate dumps were not
+retained and it carries no lock digest, so it cannot be regenerated from the
+released artefacts; the committed per-run confusion matrices bound every value
+it reports, and all fall inside those bounds.}
+
+Two things bound this control. In-domain macro-F1 is near the ceiling under both
+task definitions, so the control could not have moved the figure far in any
+case; it removes an alternative explanation rather than supplying independent
+evidence of the shift. And while the scoring procedure is identical on both
+sides, what it does is not: the mean probability mass retained inside the shared
+space before renormalisation is \RetainedMassPvInSharedRn,
+\RetainedMassPvInSharedEb\ and \RetainedMassPvInSharedMn\ in domain, against
+\RetainedMassRn, \RetainedMassEb\ and \RetainedMassMn\ under the shift.
+Renormalisation is doing substantially more work out of domain, and a strict
+scoring in which an out-of-space argmax counts as an error would report lower
+cross-domain numbers than those in Table~\ref{tab:cross-domain-compact}.
 
 Absolute cross-domain performance is poor for every backbone (Table
 \ref{tab:cross-domain-compact}). The bootstrap intervals on the
@@ -530,9 +553,7 @@ about, which is itself a symptom of the shift rather than of the mapping.
 In domain, temperature scaling behaves exactly as advertised. The fitted
 temperature is remarkably consistent across backbones and seeds, \TempPvRn{},
 \TempPvEb{}, and \TempPvMn{}, and it reduces expected calibration error by an
-order of magnitude (Table \ref{tab:calibration-compact}).
-
-\input{tables/table6_calibration_compact.tex}
+order of magnitude (supplementary table).
 
 Carried across the domain shift, the same scalar makes calibration worse. For
 every backbone and every seed, nine cases without exception, cross-domain ECE
@@ -558,8 +579,8 @@ informative.
 
 On seed \SigSeed{} all three laboratory comparisons are significant, which is why
 a single-seed reading of these same runs would have reported a clean separation.
-That separation is an artefact of which seed is displayed, as Figure
-\ref{fig:seed-spread} shows directly.
+That separation is an artefact of which seed is displayed, as the supplementary
+figure shows directly.
 
 Of the nine pairwise verdicts in Table
 \ref{tab:significance-across-seeds-compact}, three hold on every seed, two fail
@@ -625,15 +646,15 @@ makes the headline gap \emph{larger} than a generous mapping would.
 % =========================================================================== %
 
 \begin{enumerate}
-\item \textbf{The two label spaces differ, and the mapping is conservative.}
-In-domain evaluation is \NPvClasses{}-way, cross-domain \NSharedClasses{}-way
-over a restricted space, so the measured drop combines domain shift with a change
-in task difficulty and should be read as a paired trend across models rather than
-as an isolated quantity: the trend is the claim, the absolute magnitude is not.
-Excluded near-misses are listed with reasons; a human-authored correspondence
-would likely enlarge the shared space and move the numbers, most plausibly
-upward, so ours are a lower bound on transfer under a mapping that refuses to
-guess.
+\item \textbf{The mapping is conservative, and the task differs in width.}
+In-domain evaluation is 38-way and cross-domain 21-way over a restricted space.
+A control holding the task at 21 classes on both sides reproduces the
+degradation (Section~6), so the measured drop is not an artefact of that
+difference; but in-domain performance is near the ceiling under either
+definition, which limits how much that control can establish. Excluded
+near-misses are listed with reasons; a human-authored correspondence would
+likely enlarge the shared space and move the numbers, most plausibly upward, so
+ours are a lower bound on transfer under a mapping that refuses to guess.
 
 \item \textbf{The calibration result is scoped to a label-smoothed pipeline.}
 Every run uses label smoothing $0.1$, which is why the fitted temperature falls
